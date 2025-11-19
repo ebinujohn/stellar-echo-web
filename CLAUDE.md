@@ -40,38 +40,38 @@ A production-ready Next.js 16 web application for managing voice AI agent calls 
 ### Development Server
 
 ```bash
-npm run dev              # Start development server (http://localhost:3000)
-npm run build            # Production build
-npm run start            # Start production server
+pnpm dev              # Start development server (http://localhost:3000)
+pnpm build            # Production build
+pnpm start            # Start production server
 ```
 
 ### Database Operations
 
 ```bash
-npm run db:test          # Test database connection
-npm run db:seed          # Create test user (admin@example.com / password123)
-npm run db:reset-password # Reset user password to password123
-npm run db:push          # Push schema changes to database
-npm run db:studio        # Open Drizzle Studio GUI
-npm run db:generate      # Generate migration files
-npm run db:migrate       # Run migrations
+pnpm db:test          # Test database connection
+pnpm db:seed          # Create test user (admin@example.com / password123)
+pnpm db:reset-password # Reset user password to password123
+pnpm db:push          # Push schema changes to database
+pnpm db:studio        # Open Drizzle Studio GUI
+pnpm db:generate      # Generate migration files
+pnpm db:migrate       # Run migrations
 ```
 
 ### Code Quality
 
 ```bash
-npm run lint             # Run ESLint
-npm run format           # Format code with Prettier
-npm run type-check       # TypeScript type checking (tsc --noEmit)
+pnpm lint             # Run ESLint
+pnpm format           # Format code with Prettier
+pnpm type-check       # TypeScript type checking (tsc --noEmit)
 ```
 
 ### Testing
 
 ```bash
-npm run test             # Run Vitest unit tests
-npm run test:ui          # Run Vitest with UI
-npm run test:e2e         # Run Playwright E2E tests
-npm run test:e2e:ui      # Run Playwright with UI
+pnpm test             # Run Vitest unit tests
+pnpm test:ui          # Run Vitest with UI
+pnpm test:e2e         # Run Playwright E2E tests
+pnpm test:e2e:ui      # Run Playwright with UI
 ```
 
 ## Architecture
@@ -218,12 +218,12 @@ Default test credentials: `admin@example.com` / `password123`
 
 ## Development Workflow
 
-1. **Start development**: Ensure PostgreSQL is running, then `npm run db:test` to verify connection
-2. **First-time setup**: Run `npm run db:seed` to create test user
-3. **Schema changes**: Update `src/lib/db/schema/*.ts`, then `npm run db:push` (or `db:generate` + `db:migrate` for migrations)
-4. **Type safety**: Always run `npm run type-check` before committing
-5. **Code formatting**: Use `npm run format` to auto-format with Prettier
-6. **Testing**: Write unit tests in `*.test.ts` files, run with `npm run test`
+1. **Start development**: Ensure PostgreSQL is running, then `pnpm db:test` to verify connection
+2. **First-time setup**: Run `pnpm db:seed` to create test user
+3. **Schema changes**: Update `src/lib/db/schema/*.ts`, then `pnpm db:push` (or `db:generate` + `db:migrate` for migrations)
+4. **Type safety**: Always run `pnpm type-check` before committing
+5. **Code formatting**: Use `pnpm format` to auto-format with Prettier
+6. **Testing**: Write unit tests in `*.test.ts` files, run with `pnpm test`
 
 ## Important Patterns
 
@@ -302,15 +302,15 @@ Always use these formatters for consistency across the UI.
 
 ### Database connection failures
 
-- Run `npm run db:test` to diagnose
+- Run `pnpm db:test` to diagnose
 - Verify PostgreSQL is running: `psql -U orchestrator -d orchestrator -h localhost`
 - Check `.env.local` has correct credentials
 
 ### Type errors after schema changes
 
-- Rebuild: `rm -rf .next && npm run build`
-- Regenerate types: `npm run db:generate`
-- Run `npm run type-check` to identify issues
+- Rebuild: `rm -rf .next && pnpm build`
+- Regenerate types: `pnpm db:generate`
+- Run `pnpm type-check` to identify issues
 
 ### Missing data in components
 
