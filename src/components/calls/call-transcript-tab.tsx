@@ -80,12 +80,19 @@ export function CallTranscriptTab({ callId }: CallTranscriptTabProps) {
     );
   }
 
+  // Detect if this is a single "System" entry (indicating unparsed transcript)
+  const isSingleSystemEntry = transcript.length === 1 && transcript[0].speaker.toLowerCase() === 'system';
+
   return (
     <div className="space-y-4">
       {/* Header with export button */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          {transcript.length} transcript entries
+          {isSingleSystemEntry ? (
+            <span>Full conversation transcript</span>
+          ) : (
+            <span>{transcript.length} transcript {transcript.length === 1 ? 'entry' : 'entries'}</span>
+          )}
         </div>
         <Button
           onClick={handleExport}
@@ -101,15 +108,24 @@ export function CallTranscriptTab({ callId }: CallTranscriptTabProps) {
       {/* Transcript entries */}
       <div className="space-y-4">
         {transcript.map((entry) => {
-          const isAgent = entry.speaker.toLowerCase() === 'agent' || entry.speaker.toLowerCase() === 'bot';
-          const Icon = isAgent ? Bot : User;
-          const bgClass = isAgent ? 'bg-primary/5' : 'bg-muted/50';
+          const isAgent = entry.speaker.toLowerCase() === 'agent' ||
+                         entry.speaker.toLowerCase() === 'bot' ||
+                         entry.speaker.toLowerCase() === 'assistant';
+          const isUser = entry.speaker.toLowerCase() === 'user' ||
+                        entry.speaker.toLowerCase() === 'customer' ||
+                        entry.speaker.toLowerCase().includes('caller');
+          const isSystem = entry.speaker.toLowerCase() === 'system';
+
+          const Icon = isAgent ? Bot : isUser ? User : User;
+          const bgClass = isAgent ? 'bg-primary/5' : isUser ? 'bg-muted/50' : 'bg-secondary/30';
 
           return (
             <div key={entry.id} className={`flex gap-4 p-4 rounded-lg ${bgClass}`}>
               <div className="flex-shrink-0">
                 <div className={`flex h-10 w-10 items-center justify-center rounded-full ${
-                  isAgent ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                  isAgent ? 'bg-primary text-primary-foreground' :
+                  isUser ? 'bg-muted' :
+                  'bg-secondary'
                 }`}>
                   <Icon className="h-5 w-5" />
                 </div>
@@ -132,7 +148,9 @@ export function CallTranscriptTab({ callId }: CallTranscriptTabProps) {
                     )}
                   </div>
                 </div>
-                <p className="text-sm leading-relaxed">{entry.text}</p>
+                <p className={`text-sm leading-relaxed ${isSystem ? 'whitespace-pre-wrap' : ''}`}>
+                  {entry.text}
+                </p>
               </div>
             </div>
           );

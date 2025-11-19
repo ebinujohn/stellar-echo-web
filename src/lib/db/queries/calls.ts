@@ -1,5 +1,5 @@
 import { db } from '../index';
-import { calls, callMessages, callTransitions, callMetricsSummary, callAnalysis, agents } from '../schema';
+import { calls, callMessages, callTransitions, callMetricsSummary, callAnalysis, agents, agentConfigVersions } from '../schema';
 import { eq, and, gte, lte, desc, count, sql, ilike, or } from 'drizzle-orm';
 import type { CallFilters } from '@/types';
 
@@ -182,8 +182,134 @@ export async function getCallsStats(tenantId: string, filters?: CallFilters) {
 }
 
 export async function getAgentsList(tenantId: string) {
-  return db.query.agents.findMany({
+  const agentData = await db.query.agents.findMany({
     where: eq(agents.tenantId, tenantId),
     orderBy: [agents.name],
   });
+
+  // Get call counts for each agent
+  const agentsWithStats = await Promise.all(
+    agentData.map(async (agent) => {
+      const callCount = await db
+        .select({ count: count() })
+        .from(calls)
+        .where(
+          and(
+            eq(calls.agentId, agent.id),
+            eq(calls.tenantId, tenantId)
+          )
+        )
+        .then(result => result[0]?.count || 0);
+
+      // Get active version
+      const activeVersion = await db.query.agentConfigVersions.findFirst({
+        where: and(
+          eq(agentConfigVersions.agentId, agent.id),
+          eq(agentConfigVersions.isActive, true)
+        ),
+      });
+
+      return {
+        ...agent,
+        callCount: Number(callCount),
+        activeVersion: activeVersion?.version || null,
+      };
+    })
+  );
+
+  return agentsWithStats;
+}
+
+/**
+ * Get call volume grouped by date for the last N days
+ */
+export async function getCallVolumeTimeSeries(tenantId: string, days = 7) {
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+  startDate.setHours(0, 0, 0, 0);
+
+  const results = await db
+    .select({
+      date: sql<string>`DATE(${calls.startedAt})`,
+      count: count(),
+    })
+    .from(calls)
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        gte(calls.startedAt, startDate)
+      )
+    )
+    .groupBy(sql`DATE(${calls.startedAt})`)
+    .orderBy(sql`DATE(${calls.startedAt})`);
+
+  return results;
+}
+
+/**
+ * Get sentiment distribution across all calls
+ */
+export async function getSentimentDistribution(tenantId: string) {
+  const results = await db
+    .select({
+      sentiment: callAnalysis.sentiment,
+      count: count(),
+    })
+    .from(callAnalysis)
+    .innerJoin(calls, eq(calls.callId, callAnalysis.callId))
+    .where(eq(calls.tenantId, tenantId))
+    .groupBy(callAnalysis.sentiment)
+    .orderBy(count());
+
+  return results;
+}
+
+/**
+ * Get average latency grouped by agent
+ */
+export async function getLatencyByAgent(tenantId: string) {
+  const results = await db
+    .select({
+      agentId: calls.agentId,
+      agentName: calls.agentName,
+      avgLatency: sql<number>`AVG(${callMetricsSummary.avgLlmTtfbMs})`,
+      callCount: count(),
+    })
+    .from(calls)
+    .innerJoin(callMetricsSummary, eq(calls.callId, callMetricsSummary.callId))
+    .where(eq(calls.tenantId, tenantId))
+    .groupBy(calls.agentId, calls.agentName)
+    .having(sql`COUNT(*) > 0`)
+    .orderBy(desc(count()));
+
+  return results;
+}
+
+/**
+ * Get token usage time series (aggregated by date)
+ */
+export async function getTokenUsageTimeSeries(tenantId: string, days = 30) {
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+  startDate.setHours(0, 0, 0, 0);
+
+  const results = await db
+    .select({
+      date: sql<string>`DATE(${calls.startedAt})`,
+      totalTokens: sql<number>`SUM(${callMetricsSummary.totalLlmTokens})`,
+      totalTtsChars: sql<number>`SUM(${callMetricsSummary.totalTtsCharacters})`,
+      callCount: count(),
+    })
+    .from(calls)
+    .innerJoin(callMetricsSummary, eq(calls.callId, callMetricsSummary.callId))
+    .where(
+      and(
+        eq(calls.tenantId, tenantId),
+        gte(calls.startedAt, startDate)
+      )
+    )
+    .groupBy(sql`DATE(${calls.startedAt})`)
+    .orderBy(sql`DATE(${calls.startedAt})`);
+
+  return results;
 }

@@ -2,9 +2,13 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Zap, MessageSquare, Activity, TrendingUp } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Zap, MessageSquare, Activity, TrendingUp, Repeat, AlertCircle } from 'lucide-react';
 import { useCallMetrics } from '@/lib/hooks/use-call-detail';
-import { formatLatency, formatNumber } from '@/lib/utils/formatters';
+import { formatLatency, formatNumber, formatPercentage } from '@/lib/utils/formatters';
+import { TokenUsageChart } from './token-usage-chart';
+import { LatencyOverTimeChart } from './latency-over-time-chart';
+import { ComprehensiveMetricsTable } from './comprehensive-metrics-table';
 
 interface CallMetricsTabProps {
   callId: string;
@@ -51,28 +55,30 @@ export function CallMetricsTab({ callId }: CallMetricsTabProps) {
 
   const metricsCards = [
     {
-      title: 'Avg TTFB',
-      value: formatLatency(metrics.avgLlmTtfbMs),
-      description: 'LLM time to first byte',
+      title: 'Avg Pipeline Time',
+      value: formatLatency(metrics.avgPipelineTotalMs),
+      description: `Min: ${formatLatency(metrics.minPipelineTotalMs)} | Max: ${formatLatency(metrics.maxPipelineTotalMs)}`,
+      icon: TrendingUp,
+    },
+    {
+      title: 'Avg LLM Processing',
+      value: formatLatency(metrics.avgLlmProcessingMs),
+      description: 'LLM response time',
       icon: Zap,
     },
     {
-      title: 'Avg Pipeline Time',
-      value: formatLatency(metrics.avgPipelineTotalMs),
-      description: 'Total pipeline latency',
-      icon: TrendingUp,
+      title: 'Total Turns',
+      value: formatNumber(metrics.totalTurns),
+      description: metrics.totalInterruptions
+        ? `${metrics.totalInterruptions} interruptions (${formatPercentage((metrics.totalInterruptions / (metrics.totalTurns || 1)) * 100)})`
+        : 'No interruptions',
+      icon: Repeat,
     },
     {
       title: 'Total LLM Tokens',
       value: formatNumber(metrics.totalLlmTokens),
-      description: 'LLM tokens used',
+      description: `TTS: ${formatNumber(metrics.totalTtsCharacters)} chars`,
       icon: MessageSquare,
-    },
-    {
-      title: 'TTS Characters',
-      value: formatNumber(metrics.totalTtsCharacters),
-      description: 'Text-to-speech chars',
-      icon: Activity,
     },
   ];
 
@@ -97,28 +103,57 @@ export function CallMetricsTab({ callId }: CallMetricsTabProps) {
       </div>
 
 
-      {/* Charts Placeholder */}
+      {/* Latency Over Time - PRIMARY CHART */}
       <Card>
         <CardHeader>
-          <CardTitle>Latency Over Time</CardTitle>
-          <CardDescription>Response latency throughout the call</CardDescription>
+          <div className="flex items-start justify-between">
+            <div>
+              <CardTitle>Latency Over Time</CardTitle>
+              <CardDescription>
+                Per-turn latency metrics throughout the call
+                {(metrics.totalInterruptions ?? 0) > 0 && (
+                  <span className="ml-2">
+                    <Badge variant="destructive" className="text-xs">
+                      <AlertCircle className="mr-1 h-3 w-3" />
+                      {metrics.totalInterruptions} interruption{(metrics.totalInterruptions ?? 0) > 1 ? 's' : ''}
+                    </Badge>
+                  </span>
+                )}
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="flex h-[200px] items-center justify-center text-muted-foreground">
-            Chart will be implemented with Recharts (showing latency per message)
-          </div>
+          <LatencyOverTimeChart metricsData={metrics.metricsData} height={350} />
+          {(metrics.totalInterruptions ?? 0) > 0 && (
+            <p className="text-xs text-muted-foreground mt-2">
+              🔴 Red dots indicate turns where the user interrupted the bot
+            </p>
+          )}
         </CardContent>
       </Card>
 
+      {/* Comprehensive Metrics Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Token Usage</CardTitle>
-          <CardDescription>Token consumption by message role</CardDescription>
+          <CardTitle>Latency Metrics - Min / Average / Max</CardTitle>
+          <CardDescription>
+            Complete breakdown of all pipeline latency components with statistical ranges
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex h-[200px] items-center justify-center text-muted-foreground">
-            Chart will be implemented with Recharts (showing token breakdown)
-          </div>
+          <ComprehensiveMetricsTable metrics={metrics} />
+        </CardContent>
+      </Card>
+
+      {/* Resource Usage */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Resource Usage</CardTitle>
+          <CardDescription>Total tokens and characters consumed</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <TokenUsageChart metrics={metrics} height={280} />
         </CardContent>
       </Card>
     </div>

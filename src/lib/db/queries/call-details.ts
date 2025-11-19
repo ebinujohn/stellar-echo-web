@@ -40,12 +40,66 @@ export interface CallTransition {
   reason: string | null;
 }
 
+export interface TurnMetrics {
+  turnNumber: number;
+  timestamp?: string;
+  sttDelayMs?: number;
+  userToBotLatencyMs?: number;
+  transcriptLlmGapMs?: number;
+  llmProcessingMs?: number;
+  llmToTtsGapMs?: number;
+  pipelineTotalMs?: number;
+  ragProcessingMs?: number;
+  variableExtractionMs?: number;
+  llmTtfbMs?: number;
+  wasInterrupted?: boolean;
+}
+
 export interface CallMetrics {
   callId: string;
+  // LLM TTFB
   avgLlmTtfbMs: number | null;
+  minLlmTtfbMs: number | null;
+  maxLlmTtfbMs: number | null;
+  // Pipeline Total
   avgPipelineTotalMs: number | null;
+  minPipelineTotalMs: number | null;
+  maxPipelineTotalMs: number | null;
+  // STT Delay
+  avgSttDelayMs: number | null;
+  minSttDelayMs: number | null;
+  maxSttDelayMs: number | null;
+  // LLM Processing
+  avgLlmProcessingMs: number | null;
+  minLlmProcessingMs: number | null;
+  maxLlmProcessingMs: number | null;
+  // User to Bot Latency
+  avgUserToBotLatencyMs: number | null;
+  minUserToBotLatencyMs: number | null;
+  maxUserToBotLatencyMs: number | null;
+  // Transcript to LLM Gap
+  avgTranscriptLlmGapMs: number | null;
+  minTranscriptLlmGapMs: number | null;
+  maxTranscriptLlmGapMs: number | null;
+  // LLM to TTS Gap
+  avgLlmToTtsGapMs: number | null;
+  minLlmToTtsGapMs: number | null;
+  maxLlmToTtsGapMs: number | null;
+  // RAG Processing
+  avgRagProcessingMs: number | null;
+  minRagProcessingMs: number | null;
+  maxRagProcessingMs: number | null;
+  // Variable Extraction
+  avgVariableExtractionMs: number | null;
+  minVariableExtractionMs: number | null;
+  maxVariableExtractionMs: number | null;
+  // Tokens and Characters
   totalLlmTokens: number | null;
   totalTtsCharacters: number | null;
+  // Turn data
+  metricsData: TurnMetrics[] | null;
+  totalTurns: number | null;
+  totalInterruptions: number | null;
 }
 
 export interface CallAnalysisData {
@@ -178,12 +232,63 @@ export async function getCallMetrics(callId: string, tenantId: string): Promise<
 
   if (!metrics) return null;
 
+  // Parse metricsData JSONB field to get per-turn metrics
+  let parsedMetricsData: TurnMetrics[] | null = null;
+  if (metrics.metricsData && Array.isArray(metrics.metricsData)) {
+    parsedMetricsData = metrics.metricsData as TurnMetrics[];
+  }
+
+  // Count interruptions from turn metrics
+  let totalInterruptions = 0;
+  if (parsedMetricsData) {
+    totalInterruptions = parsedMetricsData.filter(turn => turn.wasInterrupted).length;
+  }
+
   return {
     callId: metrics.callId,
+    // LLM TTFB
     avgLlmTtfbMs: metrics.avgLlmTtfbMs ? Number(metrics.avgLlmTtfbMs) : null,
+    minLlmTtfbMs: metrics.minLlmTtfbMs ? Number(metrics.minLlmTtfbMs) : null,
+    maxLlmTtfbMs: metrics.maxLlmTtfbMs ? Number(metrics.maxLlmTtfbMs) : null,
+    // Pipeline Total
     avgPipelineTotalMs: metrics.avgPipelineTotalMs ? Number(metrics.avgPipelineTotalMs) : null,
+    minPipelineTotalMs: metrics.minPipelineTotalMs ? Number(metrics.minPipelineTotalMs) : null,
+    maxPipelineTotalMs: metrics.maxPipelineTotalMs ? Number(metrics.maxPipelineTotalMs) : null,
+    // STT Delay
+    avgSttDelayMs: metrics.avgSttDelayMs ? Number(metrics.avgSttDelayMs) : null,
+    minSttDelayMs: metrics.minSttDelayMs ? Number(metrics.minSttDelayMs) : null,
+    maxSttDelayMs: metrics.maxSttDelayMs ? Number(metrics.maxSttDelayMs) : null,
+    // LLM Processing
+    avgLlmProcessingMs: metrics.avgLlmProcessingMs ? Number(metrics.avgLlmProcessingMs) : null,
+    minLlmProcessingMs: metrics.minLlmProcessingMs ? Number(metrics.minLlmProcessingMs) : null,
+    maxLlmProcessingMs: metrics.maxLlmProcessingMs ? Number(metrics.maxLlmProcessingMs) : null,
+    // User to Bot Latency
+    avgUserToBotLatencyMs: metrics.avgUserToBotLatencyMs ? Number(metrics.avgUserToBotLatencyMs) : null,
+    minUserToBotLatencyMs: metrics.minUserToBotLatencyMs ? Number(metrics.minUserToBotLatencyMs) : null,
+    maxUserToBotLatencyMs: metrics.maxUserToBotLatencyMs ? Number(metrics.maxUserToBotLatencyMs) : null,
+    // Transcript to LLM Gap
+    avgTranscriptLlmGapMs: metrics.avgTranscriptLlmGapMs ? Number(metrics.avgTranscriptLlmGapMs) : null,
+    minTranscriptLlmGapMs: metrics.minTranscriptLlmGapMs ? Number(metrics.minTranscriptLlmGapMs) : null,
+    maxTranscriptLlmGapMs: metrics.maxTranscriptLlmGapMs ? Number(metrics.maxTranscriptLlmGapMs) : null,
+    // LLM to TTS Gap
+    avgLlmToTtsGapMs: metrics.avgLlmToTtsGapMs ? Number(metrics.avgLlmToTtsGapMs) : null,
+    minLlmToTtsGapMs: metrics.minLlmToTtsGapMs ? Number(metrics.minLlmToTtsGapMs) : null,
+    maxLlmToTtsGapMs: metrics.maxLlmToTtsGapMs ? Number(metrics.maxLlmToTtsGapMs) : null,
+    // RAG Processing
+    avgRagProcessingMs: metrics.avgRagProcessingMs ? Number(metrics.avgRagProcessingMs) : null,
+    minRagProcessingMs: metrics.minRagProcessingMs ? Number(metrics.minRagProcessingMs) : null,
+    maxRagProcessingMs: metrics.maxRagProcessingMs ? Number(metrics.maxRagProcessingMs) : null,
+    // Variable Extraction
+    avgVariableExtractionMs: metrics.avgVariableExtractionMs ? Number(metrics.avgVariableExtractionMs) : null,
+    minVariableExtractionMs: metrics.minVariableExtractionMs ? Number(metrics.minVariableExtractionMs) : null,
+    maxVariableExtractionMs: metrics.maxVariableExtractionMs ? Number(metrics.maxVariableExtractionMs) : null,
+    // Tokens and Characters
     totalLlmTokens: metrics.totalLlmTokens,
     totalTtsCharacters: metrics.totalTtsCharacters,
+    // Turn data
+    metricsData: parsedMetricsData,
+    totalTurns: parsedMetricsData ? parsedMetricsData.length : null,
+    totalInterruptions,
   };
 }
 
@@ -238,19 +343,105 @@ export async function getCallTranscript(callId: string, tenantId: string): Promi
 
   if (!transcript) return [];
 
-  // If transcript is in JSON format, parse it
-  if (transcript.transcriptData && Array.isArray(transcript.transcriptData)) {
-    return transcript.transcriptData.map((entry: any, index: number) => ({
-      id: `${callId}-${index}`,
-      speaker: entry.speaker || 'Unknown',
-      text: entry.text || entry.content || '',
-      timestamp: entry.timestamp ? new Date(entry.timestamp) : null,
-      confidence: entry.confidence || null,
-    }));
+  // Handle transcript_data JSONB field with multiple possible structures
+  if (transcript.transcriptData) {
+    const data = transcript.transcriptData as any;
+
+    // Case 1: Direct array of transcript entries
+    if (Array.isArray(data)) {
+      return data.map((entry: any, index: number) => ({
+        id: `${callId}-${index}`,
+        speaker: entry.speaker || entry.role || entry.name || 'Unknown',
+        text: entry.text || entry.content || entry.message || '',
+        timestamp: entry.timestamp ? new Date(entry.timestamp) : null,
+        confidence: entry.confidence || entry.score || null,
+      }));
+    }
+
+    // Case 2: Object with 'entries' or 'messages' or 'turns' array
+    if (data.entries && Array.isArray(data.entries)) {
+      return data.entries.map((entry: any, index: number) => ({
+        id: `${callId}-${index}`,
+        speaker: entry.speaker || entry.role || entry.name || 'Unknown',
+        text: entry.text || entry.content || entry.message || '',
+        timestamp: entry.timestamp ? new Date(entry.timestamp) : null,
+        confidence: entry.confidence || entry.score || null,
+      }));
+    }
+
+    if (data.messages && Array.isArray(data.messages)) {
+      return data.messages.map((entry: any, index: number) => ({
+        id: `${callId}-${index}`,
+        speaker: entry.speaker || entry.role || entry.from || 'Unknown',
+        text: entry.text || entry.content || entry.message || '',
+        timestamp: entry.timestamp || entry.time ? new Date(entry.timestamp || entry.time) : null,
+        confidence: entry.confidence || entry.score || null,
+      }));
+    }
+
+    if (data.turns && Array.isArray(data.turns)) {
+      return data.turns.map((entry: any, index: number) => ({
+        id: `${callId}-${index}`,
+        speaker: entry.speaker || entry.role || entry.who || 'Unknown',
+        text: entry.text || entry.content || entry.message || '',
+        timestamp: entry.timestamp || entry.time ? new Date(entry.timestamp || entry.time) : null,
+        confidence: entry.confidence || entry.score || null,
+      }));
+    }
+
+    // Case 3: Object with speaker and text directly (single entry)
+    if (data.speaker && data.text) {
+      return [{
+        id: callId,
+        speaker: data.speaker,
+        text: data.text,
+        timestamp: data.timestamp ? new Date(data.timestamp) : null,
+        confidence: data.confidence || null,
+      }];
+    }
   }
 
-  // If only text transcript is available, return as single entry
+  // Fallback: If only text transcript is available, return as single entry
   if (transcript.transcriptText) {
+    // Try to parse the text if it contains speaker labels
+    const lines = transcript.transcriptText.split('\n').filter(line => line.trim());
+
+    // Pattern: "Speaker: text" or "[Speaker] text" or "Speaker - text"
+    const speakerPattern = /^(?:\[)?([^:\]\-]+)(?:\])?[\:\-]\s*(.+)$/;
+
+    const parsedEntries: TranscriptEntry[] = [];
+    let currentSpeaker = 'System';
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      const match = line.match(speakerPattern);
+
+      if (match) {
+        parsedEntries.push({
+          id: `${callId}-${i}`,
+          speaker: match[1].trim(),
+          text: match[2].trim(),
+          timestamp: null,
+          confidence: null,
+        });
+      } else if (line) {
+        // If no speaker pattern, use previous speaker or 'System'
+        parsedEntries.push({
+          id: `${callId}-${i}`,
+          speaker: currentSpeaker,
+          text: line,
+          timestamp: null,
+          confidence: null,
+        });
+      }
+    }
+
+    // If we successfully parsed entries, return them
+    if (parsedEntries.length > 0) {
+      return parsedEntries;
+    }
+
+    // Otherwise return as single block
     return [{
       id: callId,
       speaker: 'System',

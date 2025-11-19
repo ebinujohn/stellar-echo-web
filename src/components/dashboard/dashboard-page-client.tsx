@@ -5,6 +5,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { BarChart3, Phone, TrendingUp, Clock } from 'lucide-react';
 import { useCallsStats } from '@/lib/hooks/use-calls';
 import { formatNumber, formatDurationShort, formatLatency, formatPercentage } from '@/lib/utils/formatters';
+import { CallVolumeChart } from './call-volume-chart';
+import { SentimentDistributionChart } from './sentiment-distribution-chart';
+import { RecentCallsTable } from './recent-calls-table';
 
 export function DashboardPageClient() {
   const { data: stats, isLoading } = useCallsStats();
@@ -72,7 +75,7 @@ export function DashboardPageClient() {
         ))}
       </div>
 
-      {/* Charts Placeholder */}
+      {/* Charts */}
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
@@ -80,9 +83,7 @@ export function DashboardPageClient() {
             <CardDescription>Calls over the last 7 days</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex h-[200px] items-center justify-center text-muted-foreground">
-              Chart will be implemented with Recharts
-            </div>
+            <CallVolumeChart days={7} height={280} />
           </CardContent>
         </Card>
 
@@ -92,9 +93,7 @@ export function DashboardPageClient() {
             <CardDescription>Call sentiment analysis</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex h-[200px] items-center justify-center text-muted-foreground">
-              Chart will be implemented with Recharts
-            </div>
+            <SentimentDistributionChart height={280} />
           </CardContent>
         </Card>
       </div>
@@ -103,12 +102,10 @@ export function DashboardPageClient() {
       <Card>
         <CardHeader>
           <CardTitle>Recent Calls</CardTitle>
-          <CardDescription>Latest call activity - Click "Calls" in sidebar to see full list</CardDescription>
+          <CardDescription>Latest call activity</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="text-sm text-muted-foreground">
-            Navigate to the Calls page to view and filter all calls with advanced search options.
-          </div>
+          <RecentCallsTable />
         </CardContent>
       </Card>
     </div>
