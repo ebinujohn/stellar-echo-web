@@ -58,6 +58,7 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNodeData>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedNode, setSelectedNode] = useState<Node<WorkflowNodeData> | null>(null);
+  const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [validationResult, setValidationResult] = useState<{
@@ -90,9 +91,25 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node<WorkflowNodeData>) => {
       setSelectedNode(node);
+      setSelectedEdge(null); // Deselect edge when selecting node
     },
     []
   );
+
+  // Handle edge selection
+  const handleEdgeClick = useCallback(
+    (_event: React.MouseEvent, edge: Edge) => {
+      setSelectedEdge(edge);
+      setSelectedNode(null); // Deselect node when selecting edge
+    },
+    []
+  );
+
+  // Handle pane click (canvas background)
+  const handlePaneClick = useCallback(() => {
+    setSelectedNode(null);
+    setSelectedEdge(null);
+  }, []);
 
   // Handle connection creation
   const onConnect = useCallback(
@@ -292,10 +309,16 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
         return;
       }
 
-      // Delete selected node (Delete or Backspace)
-      if ((event.key === 'Delete' || event.key === 'Backspace') && selectedNode && !isTyping) {
+      // Delete selected node or edge (Delete or Backspace)
+      if ((event.key === 'Delete' || event.key === 'Backspace') && !isTyping) {
         event.preventDefault();
-        handleDeleteNode(selectedNode.id);
+        if (selectedNode) {
+          handleDeleteNode(selectedNode.id);
+        } else if (selectedEdge) {
+          setEdges((eds) => eds.filter((edge) => edge.id !== selectedEdge.id));
+          setSelectedEdge(null);
+          toast.success('Connection deleted');
+        }
       }
 
       // Save workflow (Ctrl/Cmd + S)
@@ -310,20 +333,22 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
         handleAutoLayout();
       }
 
-      // Deselect node (Escape)
+      // Deselect node or edge (Escape)
       if (event.key === 'Escape') {
         event.preventDefault();
         if (shortcutsOpen) {
           setShortcutsOpen(false);
         } else if (selectedNode) {
           setSelectedNode(null);
+        } else if (selectedEdge) {
+          setSelectedEdge(null);
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedNode, shortcutsOpen, handleDeleteNode, handleSave, handleAutoLayout]);
+  }, [selectedNode, selectedEdge, shortcutsOpen, handleDeleteNode, handleSave, handleAutoLayout, setEdges]);
 
   return (
     <div className="flex flex-col h-[calc(100vh-12rem)]">
@@ -361,10 +386,10 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
                     <div className="font-medium">Auto Layout</div>
                     <div className="text-muted-foreground font-mono">Ctrl/⌘ + L</div>
 
-                    <div className="font-medium">Delete Node</div>
+                    <div className="font-medium">Delete Node/Connection</div>
                     <div className="text-muted-foreground font-mono">Delete / Backspace</div>
 
-                    <div className="font-medium">Deselect Node</div>
+                    <div className="font-medium">Deselect</div>
                     <div className="text-muted-foreground font-mono">Escape</div>
 
                     <div className="font-medium">Show Shortcuts</div>
@@ -470,12 +495,16 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onNodeClick={handleNodeClick}
+            onEdgeClick={handleEdgeClick}
+            onPaneClick={handlePaneClick}
             onDragOver={onDragOver}
             onDrop={onDrop}
             nodeTypes={nodeTypes}
             nodesDraggable={isInteractive}
             nodesConnectable={isInteractive}
             elementsSelectable={isInteractive}
+            edgesUpdatable={isInteractive}
+            edgesFocusable={isInteractive}
             panOnDrag={isInteractive}
             zoomOnScroll={isInteractive}
             fitView
