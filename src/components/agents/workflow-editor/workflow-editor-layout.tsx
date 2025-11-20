@@ -43,6 +43,7 @@ import {
 import { toast } from 'sonner';
 
 import { nodeTypes } from './nodes';
+import { edgeTypes } from './edges';
 import type { WorkflowNodeData } from './utils/json-converter';
 import { workflowToNodes, nodesToWorkflow, validateWorkflowGraph } from './utils/json-converter';
 import { getLayoutedNodes } from './utils/auto-layout';
@@ -122,7 +123,7 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
         target: connection.target,
         sourceHandle: connection.sourceHandle || null,
         targetHandle: connection.targetHandle || null,
-        type: 'smoothstep',
+        type: 'deletable',
         label: 'always',
         markerEnd: {
           type: MarkerType.ArrowClosed,
@@ -500,6 +501,7 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
             onDragOver={onDragOver}
             onDrop={onDrop}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
             nodesDraggable={isInteractive}
             nodesConnectable={isInteractive}
             elementsSelectable={isInteractive}

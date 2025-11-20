@@ -79,7 +79,7 @@ export function workflowToNodes(config: WorkflowConfig): {
           source: node.id,
           target: transition.target,
           label: transition.condition,
-          type: 'smoothstep',
+          type: 'deletable',
           animated: transition.priority && transition.priority > 5,
           markerEnd: {
             type: MarkerType.ArrowClosed,
