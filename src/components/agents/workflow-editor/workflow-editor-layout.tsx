@@ -485,6 +485,8 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
             <Controls showInteractive onInteractiveChange={setIsInteractive} />
             <MiniMap
               className="!bg-card !border !border-border"
+              pannable={isInteractive}
+              zoomable={isInteractive}
               nodeColor={(node) => {
                 if (node.type === 'standardNode') return '#a855f7';
                 if (node.type === 'retrieveVariableNode') return '#f59e0b';
