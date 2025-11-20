@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef, ReactNode } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -39,6 +39,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Keyboard,
+  MessageSquare,
+  Database,
+  PhoneOff,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -449,7 +452,7 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
                 <div className="space-y-2">
                   <NodePaletteItem
                     type="standard"
-                    icon="💬"
+                    icon={<MessageSquare className="h-5 w-5 text-purple-500" />}
                     label="Standard Node"
                     description="LLM-powered conversation or static text"
                   />
@@ -463,7 +466,7 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
                 <div className="space-y-2">
                   <NodePaletteItem
                     type="retrieve_variable"
-                    icon="📋"
+                    icon={<Database className="h-5 w-5 text-amber-500" />}
                     label="Extract Variables"
                     description="Extract data from conversation"
                   />
@@ -477,7 +480,7 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
                 <div className="space-y-2">
                   <NodePaletteItem
                     type="end_call"
-                    icon="🛑"
+                    icon={<PhoneOff className="h-5 w-5 text-red-500" />}
                     label="End Call"
                     description="Terminate the call"
                   />
@@ -597,7 +600,7 @@ function NodePaletteItem({
   description,
 }: {
   type: string;
-  icon: string;
+  icon: ReactNode;
   label: string;
   description: string;
 }) {
@@ -613,7 +616,7 @@ function NodePaletteItem({
       onDragStart={onDragStart}
     >
       <div className="flex items-start gap-2">
-        <span className="text-2xl">{icon}</span>
+        <div className="flex-shrink-0">{icon}</div>
         <div className="flex-1 min-w-0">
           <div className="font-medium text-sm">{label}</div>
           <div className="text-xs text-muted-foreground line-clamp-2">{description}</div>
