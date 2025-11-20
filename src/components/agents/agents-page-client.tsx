@@ -100,19 +100,17 @@ export function AgentsPageClient() {
                       {agent.name}
                       <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
                     </CardTitle>
-                    <CardDescription className="mt-1">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-xs">
-                          <Activity className="mr-1 h-3 w-3" />
-                          Active
-                        </Badge>
-                        {agent.activeVersion && (
-                          <span className="text-xs">
-                            v{agent.activeVersion}
-                          </span>
-                        )}
-                      </div>
-                    </CardDescription>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Badge variant="outline" className="text-xs">
+                        <Activity className="mr-1 h-3 w-3" />
+                        Active
+                      </Badge>
+                      {agent.activeVersion && (
+                        <span className="text-xs text-muted-foreground">
+                          v{agent.activeVersion}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="flex gap-1">
                     <Button
