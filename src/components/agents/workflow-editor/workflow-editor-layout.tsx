@@ -65,6 +65,7 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
     errors: string[];
   } | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [isInteractive, setIsInteractive] = useState(true);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition } = useReactFlow();
 
@@ -472,11 +473,16 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
             onDragOver={onDragOver}
             onDrop={onDrop}
             nodeTypes={nodeTypes}
+            nodesDraggable={isInteractive}
+            nodesConnectable={isInteractive}
+            elementsSelectable={isInteractive}
+            panOnDrag={isInteractive}
+            zoomOnScroll={isInteractive}
             fitView
             attributionPosition="bottom-left"
           >
             <Background />
-            <Controls />
+            <Controls showInteractive onInteractiveChange={setIsInteractive} />
             <MiniMap
               className="!bg-card !border !border-border"
               nodeColor={(node) => {
