@@ -52,7 +52,6 @@ export function SettingsForm({ agentId, currentConfig, onSave }: SettingsFormPro
 
   // Other Settings
   const [autoHangupEnabled, setAutoHangupEnabled] = useState(currentConfig.auto_hangup?.enabled ?? true);
-  const [loggingLevel, setLoggingLevel] = useState(currentConfig.logging?.level || 'INFO');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,9 +90,6 @@ export function SettingsForm({ agentId, currentConfig, onSave }: SettingsFormPro
         },
         auto_hangup: {
           enabled: autoHangupEnabled,
-        },
-        logging: {
-          level: loggingLevel,
         },
       };
 
@@ -396,54 +392,26 @@ export function SettingsForm({ agentId, currentConfig, onSave }: SettingsFormPro
         </CardContent>
       </Card>
 
-      {/* Auto Hangup & Logging */}
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Auto Hangup</CardTitle>
-            <CardDescription>
-              Automatically end calls when appropriate
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between rounded-lg border p-4">
-              <div className="space-y-0.5">
-                <Label className="text-base">Enable Auto Hangup</Label>
-                <p className="text-sm text-muted-foreground">
-                  Automatically end calls at completion
-                </p>
-              </div>
-              <Switch checked={autoHangupEnabled} onCheckedChange={setAutoHangupEnabled} />
+      {/* Auto Hangup */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Auto Hangup</CardTitle>
+          <CardDescription>
+            Automatically end calls when appropriate
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between rounded-lg border p-4">
+            <div className="space-y-0.5">
+              <Label className="text-base">Enable Auto Hangup</Label>
+              <p className="text-sm text-muted-foreground">
+                Automatically end calls at completion
+              </p>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Logging</CardTitle>
-            <CardDescription>
-              Configure logging level for debugging
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <Label htmlFor="logging-level">Log Level</Label>
-              <Select value={loggingLevel} onValueChange={setLoggingLevel}>
-                <SelectTrigger id="logging-level">
-                  <SelectValue placeholder="Select log level" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="DEBUG">DEBUG</SelectItem>
-                  <SelectItem value="INFO">INFO</SelectItem>
-                  <SelectItem value="WARNING">WARNING</SelectItem>
-                  <SelectItem value="ERROR">ERROR</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">Level of detail for logs</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            <Switch checked={autoHangupEnabled} onCheckedChange={setAutoHangupEnabled} />
+          </div>
+        </CardContent>
+      </Card>
     </form>
     </div>
   );

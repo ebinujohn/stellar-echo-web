@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, Phone, LayoutDashboard, PhoneCall } from 'lucide-react';
+import { BarChart3, Phone, LayoutDashboard, PhoneCall, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navigation = [
@@ -37,9 +37,9 @@ export function Sidebar() {
       <div className="flex h-16 items-center border-b px-6">
         <Link href="/dashboard" className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Phone className="h-4 w-4" />
+            <Sparkles className="h-4 w-4" />
           </div>
-          <span className="text-lg font-semibold">Call Analytics</span>
+          <span className="text-lg font-semibold">Stellar Echo</span>
         </Link>
       </div>
 
@@ -68,7 +68,7 @@ export function Sidebar() {
       {/* Footer */}
       <div className="border-t p-4">
         <div className="text-xs text-muted-foreground">
-          <p>Voice AI Platform</p>
+          <p>Stellar Echo</p>
           <p className="mt-1">v1.0.0</p>
         </div>
       </div>

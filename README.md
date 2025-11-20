@@ -1,4 +1,4 @@
-# Call Analytics Web Application
+# Stellar Echo
 
 A modern, production-ready web application for managing voice AI agent calls and configurations.
 

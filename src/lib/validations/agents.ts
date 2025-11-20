@@ -279,13 +279,6 @@ const autoHangupSchema = z.object({
 });
 
 /**
- * Logging configuration schema
- */
-const loggingSchema = z.object({
-  level: z.enum(['DEBUG', 'INFO', 'WARNING', 'ERROR']).optional().default('INFO'),
-});
-
-/**
  * Complete workflow configuration schema
  * This validates the entire config JSON that goes into agentConfigVersions.configJson
  */
@@ -297,7 +290,6 @@ export const workflowConfigSchema = z.object({
   stt: sttConfigSchema.optional(),
   rag: ragConfigSchema.optional(),
   auto_hangup: autoHangupSchema.optional(),
-  logging: loggingSchema.optional(),
 }).refine(
   (data) => {
     // Validation: initial_node must exist in nodes

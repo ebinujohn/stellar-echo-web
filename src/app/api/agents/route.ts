@@ -159,8 +159,5 @@ function createDefaultWorkflowConfig(agentName: string) {
     auto_hangup: {
       enabled: true,
     },
-    logging: {
-      level: 'INFO',
-    },
   };
 }

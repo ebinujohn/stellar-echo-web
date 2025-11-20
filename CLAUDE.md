@@ -31,7 +31,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A production-ready Next.js 16 web application for managing voice AI agent calls and analytics. Built with React 19, TypeScript, Tailwind CSS v4, and PostgreSQL with Drizzle ORM. The application provides real-time call analytics, per-turn latency metrics, AI-powered analysis, and comprehensive dashboard views.
+**Stellar Echo** - A production-ready Next.js 16 web application for managing voice AI agent calls and analytics. Built with React 19, TypeScript, Tailwind CSS v4, and PostgreSQL with Drizzle ORM. The application provides real-time call analytics, per-turn latency metrics, AI-powered analysis, and comprehensive dashboard views.
 
 ## Common Development Commands
 
@@ -110,7 +110,7 @@ pnpm test:e2e:ui      # Run Playwright with UI
 
 - **Page components**: Client components with `"use client"` directive in `src/app/(dashboard)/`
 - **Feature components**: Domain-specific components in `src/components/[feature]/` (calls, dashboard, analytics, agents)
-  - Agent settings form: `src/components/agents/settings-form.tsx` - comprehensive global settings UI (LLM, TTS, STT, auto-hangup, logging)
+  - Agent settings form: `src/components/agents/settings-form.tsx` - comprehensive global settings UI (LLM, TTS, STT, auto-hangup)
   - Agent detail tabs: Overview (with settings preview), Workflow Editor, Versions, Settings
 - **Layout components**: Reusable layout pieces in `src/components/layout/` (sidebar, navbar, user-menu, theme-toggle)
 - **UI primitives**: shadcn/ui components in `src/components/ui/`
@@ -193,13 +193,12 @@ Agent configurations are stored as versioned JSONB documents in `agent_config_ve
   llm: { enabled, model, temperature, max_tokens, service_tier },
   tts: { enabled, model, voice_id, stability, similarity_boost, style, ... },
   stt: { model, sample_rate, eager_eot_threshold, eot_threshold, ... },
-  auto_hangup: { enabled },
-  logging: { level: 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR' }
+  auto_hangup: { enabled }
 }
 ```
 
 **Settings Management:**
-- **Overview Tab**: Displays all global settings in read-only cards (LLM, TTS, STT, Auto-Hangup, Logging)
+- **Overview Tab**: Displays all global settings in read-only cards (LLM, TTS, STT, Auto-Hangup)
 - **Settings Tab**: Full form for editing global settings with save button at top (creates new version)
 - **Workflow Tab**: Visual editor for workflow nodes and transitions
 - All changes create a new configuration version via `/api/agents/[id]/versions`
@@ -219,7 +218,7 @@ Agent configurations are stored as versioned JSONB documents in `agent_config_ve
 - `tenants` - Organizations (multi-tenancy root)
 - `users` - User accounts with bcrypt-hashed passwords
 - `agents` - Agent definitions
-- `agent_config_versions` - Versioned agent configurations (stores workflow, LLM, TTS, STT, logging settings in `config_json` JSONB field)
+- `agent_config_versions` - Versioned agent configurations (stores workflow, LLM, TTS, STT, auto-hangup settings in `config_json` JSONB field)
 
 ### Call Tables
 

@@ -424,25 +424,17 @@ export function AgentDetailClient({ agentId }: AgentDetailClientProps) {
                 </CardContent>
               </Card>
 
-              {/* Other Settings */}
+              {/* Auto Hangup Settings */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Other Settings</CardTitle>
-                  <CardDescription>Additional configuration</CardDescription>
+                  <CardTitle>Auto Hangup</CardTitle>
+                  <CardDescription>Call termination settings</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <div className="text-muted-foreground">Auto Hangup</div>
-                      <div className="font-medium">
-                        {agent.activeVersion.configJson.auto_hangup?.enabled ? 'Enabled' : 'Disabled'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-muted-foreground">Log Level</div>
-                      <div className="font-medium">
-                        {agent.activeVersion.configJson.logging?.level || 'INFO'}
-                      </div>
+                  <div className="text-sm">
+                    <div className="text-muted-foreground">Status</div>
+                    <div className="font-medium">
+                      {agent.activeVersion.configJson.auto_hangup?.enabled ? 'Enabled' : 'Disabled'}
                     </div>
                   </div>
                 </CardContent>

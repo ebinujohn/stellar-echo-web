@@ -11,8 +11,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Call Analytics - Voice AI Management",
-  description: "Voice AI Agent Call Analytics and Configuration Management Platform",
+  title: "Stellar Echo - Voice AI Management",
+  description: "Stellar Echo - Voice AI Agent Call Analytics and Configuration Management Platform",
 };
 
 export default function RootLayout({
