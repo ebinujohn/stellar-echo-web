@@ -1,11 +1,11 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   BaseEdge,
   EdgeLabelRenderer,
   EdgeProps,
-  getSmoothStepPath,
+  getBezierPath,
   useReactFlow,
 } from 'reactflow';
 import { X } from 'lucide-react';
@@ -21,17 +21,65 @@ export function DeletableEdge({
   style = {},
   markerEnd,
   label,
+  source,
+  target,
 }: EdgeProps) {
-  const { setEdges } = useReactFlow();
+  const { setEdges, getEdges } = useReactFlow();
 
-  const [edgePath, labelX, labelY] = getSmoothStepPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-  });
+  // Calculate offset for parallel edges
+  const edgeOffset = useMemo(() => {
+    const edges = getEdges();
+    const parallelEdges = edges.filter(
+      (e) =>
+        (e.source === source && e.target === target) ||
+        (e.source === target && e.target === source)
+    );
+
+    if (parallelEdges.length <= 1) return 0;
+
+    const edgeIndex = parallelEdges.findIndex((e) => e.id === id);
+    const totalEdges = parallelEdges.length;
+
+    // Center the group of parallel edges
+    const offset = (edgeIndex - (totalEdges - 1) / 2) * 30;
+    return offset;
+  }, [id, source, target, getEdges]);
+
+  // Apply offset to control points for parallel edges
+  const [edgePath, labelX, labelY] = useMemo(() => {
+    if (edgeOffset === 0) {
+      return getBezierPath({
+        sourceX,
+        sourceY,
+        sourcePosition,
+        targetX,
+        targetY,
+        targetPosition,
+      });
+    }
+
+    // Calculate perpendicular offset direction
+    const dx = targetX - sourceX;
+    const dy = targetY - sourceY;
+    const length = Math.sqrt(dx * dx + dy * dy);
+
+    // Perpendicular vector (normalized)
+    const perpX = -dy / length;
+    const perpY = dx / length;
+
+    // Apply offset perpendicular to the edge
+    const offsetX = perpX * edgeOffset;
+    const offsetY = perpY * edgeOffset;
+
+    return getBezierPath({
+      sourceX: sourceX + offsetX,
+      sourceY: sourceY + offsetY,
+      sourcePosition,
+      targetX: targetX + offsetX,
+      targetY: targetY + offsetY,
+      targetPosition,
+    });
+  }, [sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, edgeOffset]);
 
   const onEdgeClick = useCallback(
     (event: React.MouseEvent) => {
