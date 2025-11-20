@@ -110,9 +110,12 @@ pnpm test:e2e:ui      # Run Playwright with UI
 
 - **Page components**: Client components with `"use client"` directive in `src/app/(dashboard)/`
 - **Feature components**: Domain-specific components in `src/components/[feature]/` (calls, dashboard, analytics, agents)
+  - Agent settings form: `src/components/agents/settings-form.tsx` - comprehensive global settings UI (LLM, TTS, STT, auto-hangup, logging)
+  - Agent detail tabs: Overview (with settings preview), Workflow Editor, Versions, Settings
 - **Layout components**: Reusable layout pieces in `src/components/layout/` (sidebar, navbar, user-menu, theme-toggle)
 - **UI primitives**: shadcn/ui components in `src/components/ui/`
 - **Providers**: React context providers in `src/components/providers/`
+- **Toast notifications**: Positioned at top-center via Sonner (configured in `src/app/layout.tsx`)
 
 ### Chart Infrastructure
 
@@ -178,6 +181,30 @@ The Metrics tab on call detail pages shows 9 latency components:
 
 Display min/avg/max for each metric, and show interruptions with visual indicators.
 
+### Agent Configuration Management
+
+Agent configurations are stored as versioned JSONB documents in `agent_config_versions.config_json`:
+
+**Configuration Structure:**
+```typescript
+{
+  agent: { id, name, description, version },
+  workflow: { initial_node, nodes, transitions, ... },
+  llm: { enabled, model, temperature, max_tokens, service_tier },
+  tts: { enabled, model, voice_id, stability, similarity_boost, style, ... },
+  stt: { model, sample_rate, eager_eot_threshold, eot_threshold, ... },
+  auto_hangup: { enabled },
+  logging: { level: 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR' }
+}
+```
+
+**Settings Management:**
+- **Overview Tab**: Displays all global settings in read-only cards (LLM, TTS, STT, Auto-Hangup, Logging)
+- **Settings Tab**: Full form for editing global settings with save button at top (creates new version)
+- **Workflow Tab**: Visual editor for workflow nodes and transitions
+- All changes create a new configuration version via `/api/agents/[id]/versions`
+- Active version (`is_active=true`) is used for agent runtime behavior
+
 ### Session & Cookie Management
 
 - Access token expires in 15 minutes (short-lived for security)
@@ -192,7 +219,7 @@ Display min/avg/max for each metric, and show interruptions with visual indicato
 - `tenants` - Organizations (multi-tenancy root)
 - `users` - User accounts with bcrypt-hashed passwords
 - `agents` - Agent definitions
-- `agent_config_versions` - Versioned agent configurations
+- `agent_config_versions` - Versioned agent configurations (stores workflow, LLM, TTS, STT, logging settings in `config_json` JSONB field)
 
 ### Call Tables
 

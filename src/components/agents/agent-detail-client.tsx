@@ -25,6 +25,7 @@ import { useAgent, useCreateVersion } from '@/lib/hooks/use-agents';
 import { formatDateTime } from '@/lib/utils/formatters';
 import { DeleteAgentDialog } from './dialogs/delete-agent-dialog';
 import { WorkflowEditorLayout } from './workflow-editor/workflow-editor-layout';
+import { SettingsForm } from './settings-form';
 import { toast } from 'sonner';
 
 interface AgentDetailClientProps {
@@ -304,28 +305,11 @@ export function AgentDetailClient({ agentId }: AgentDetailClientProps) {
                       </div>
                     </div>
                   </div>
-                  <Separator />
-                  <div>
-                    <div className="text-sm font-medium text-muted-foreground mb-2">
-                      LLM Configuration
-                    </div>
-                    <div className="text-sm space-y-1">
-                      <div>
-                        Model:{' '}
-                        <span className="font-mono">
-                          {agent.activeVersion.configJson.llm?.model || 'Not configured'}
-                        </span>
-                      </div>
-                      <div>
-                        Temperature:{' '}
-                        {agent.activeVersion.configJson.llm?.temperature ?? 'Default'}
-                      </div>
-                    </div>
-                  </div>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setActiveTab('workflow')}
+                    className="mt-2"
                   >
                     <Edit className="mr-2 h-4 w-4" />
                     Edit Workflow
@@ -338,6 +322,133 @@ export function AgentDetailClient({ agentId }: AgentDetailClientProps) {
               )}
             </CardContent>
           </Card>
+
+          {/* Global Settings Overview */}
+          {agent.activeVersion && (
+            <div className="grid gap-4 md:grid-cols-2">
+              {/* LLM Settings */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>LLM Configuration</CardTitle>
+                  <CardDescription>Language model settings</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <div className="text-muted-foreground">Enabled</div>
+                      <div className="font-medium">
+                        {agent.activeVersion.configJson.llm?.enabled ? 'Yes' : 'No'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">Model</div>
+                      <div className="font-mono text-xs">
+                        {agent.activeVersion.configJson.llm?.model || 'N/A'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">Temperature</div>
+                      <div className="font-medium">
+                        {agent.activeVersion.configJson.llm?.temperature ?? 'N/A'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">Max Tokens</div>
+                      <div className="font-medium">
+                        {agent.activeVersion.configJson.llm?.max_tokens || 'N/A'}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* TTS Settings */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>TTS Configuration</CardTitle>
+                  <CardDescription>Text-to-speech settings</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <div className="text-muted-foreground">Enabled</div>
+                      <div className="font-medium">
+                        {agent.activeVersion.configJson.tts?.enabled ? 'Yes' : 'No'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">Model</div>
+                      <div className="font-mono text-xs">
+                        {agent.activeVersion.configJson.tts?.model || 'N/A'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">Stability</div>
+                      <div className="font-medium">
+                        {agent.activeVersion.configJson.tts?.stability ?? 'N/A'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">Similarity Boost</div>
+                      <div className="font-medium">
+                        {agent.activeVersion.configJson.tts?.similarity_boost ?? 'N/A'}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* STT Settings */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>STT Configuration</CardTitle>
+                  <CardDescription>Speech-to-text settings</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <div className="text-muted-foreground">Model</div>
+                      <div className="font-mono text-xs">
+                        {agent.activeVersion.configJson.stt?.model || 'N/A'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">Sample Rate</div>
+                      <div className="font-medium">
+                        {agent.activeVersion.configJson.stt?.sample_rate
+                          ? `${agent.activeVersion.configJson.stt.sample_rate} Hz`
+                          : 'N/A'}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Other Settings */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Other Settings</CardTitle>
+                  <CardDescription>Additional configuration</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <div className="text-muted-foreground">Auto Hangup</div>
+                      <div className="font-medium">
+                        {agent.activeVersion.configJson.auto_hangup?.enabled ? 'Enabled' : 'Disabled'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">Log Level</div>
+                      <div className="font-medium">
+                        {agent.activeVersion.configJson.logging?.level || 'INFO'}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </TabsContent>
 
         {/* Workflow Editor Tab */}
@@ -389,23 +500,31 @@ export function AgentDetailClient({ agentId }: AgentDetailClientProps) {
 
         {/* Settings Tab */}
         <TabsContent value="settings" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Agent Settings</CardTitle>
-              <CardDescription>
-                Update agent name and description
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="py-12 text-center text-muted-foreground">
-                <Settings className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p className="text-lg font-medium mb-2">Settings</p>
-                <p className="text-sm">
-                  Agent settings editor will be available soon.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          {agent.activeVersion ? (
+            <SettingsForm
+              agentId={agentId}
+              currentConfig={agent.activeVersion.configJson}
+              onSave={handleWorkflowSave}
+            />
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Agent Settings</CardTitle>
+                <CardDescription>
+                  Configure global settings for this agent
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="py-12 text-center text-muted-foreground">
+                  <Settings className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium mb-2">No Active Configuration</p>
+                  <p className="text-sm">
+                    This agent doesn't have an active workflow version.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
 
