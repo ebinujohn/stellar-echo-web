@@ -20,30 +20,32 @@ export function getLayoutedNodes(
 ): Node<WorkflowNodeData>[] {
   const {
     direction = 'TB',
-    nodeWidth = 250,
-    nodeHeight = 150,
-    ranksep = 100,
-    nodesep = 80,
+    nodeWidth = 280,
+    nodeHeight = 180,
+    ranksep = 180,  // Increased from 100 for better vertical spacing
+    nodesep = 150,  // Increased from 80 for better horizontal spacing
   } = options;
 
   // Create a new directed graph
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
 
-  // Set graph configuration
+  // Set graph configuration with better spacing
   dagreGraph.setGraph({
     rankdir: direction,
     ranksep,
     nodesep,
-    marginx: 50,
-    marginy: 50,
+    edgesep: 100,   // Add edge separation
+    marginx: 100,   // Increased margin
+    marginy: 100,   // Increased margin
   });
 
-  // Add nodes to dagre graph
+  // Add nodes to dagre graph with proper dimensions per node type
   nodes.forEach((node) => {
+    const dimensions = getNodeDimensions(node.type || 'standardNode');
     dagreGraph.setNode(node.id, {
-      width: nodeWidth,
-      height: nodeHeight,
+      width: dimensions.width,
+      height: dimensions.height,
     });
   });
 
@@ -58,10 +60,11 @@ export function getLayoutedNodes(
   // Map dagre positions back to ReactFlow nodes
   const layoutedNodes = nodes.map((node) => {
     const nodeWithPosition = dagreGraph.node(node.id);
+    const dimensions = getNodeDimensions(node.type || 'standardNode');
 
     // Calculate position (dagre uses center, ReactFlow uses top-left)
-    const x = nodeWithPosition.x - nodeWidth / 2;
-    const y = nodeWithPosition.y - nodeHeight / 2;
+    const x = nodeWithPosition.x - dimensions.width / 2;
+    const y = nodeWithPosition.y - dimensions.height / 2;
 
     return {
       ...node,
@@ -78,13 +81,13 @@ export function getLayoutedNodes(
 export function getNodeDimensions(nodeType: string): { width: number; height: number } {
   switch (nodeType) {
     case 'standardNode':
-      return { width: 280, height: 180 };
+      return { width: 280, height: 200 };  // Slightly taller to account for content
     case 'retrieveVariableNode':
-      return { width: 280, height: 200 };
+      return { width: 280, height: 220 };  // Taller for variable lists
     case 'endCallNode':
-      return { width: 200, height: 120 };
+      return { width: 220, height: 140 };  // Matches actual rendered size
     default:
-      return { width: 250, height: 150 };
+      return { width: 280, height: 180 };
   }
 }
 

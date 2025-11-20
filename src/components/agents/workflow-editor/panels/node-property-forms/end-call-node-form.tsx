@@ -16,9 +16,11 @@ export function EndCallNodeForm({ nodeData, onUpdate }: EndCallNodeFormProps) {
   const [name, setName] = useState(nodeData.name || '');
 
   // Apply changes immediately
+  // Note: onUpdate is intentionally excluded from deps to prevent infinite loops
   useEffect(() => {
     onUpdate({ name });
-  }, [name, onUpdate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name]);
 
   return (
     <ScrollArea className="h-full">

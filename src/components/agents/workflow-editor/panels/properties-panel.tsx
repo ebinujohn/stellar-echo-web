@@ -1,5 +1,6 @@
 'use client';
 
+import { useCallback } from 'react';
 import { Node } from 'reactflow';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -20,6 +21,16 @@ export function PropertiesPanel({
   onClose,
   onUpdateNode,
 }: PropertiesPanelProps) {
+  // Memoize the update handler to prevent infinite loops
+  const handleUpdate = useCallback(
+    (updates: Partial<WorkflowNodeData>) => {
+      if (selectedNode) {
+        onUpdateNode(selectedNode.id, updates);
+      }
+    },
+    [selectedNode, onUpdateNode]
+  );
+
   if (!selectedNode) {
     return (
       <div className="p-4">
@@ -41,10 +52,6 @@ export function PropertiesPanel({
       </div>
     );
   }
-
-  const handleUpdate = (updates: Partial<WorkflowNodeData>) => {
-    onUpdateNode(selectedNode.id, updates);
-  };
 
   const renderForm = () => {
     const nodeType = selectedNode.data.type;

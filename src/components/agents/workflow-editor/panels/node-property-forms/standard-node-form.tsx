@@ -39,6 +39,7 @@ export function StandardNodeForm({ nodeData, onUpdate }: StandardNodeFormProps) 
   );
 
   // Apply changes immediately
+  // Note: onUpdate is intentionally excluded from deps to prevent infinite loops
   useEffect(() => {
     const updates: Partial<WorkflowNodeData> = {
       name,
@@ -59,6 +60,7 @@ export function StandardNodeForm({ nodeData, onUpdate }: StandardNodeFormProps) 
     }
 
     onUpdate(updates);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     name,
     mode,
@@ -68,7 +70,6 @@ export function StandardNodeForm({ nodeData, onUpdate }: StandardNodeFormProps) 
     transitions,
     onEntryActions,
     onExitActions,
-    onUpdate,
   ]);
 
   const addTransition = () => {

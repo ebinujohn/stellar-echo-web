@@ -25,13 +25,15 @@ export function RetrieveVariableNodeForm({
   const [transitions, setTransitions] = useState(nodeData.transitions || []);
 
   // Apply changes immediately
+  // Note: onUpdate is intentionally excluded from deps to prevent infinite loops
   useEffect(() => {
     onUpdate({
       name,
       variables,
       transitions,
     });
-  }, [name, variables, transitions, onUpdate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name, variables, transitions]);
 
   const addVariable = () => {
     setVariables([

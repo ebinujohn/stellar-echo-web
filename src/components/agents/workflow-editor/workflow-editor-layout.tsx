@@ -14,6 +14,7 @@ import ReactFlow, {
   NodeChange,
   EdgeChange,
   Panel,
+  MarkerType,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
@@ -53,11 +54,19 @@ export function WorkflowEditorLayout({ initialConfig, onSave }: WorkflowEditorLa
     errors: string[];
   } | null>(null);
 
-  // Initialize nodes and edges from config
+  // Initialize nodes and edges from config with auto-layout
   useEffect(() => {
     if (initialConfig) {
       const { nodes: initialNodes, edges: initialEdges } = workflowToNodes(initialConfig);
-      setNodes(initialNodes);
+
+      // Apply auto-layout immediately for better initial presentation
+      const layoutedNodes = getLayoutedNodes(initialNodes, initialEdges, {
+        direction: 'TB',
+        nodeWidth: 280,
+        nodeHeight: 180,
+      });
+
+      setNodes(layoutedNodes);
       setEdges(initialEdges);
     }
   }, [initialConfig, setNodes, setEdges]);
@@ -83,6 +92,14 @@ export function WorkflowEditorLayout({ initialConfig, onSave }: WorkflowEditorLa
         targetHandle: connection.targetHandle || null,
         type: 'smoothstep',
         label: 'always',
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          width: 20,
+          height: 20,
+        },
+        style: {
+          strokeWidth: 2,
+        },
         data: {
           condition: 'always',
           priority: 0,

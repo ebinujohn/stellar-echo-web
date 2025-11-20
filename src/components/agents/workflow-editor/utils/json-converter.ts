@@ -1,4 +1,5 @@
 import type { Node, Edge } from 'reactflow';
+import { MarkerType } from 'reactflow';
 import type { WorkflowConfig, WorkflowNode as ConfigNode } from '@/lib/validations/agents';
 
 /**
@@ -80,6 +81,14 @@ export function workflowToNodes(config: WorkflowConfig): {
           label: transition.condition,
           type: 'smoothstep',
           animated: transition.priority && transition.priority > 5,
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            width: 20,
+            height: 20,
+          },
+          style: {
+            strokeWidth: 2,
+          },
           data: {
             condition: transition.condition,
             priority: transition.priority || 0,
@@ -197,14 +206,15 @@ function getNodePosition(
     return metadata.position;
   }
 
-  // Calculate default grid position
+  // Calculate default grid position with better spacing
+  // Note: Auto-layout should be applied after conversion for optimal placement
   const columns = Math.ceil(Math.sqrt(totalNodes));
   const row = Math.floor(index / columns);
   const col = index % columns;
 
   return {
-    x: col * 300 + 50,
-    y: row * 200 + 50,
+    x: col * 400 + 100,  // Increased spacing from 300 to 400
+    y: row * 300 + 100,  // Increased spacing from 200 to 300
   };
 }
 
