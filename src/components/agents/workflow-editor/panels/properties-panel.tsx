@@ -4,7 +4,7 @@ import { useCallback } from 'react';
 import { Node } from 'reactflow';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Trash2 } from 'lucide-react';
 import type { WorkflowNodeData } from '../utils/json-converter';
 import { StandardNodeForm } from './node-property-forms/standard-node-form';
 import { RetrieveVariableNodeForm } from './node-property-forms/retrieve-variable-node-form';
@@ -14,12 +14,14 @@ interface PropertiesPanelProps {
   selectedNode: Node<WorkflowNodeData> | null;
   onClose: () => void;
   onUpdateNode: (nodeId: string, updates: Partial<WorkflowNodeData>) => void;
+  onDeleteNode: (nodeId: string) => void;
 }
 
 export function PropertiesPanel({
   selectedNode,
   onClose,
   onUpdateNode,
+  onDeleteNode,
 }: PropertiesPanelProps) {
   // Memoize the update handler to prevent infinite loops
   const handleUpdate = useCallback(
@@ -30,6 +32,13 @@ export function PropertiesPanel({
     },
     [selectedNode, onUpdateNode]
   );
+
+  // Handle delete with confirmation
+  const handleDelete = useCallback(() => {
+    if (selectedNode && confirm(`Delete node "${selectedNode.data.name}"?`)) {
+      onDeleteNode(selectedNode.id);
+    }
+  }, [selectedNode, onDeleteNode]);
 
   if (!selectedNode) {
     return (
@@ -82,7 +91,7 @@ export function PropertiesPanel({
   return (
     <div className="flex flex-col h-full">
       <div className="p-4 border-b">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-3">
           <div>
             <h3 className="font-semibold text-sm">Properties</h3>
             <p className="text-xs text-muted-foreground mt-0.5 capitalize">
@@ -98,6 +107,15 @@ export function PropertiesPanel({
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
+        <Button
+          variant="destructive"
+          size="sm"
+          className="w-full"
+          onClick={handleDelete}
+        >
+          <Trash2 className="h-3.5 w-3.5 mr-2" />
+          Delete Node
+        </Button>
       </div>
 
       <div className="flex-1 overflow-hidden">{renderForm()}</div>

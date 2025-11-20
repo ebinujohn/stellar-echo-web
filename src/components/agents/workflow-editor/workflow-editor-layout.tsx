@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -15,6 +15,8 @@ import ReactFlow, {
   EdgeChange,
   Panel,
   MarkerType,
+  useReactFlow,
+  ReactFlowProvider,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
@@ -22,12 +24,21 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
   Save,
   Wand2,
   CheckCircle2,
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
+  Keyboard,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -43,7 +54,7 @@ interface WorkflowEditorLayoutProps {
   onSave?: (config: Partial<WorkflowConfig>) => void | Promise<void>;
 }
 
-export function WorkflowEditorLayout({ initialConfig, onSave }: WorkflowEditorLayoutProps) {
+function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNodeData>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedNode, setSelectedNode] = useState<Node<WorkflowNodeData> | null>(null);
@@ -53,6 +64,9 @@ export function WorkflowEditorLayout({ initialConfig, onSave }: WorkflowEditorLa
     valid: boolean;
     errors: string[];
   } | null>(null);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  const { screenToFlowPosition } = useReactFlow();
 
   // Initialize nodes and edges from config with auto-layout
   useEffect(() => {
@@ -133,6 +147,66 @@ export function WorkflowEditorLayout({ initialConfig, onSave }: WorkflowEditorLa
     toast.success('Layout applied');
   }, [nodes, edges, setNodes]);
 
+  // Generate unique node ID
+  const generateNodeId = useCallback((type: string) => {
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 9);
+    return `${type}_${timestamp}_${random}`;
+  }, []);
+
+  // Handle drag over (required for drop to work)
+  const onDragOver = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  // Handle drop to create new node
+  const onDrop = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault();
+
+      const nodeType = event.dataTransfer.getData('application/reactflow');
+      if (!nodeType) return;
+
+      const position = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+
+      const nodeId = generateNodeId(nodeType);
+
+      // Create new node with default data based on type
+      const newNode: Node<WorkflowNodeData> = {
+        id: nodeId,
+        type: getReactFlowNodeType(nodeType),
+        position,
+        data: getDefaultNodeData(nodeId, nodeType),
+      };
+
+      setNodes((nds) => nds.concat(newNode));
+      toast.success(`Added ${nodeType} node`);
+    },
+    [screenToFlowPosition, generateNodeId, setNodes]
+  );
+
+  // Handle node deletion
+  const handleDeleteNode = useCallback(
+    (nodeId: string) => {
+      setNodes((nds) => nds.filter((node) => node.id !== nodeId));
+      setEdges((eds) =>
+        eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId)
+      );
+
+      // Close properties panel if deleted node was selected
+      if (selectedNode?.id === nodeId) {
+        setSelectedNode(null);
+      }
+
+      toast.success('Node deleted');
+    },
+    [setNodes, setEdges, selectedNode]
+  );
+
   // Handle node updates from properties panel
   const handleUpdateNode = useCallback(
     (nodeId: string, updates: Partial<WorkflowNodeData>) => {
@@ -202,6 +276,54 @@ export function WorkflowEditorLayout({ initialConfig, onSave }: WorkflowEditorLa
     };
   }, [validationResult]);
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Don't trigger shortcuts if user is typing in an input (except for Ctrl/Cmd shortcuts)
+      const isTyping =
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement;
+
+      // Show shortcuts dialog (? key)
+      if (event.key === '?' && !isTyping) {
+        event.preventDefault();
+        setShortcutsOpen(true);
+        return;
+      }
+
+      // Delete selected node (Delete or Backspace)
+      if ((event.key === 'Delete' || event.key === 'Backspace') && selectedNode && !isTyping) {
+        event.preventDefault();
+        handleDeleteNode(selectedNode.id);
+      }
+
+      // Save workflow (Ctrl/Cmd + S)
+      if ((event.ctrlKey || event.metaKey) && event.key === 's') {
+        event.preventDefault();
+        handleSave();
+      }
+
+      // Auto layout (Ctrl/Cmd + L)
+      if ((event.ctrlKey || event.metaKey) && event.key === 'l') {
+        event.preventDefault();
+        handleAutoLayout();
+      }
+
+      // Deselect node (Escape)
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        if (shortcutsOpen) {
+          setShortcutsOpen(false);
+        } else if (selectedNode) {
+          setSelectedNode(null);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedNode, shortcutsOpen, handleDeleteNode, handleSave, handleAutoLayout]);
+
   return (
     <div className="flex flex-col h-[calc(100vh-12rem)]">
       {/* Toolbar */}
@@ -216,6 +338,40 @@ export function WorkflowEditorLayout({ initialConfig, onSave }: WorkflowEditorLa
               <CheckCircle2 className="mr-2 h-4 w-4" />
               Validate
             </Button>
+            <Dialog open={shortcutsOpen} onOpenChange={setShortcutsOpen}>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="sm">
+                  <Keyboard className="mr-2 h-4 w-4" />
+                  Shortcuts
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Keyboard Shortcuts</DialogTitle>
+                  <DialogDescription>
+                    Speed up your workflow with these keyboard shortcuts
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 mt-4">
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="font-medium">Save Workflow</div>
+                    <div className="text-muted-foreground font-mono">Ctrl/⌘ + S</div>
+
+                    <div className="font-medium">Auto Layout</div>
+                    <div className="text-muted-foreground font-mono">Ctrl/⌘ + L</div>
+
+                    <div className="font-medium">Delete Node</div>
+                    <div className="text-muted-foreground font-mono">Delete / Backspace</div>
+
+                    <div className="font-medium">Deselect Node</div>
+                    <div className="text-muted-foreground font-mono">Escape</div>
+
+                    <div className="font-medium">Show Shortcuts</div>
+                    <div className="text-muted-foreground font-mono">?</div>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
             {validationCounts && (
               <div className="flex items-center gap-2 text-sm">
                 {validationCounts.errors > 0 && (
@@ -244,7 +400,7 @@ export function WorkflowEditorLayout({ initialConfig, onSave }: WorkflowEditorLa
       </div>
 
       {/* Main Content: 3-Panel Layout */}
-      <div className="flex flex-1 overflow-hidden">
+      <div ref={reactFlowWrapper} className="flex flex-1 overflow-hidden">
         {/* Left Sidebar: Node Palette */}
         <div className="w-[280px] border-r bg-card/30 overflow-y-auto">
           <div className="p-4 space-y-4">
@@ -313,6 +469,8 @@ export function WorkflowEditorLayout({ initialConfig, onSave }: WorkflowEditorLa
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onNodeClick={handleNodeClick}
+            onDragOver={onDragOver}
+            onDrop={onDrop}
             nodeTypes={nodeTypes}
             fitView
             attributionPosition="bottom-left"
@@ -348,6 +506,7 @@ export function WorkflowEditorLayout({ initialConfig, onSave }: WorkflowEditorLa
               selectedNode={selectedNode}
               onClose={() => setRightPanelOpen(false)}
               onUpdateNode={handleUpdateNode}
+              onDeleteNode={handleDeleteNode}
             />
           )}
         </div>
@@ -382,6 +541,15 @@ export function WorkflowEditorLayout({ initialConfig, onSave }: WorkflowEditorLa
   );
 }
 
+// Wrapper component with ReactFlowProvider
+export function WorkflowEditorLayout(props: WorkflowEditorLayoutProps) {
+  return (
+    <ReactFlowProvider>
+      <WorkflowEditorContent {...props} />
+    </ReactFlowProvider>
+  );
+}
+
 // Node Palette Item Component
 function NodePaletteItem({
   type,
@@ -394,8 +562,17 @@ function NodePaletteItem({
   label: string;
   description: string;
 }) {
+  const onDragStart = (event: React.DragEvent) => {
+    event.dataTransfer.setData('application/reactflow', type);
+    event.dataTransfer.effectAllowed = 'move';
+  };
+
   return (
-    <div className="p-3 rounded-lg border bg-card hover:bg-accent transition-colors cursor-move">
+    <div
+      className="p-3 rounded-lg border bg-card hover:bg-accent transition-colors cursor-move"
+      draggable
+      onDragStart={onDragStart}
+    >
       <div className="flex items-start gap-2">
         <span className="text-2xl">{icon}</span>
         <div className="flex-1 min-w-0">
@@ -405,4 +582,51 @@ function NodePaletteItem({
       </div>
     </div>
   );
+}
+
+// Helper function to map node type to ReactFlow node type
+function getReactFlowNodeType(type: string): string {
+  switch (type) {
+    case 'standard':
+      return 'standardNode';
+    case 'retrieve_variable':
+      return 'retrieveVariableNode';
+    case 'end_call':
+      return 'endCallNode';
+    default:
+      return 'standardNode';
+  }
+}
+
+// Helper function to create default node data based on type
+function getDefaultNodeData(id: string, type: string): WorkflowNodeData {
+  switch (type) {
+    case 'standard':
+      return {
+        id,
+        type: 'standard',
+        name: 'New Standard Node',
+        system_prompt: 'You are a helpful AI assistant.',
+        interruptions_enabled: true,
+      };
+    case 'retrieve_variable':
+      return {
+        id,
+        type: 'retrieve_variable',
+        name: 'New Variable Node',
+        variables: [],
+      };
+    case 'end_call':
+      return {
+        id,
+        type: 'end_call',
+        name: 'End Call',
+      };
+    default:
+      return {
+        id,
+        type: 'standard',
+        name: 'New Node',
+      };
+  }
 }
