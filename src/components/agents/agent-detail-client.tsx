@@ -1,0 +1,420 @@
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Separator } from '@/components/ui/separator';
+import {
+  ArrowLeft,
+  Settings,
+  Activity,
+  Phone,
+  History,
+  Edit,
+  Trash2,
+  CheckCircle2,
+  Clock,
+  FileCode,
+} from 'lucide-react';
+import { useAgent, useCreateVersion } from '@/lib/hooks/use-agents';
+import { formatDateTime } from '@/lib/utils/formatters';
+import { DeleteAgentDialog } from './dialogs/delete-agent-dialog';
+import { WorkflowEditorLayout } from './workflow-editor/workflow-editor-layout';
+import { toast } from 'sonner';
+
+interface AgentDetailClientProps {
+  agentId: string;
+}
+
+export function AgentDetailClient({ agentId }: AgentDetailClientProps) {
+  const router = useRouter();
+  const { data: agent, isLoading, error } = useAgent(agentId);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
+  const createVersion = useCreateVersion();
+
+  const handleWorkflowSave = async (config: any) => {
+    try {
+      await createVersion.mutateAsync({
+        agentId,
+        configJson: config,
+        notes: 'Updated via visual editor',
+      });
+      toast.success('New workflow version created');
+    } catch (error) {
+      throw error; // Re-throw to let WorkflowEditorLayout handle it
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Skeleton className="h-8 w-8" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-8 w-64" />
+            <Skeleton className="h-4 w-96" />
+          </div>
+        </div>
+        <Skeleton className="h-[400px] w-full" />
+      </div>
+    );
+  }
+
+  if (error || !agent) {
+    return (
+      <div className="space-y-6">
+        <Link href="/agents">
+          <Button variant="ghost" size="sm">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Agents
+          </Button>
+        </Link>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-center text-destructive">
+              {error?.message || 'Agent not found'}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-4">
+          <Link href="/agents">
+            <Button variant="ghost" size="icon">
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          </Link>
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold tracking-tight">{agent.name}</h1>
+              <Badge variant="outline">
+                <Activity className="mr-1 h-3 w-3" />
+                Active
+              </Badge>
+            </div>
+            {agent.description && (
+              <p className="text-muted-foreground mt-1">{agent.description}</p>
+            )}
+          </div>
+        </div>
+        <Button
+          variant="destructive"
+          size="sm"
+          onClick={() => setDeleteDialogOpen(true)}
+        >
+          <Trash2 className="mr-2 h-4 w-4" />
+          Delete Agent
+        </Button>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Active Version</CardTitle>
+            <FileCode className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {agent.activeVersion ? `v${agent.activeVersion.version}` : 'None'}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {agent.versionCount} total version{agent.versionCount !== 1 ? 's' : ''}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Calls</CardTitle>
+            <Phone className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{agent.callCount}</div>
+            <p className="text-xs text-muted-foreground">
+              <Link href={`/calls?agent=${agent.id}`} className="hover:underline">
+                View call history
+              </Link>
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Phone Mappings</CardTitle>
+            <Phone className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{agent.phoneMappingCount}</div>
+            <p className="text-xs text-muted-foreground">
+              {agent.phoneMappingCount > 0 ? 'Active numbers' : 'No numbers mapped'}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Last Updated</CardTitle>
+            <Clock className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-sm font-bold">{formatDateTime(agent.updatedAt)}</div>
+            <p className="text-xs text-muted-foreground">
+              Created {formatDateTime(agent.createdAt)}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="workflow">Workflow Editor</TabsTrigger>
+          <TabsTrigger value="versions">Versions</TabsTrigger>
+          <TabsTrigger value="settings">Settings</TabsTrigger>
+        </TabsList>
+
+        {/* Overview Tab */}
+        <TabsContent value="overview" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Agent Information</CardTitle>
+                <CardDescription>Basic information about this agent</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground">Agent ID</div>
+                  <div className="text-sm font-mono mt-1">{agent.id}</div>
+                </div>
+                <Separator />
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground">Name</div>
+                  <div className="text-sm mt-1">{agent.name}</div>
+                </div>
+                {agent.description && (
+                  <>
+                    <Separator />
+                    <div>
+                      <div className="text-sm font-medium text-muted-foreground">
+                        Description
+                      </div>
+                      <div className="text-sm mt-1">{agent.description}</div>
+                    </div>
+                  </>
+                )}
+                <Separator />
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground">Tenant ID</div>
+                  <div className="text-sm font-mono mt-1">{agent.tenantId}</div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Active Configuration</CardTitle>
+                <CardDescription>Current workflow version details</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {agent.activeVersion ? (
+                  <>
+                    <div>
+                      <div className="text-sm font-medium text-muted-foreground">Version</div>
+                      <div className="text-sm mt-1 flex items-center gap-2">
+                        <Badge variant="default">v{agent.activeVersion.version}</Badge>
+                        <CheckCircle2 className="h-4 w-4 text-green-500" />
+                      </div>
+                    </div>
+                    <Separator />
+                    <div>
+                      <div className="text-sm font-medium text-muted-foreground">
+                        Created By
+                      </div>
+                      <div className="text-sm mt-1">
+                        {agent.activeVersion.createdBy || 'Unknown'}
+                      </div>
+                    </div>
+                    <Separator />
+                    <div>
+                      <div className="text-sm font-medium text-muted-foreground">
+                        Created At
+                      </div>
+                      <div className="text-sm mt-1">
+                        {formatDateTime(agent.activeVersion.createdAt)}
+                      </div>
+                    </div>
+                    {agent.activeVersion.notes && (
+                      <>
+                        <Separator />
+                        <div>
+                          <div className="text-sm font-medium text-muted-foreground">
+                            Notes
+                          </div>
+                          <div className="text-sm mt-1">{agent.activeVersion.notes}</div>
+                        </div>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No active version configured
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Workflow Summary</CardTitle>
+              <CardDescription>Overview of the current workflow configuration</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {agent.activeVersion ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-sm font-medium text-muted-foreground">
+                        Initial Node
+                      </div>
+                      <div className="text-sm mt-1 font-mono">
+                        {agent.activeVersion.configJson.workflow.initial_node}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-muted-foreground">
+                        Total Nodes
+                      </div>
+                      <div className="text-sm mt-1">
+                        {agent.activeVersion.configJson.workflow.nodes.length}
+                      </div>
+                    </div>
+                  </div>
+                  <Separator />
+                  <div>
+                    <div className="text-sm font-medium text-muted-foreground mb-2">
+                      LLM Configuration
+                    </div>
+                    <div className="text-sm space-y-1">
+                      <div>
+                        Model:{' '}
+                        <span className="font-mono">
+                          {agent.activeVersion.configJson.llm?.model || 'Not configured'}
+                        </span>
+                      </div>
+                      <div>
+                        Temperature:{' '}
+                        {agent.activeVersion.configJson.llm?.temperature ?? 'Default'}
+                      </div>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setActiveTab('workflow')}
+                  >
+                    <Edit className="mr-2 h-4 w-4" />
+                    Edit Workflow
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No workflow configuration available
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Workflow Editor Tab */}
+        <TabsContent value="workflow" className="space-y-4">
+          {agent.activeVersion ? (
+            <WorkflowEditorLayout
+              initialConfig={agent.activeVersion.configJson}
+              onSave={handleWorkflowSave}
+            />
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Workflow Editor</CardTitle>
+                <CardDescription>No active workflow configuration</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="py-12 text-center text-muted-foreground">
+                  <FileCode className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium mb-2">No Active Configuration</p>
+                  <p className="text-sm">
+                    This agent doesn't have an active workflow version.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* Versions Tab */}
+        <TabsContent value="versions" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Version History</CardTitle>
+              <CardDescription>
+                Manage and compare configuration versions
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="py-12 text-center text-muted-foreground">
+                <History className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p className="text-lg font-medium mb-2">Version Management</p>
+                <p className="text-sm">
+                  Version history and comparison features will be implemented soon.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Settings Tab */}
+        <TabsContent value="settings" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Agent Settings</CardTitle>
+              <CardDescription>
+                Update agent name and description
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="py-12 text-center text-muted-foreground">
+                <Settings className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p className="text-lg font-medium mb-2">Settings</p>
+                <p className="text-sm">
+                  Agent settings editor will be available soon.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Delete Dialog */}
+      <DeleteAgentDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        agent={agent}
+      />
+    </div>
+  );
+}

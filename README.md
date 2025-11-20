@@ -13,6 +13,8 @@ A modern, production-ready web application for managing voice AI agent calls and
 - **Data Fetching**: TanStack Query v5
 - **Validation**: Zod v3
 - **Charts**: Recharts v3.4.1
+- **Workflow Editor**: ReactFlow 11.11.4 with Dagre layout
+- **Code Editor**: Monaco Editor (for JSON editing)
 
 ## Prerequisites
 
@@ -179,10 +181,13 @@ Complete tabbed interface with 4 tabs:
 - ✅ Visual status badges (Active)
 - ✅ Last updated timestamps
 - ✅ Empty state handling
-- ✅ Phase 2 placeholder for visual workflow editor
+- ✅ Create agent dialog with validation
+- ✅ Delete agent confirmation with impact analysis
+- ✅ Interactive agent cards with edit/delete actions
+- ✅ Click to view agent details
 
 #### 9. **API Routes**
-Complete REST API (22 endpoints):
+Complete REST API (30 endpoints):
 - `/api/auth/login` - Authentication
 - `/api/auth/logout` - Logout
 - `/api/calls` - Paginated call list with filters
@@ -192,7 +197,12 @@ Complete REST API (22 endpoints):
 - `/api/calls/[call_id]/metrics` - Performance metrics (with per-turn data)
 - `/api/calls/[call_id]/analysis` - AI analysis
 - `/api/calls/[call_id]/transcript` - Full transcript
-- `/api/agents` - Agent list with statistics
+- `/api/agents` - Agent list with CRUD operations
+- `/api/agents/[id]` - Agent detail (GET, PUT, DELETE)
+- `/api/agents/[id]/versions` - Version list and creation
+- `/api/agents/[id]/versions/[versionId]/activate` - Version activation
+- `/api/phone-mappings` - Phone mapping CRUD
+- `/api/phone-mappings/[phone]` - Specific mapping operations
 - `/api/dashboard/call-volume` - Call volume time series
 - `/api/dashboard/sentiment-distribution` - Sentiment aggregation
 - `/api/analytics/latency-by-agent` - Agent performance comparison
@@ -245,6 +255,7 @@ src/
 │   │   │   └── [call_id]/             # Dynamic call detail page
 │   │   ├── analytics/                  # Analytics & charts
 │   │   └── agents/                     # Agent management
+│   │       └── [id]/                  # Agent detail page
 │   ├── api/                            # API routes
 │   │   ├── auth/                       # Authentication
 │   │   ├── calls/                      # Call endpoints
@@ -254,7 +265,12 @@ src/
 │   │   │   │   ├── analysis/
 │   │   │   │   └── transcript/
 │   │   │   └── stats/
-│   │   └── agents/
+│   │   ├── agents/                     # Agent management
+│   │   │   └── [id]/                  # Agent operations
+│   │   │       └── versions/          # Version management
+│   │   │           └── [versionId]/
+│   │   │               └── activate/
+│   │   └── phone-mappings/            # Phone mapping CRUD
 │   ├── layout.tsx                      # Root layout with providers
 │   └── page.tsx                        # Home page (redirects)
 ├── components/
@@ -289,7 +305,26 @@ src/
 │   │   ├── latency-by-agent-chart.tsx # Agent comparison bar chart
 │   │   └── token-usage-trends-chart.tsx # Usage trends line chart
 │   ├── agents/                         # Agent management
-│   │   └── agents-page-client.tsx     # Agents list with real data
+│   │   ├── agents-page-client.tsx     # Agents list with CRUD
+│   │   ├── agent-detail-client.tsx    # Agent detail with tabs
+│   │   ├── dialogs/                    # Create/Delete dialogs
+│   │   │   ├── create-agent-dialog.tsx
+│   │   │   └── delete-agent-dialog.tsx
+│   │   └── workflow-editor/            # Visual workflow editor
+│   │       ├── workflow-editor-layout.tsx # Main 3-panel editor
+│   │       ├── nodes/                  # Custom ReactFlow nodes
+│   │       │   ├── standard-node.tsx
+│   │       │   ├── retrieve-variable-node.tsx
+│   │       │   └── end-call-node.tsx
+│   │       ├── panels/                 # Editor panels
+│   │       │   ├── properties-panel.tsx
+│   │       │   └── node-property-forms/
+│   │       │       ├── standard-node-form.tsx
+│   │       │       ├── retrieve-variable-node-form.tsx
+│   │       │       └── end-call-node-form.tsx
+│   │       └── utils/                  # Editor utilities
+│   │           ├── json-converter.ts   # JSON ↔ ReactFlow conversion
+│   │           └── auto-layout.ts      # Dagre auto-layout
 │   └── providers/                      # React context providers
 ├── lib/
 │   ├── db/                             # Database layer
@@ -313,11 +348,26 @@ src/
 │   │   ├── use-call-detail.ts         # Call detail hooks
 │   │   ├── use-dashboard.ts           # Dashboard data hooks
 │   │   ├── use-analytics.ts           # Analytics data hooks
-│   │   └── use-agents.ts              # Agents data hooks
+│   │   └── use-agents.ts              # Agents data hooks (11 hooks)
+│   ├── db/                             # Database layer
+│   │   ├── schema/                     # Drizzle schema definitions
+│   │   │   ├── index.ts
+│   │   │   ├── calls.ts               # Call-related tables
+│   │   │   ├── agents.ts              # Agent tables
+│   │   │   ├── users.ts               # User tables
+│   │   │   └── tenants.ts             # Tenant tables
+│   │   ├── queries/                    # Database queries
+│   │   │   ├── calls.ts               # Call list queries
+│   │   │   ├── call-details.ts        # Call detail queries
+│   │   │   └── agents.ts              # Agent CRUD queries
+│   │   ├── index.ts                    # DB connection
+│   │   ├── seed-user.ts               # User seeding
+│   │   └── reset-password.ts          # Password reset
 │   ├── charts/                         # Chart configuration
 │   │   └── config.ts                  # Theme-aware chart colors and styles
 │   ├── validations/                    # Zod schemas
-│   │   └── auth.ts
+│   │   ├── auth.ts
+│   │   └── agents.ts                  # Agent/workflow validation
 │   └── utils/
 │       └── formatters.ts               # Formatting utilities
 ├── types/                              # TypeScript types
@@ -511,34 +561,84 @@ The `call_transcripts.transcript_data` JSONB field supports multiple formats:
 }
 ```
 
+### ✅ Phase 2 - Agent Configuration Management (In Progress)
+
+#### 1. **Agent Management UI**
+- ✅ Create new agents with name and description
+- ✅ Delete agents with impact analysis (call count, phone mappings)
+- ✅ Agent detail page with tabbed interface (Overview, Workflow Editor, Versions, Settings)
+- ✅ Real-time statistics (active version, call count, phone mappings, timestamps)
+
+#### 2. **Visual Workflow Editor** (ReactFlow-based)
+- ✅ 3-panel layout: Node Palette (left), Canvas (center), Properties Panel (right)
+- ✅ Custom node components: Standard Node, Retrieve Variable Node, End Call Node
+- ✅ ReactFlow canvas with Background, Controls, MiniMap
+- ✅ Auto-layout with Dagre algorithm (hierarchical graph layout)
+- ✅ Real-time workflow validation with error reporting
+- ✅ **Enhanced Node Editing** - Full properties panel with node-specific forms:
+  - ✅ Standard Node: Static Text/LLM mode toggle, prompt editor, interruptions, transitions, actions
+  - ✅ Retrieve Variable Node: Variable list editor with extraction prompts
+  - ✅ End Call Node: Simple name editor with informational message
+- ✅ Real-time node updates to canvas when editing properties
+- ✅ Save workflow as new version with validation
+- ✅ Collapsible properties panel with toggle button
+
+#### 3. **Workflow Configuration**
+- ✅ JSON ↔ ReactFlow bidirectional conversion
+- ✅ Workflow validation engine (unique IDs, valid targets, required nodes)
+- ✅ Visual validation feedback on canvas
+- ✅ Node position calculation and persistence
+- ✅ Transition management with conditions and priorities
+- ✅ Action management (on_entry, on_exit hooks)
+
+#### 4. **Database & Backend**
+- ✅ Complete database query layer (`src/lib/db/queries/agents.ts`)
+- ✅ Agent CRUD operations with multi-tenant isolation
+- ✅ Version management (create, list, activate with transaction safety)
+- ✅ Phone mapping management (CRUD operations)
+- ✅ Comprehensive Zod validation schemas
+- ✅ TanStack Query hooks for all operations (11 hooks)
+
+#### 5. **Pending Features**
+See [PHASE_2_IMPLEMENTATION.md](./PHASE_2_IMPLEMENTATION.md) for detailed status (64% complete - 23/36 tasks)
+
+**High Priority:**
+- 🔲 Drag & drop node creation from palette
+- 🔲 Add/Delete node buttons
+- 🔲 JSON editor view with Monaco Editor
+- 🔲 Form-based editor alternative
+- 🔲 Version history and comparison UI
+
+**Medium Priority:**
+- 🔲 Phone mappings management UI
+- 🔲 Keyboard shortcuts for workflow editor
+- 🔲 Performance optimization (debouncing, lazy loading)
+
+**Low Priority:**
+- 🔲 Comprehensive testing suite
+- 🔲 Responsive design refinements
+
 ## Next Steps
 
-### Phase 2 - Advanced Features
+### Phase 3 - Advanced Features
 
-1. **Visual Workflow Editor**
-   - Node-based agent configuration
-   - Drag-and-drop flow creation
-   - LLM/TTS/STT settings
-   - Version control UI
-   - Simulation mode
-
-2. **Real-time Updates**
+1. **Real-time Updates**
    - WebSocket integration
    - Live call monitoring
    - Real-time metric streaming
 
-3. **Advanced Analytics**
+2. **Advanced Analytics**
    - Custom date ranges
    - Cost analysis
    - Agent comparison
    - Export reports (CSV/PDF)
 
-4. **Testing Suite**
+3. **Testing Suite**
    - Unit tests (Vitest)
    - Component tests (Testing Library)
    - E2E tests (Playwright)
 
-5. **Docker & Deployment**
+4. **Docker & Deployment**
    - Dockerfile for Next.js app
    - docker-compose.yml
    - Production optimization

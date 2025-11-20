@@ -11,8 +11,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Before implementing ANY feature**, check docs via context7 MCP
 - Use `mcp__context7__resolve-library-id` with "pipecat-ai" to get library ID
 - Then `mcp__context7__get-library-docs` with the library ID and topic
-- **Pipecat may already have native features - don't reinvent the wheel!**
-- Current version: v0.0.93 (see Dependencies section)
 
 ### 2. Use TodoWrite for Task Planning
 

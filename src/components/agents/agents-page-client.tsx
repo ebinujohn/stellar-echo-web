@@ -1,15 +1,39 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Activity, Clock } from "lucide-react";
+import { Plus, Activity, Clock, Edit, Trash2, ArrowRight } from "lucide-react";
 import { useAgents } from "@/lib/hooks/use-agents";
 import { formatDateTime } from "@/lib/utils/formatters";
+import { CreateAgentDialog } from "./dialogs/create-agent-dialog";
+import { DeleteAgentDialog } from "./dialogs/delete-agent-dialog";
 
 export function AgentsPageClient() {
+  const router = useRouter();
   const { data: agents, isLoading, error } = useAgents();
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedAgent, setSelectedAgent] = useState<{
+    id: string;
+    name: string;
+    callCount?: number;
+    phoneMappingCount?: number;
+  } | null>(null);
+
+  const handleDeleteClick = (agent: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedAgent(agent);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleEditClick = (agentId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    router.push(`/agents/${agentId}`);
+  };
 
   return (
     <div className="space-y-6">
@@ -20,7 +44,7 @@ export function AgentsPageClient() {
             Manage voice AI agent configurations
           </p>
         </div>
-        <Button disabled>
+        <Button onClick={() => setCreateDialogOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
           New Agent
         </Button>
@@ -55,7 +79,7 @@ export function AgentsPageClient() {
                 <p className="text-muted-foreground mb-4">
                   No agents found. Create your first agent to get started.
                 </p>
-                <Button disabled>
+                <Button onClick={() => setCreateDialogOpen(true)}>
                   <Plus className="mr-2 h-4 w-4" />
                   Create First Agent
                 </Button>
@@ -64,11 +88,18 @@ export function AgentsPageClient() {
           </Card>
         ) : (
           agents.map((agent) => (
-            <Card key={agent.id} className="hover:shadow-md transition-shadow">
+            <Card
+              key={agent.id}
+              className="hover:shadow-md transition-shadow cursor-pointer group"
+              onClick={() => router.push(`/agents/${agent.id}`)}
+            >
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <CardTitle className="text-lg">{agent.name}</CardTitle>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      {agent.name}
+                      <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </CardTitle>
                     <CardDescription className="mt-1">
                       <div className="flex items-center gap-2">
                         <Badge variant="outline" className="text-xs">
@@ -82,6 +113,24 @@ export function AgentsPageClient() {
                         )}
                       </div>
                     </CardDescription>
+                  </div>
+                  <div className="flex gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={(e) => handleEditClick(agent.id, e)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      onClick={(e) => handleDeleteClick(agent, e)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
               </CardHeader>
@@ -109,27 +158,13 @@ export function AgentsPageClient() {
         )}
       </div>
 
-      {/* Info Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Agent Configuration</CardTitle>
-          <CardDescription>
-            Phase 2 feature - Visual workflow editor for agent configuration
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="text-sm text-muted-foreground">
-            The visual workflow editor with node-based configuration will be implemented in Phase 2.
-            This will allow you to:
-            <ul className="mt-2 list-disc pl-6 space-y-1">
-              <li>Create conversation flows with drag-and-drop nodes</li>
-              <li>Configure LLM, TTS, and STT settings</li>
-              <li>Manage version control and rollbacks</li>
-              <li>Test workflows with simulation mode</li>
-            </ul>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Dialogs */}
+      <CreateAgentDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} />
+      <DeleteAgentDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        agent={selectedAgent}
+      />
     </div>
   );
 }
