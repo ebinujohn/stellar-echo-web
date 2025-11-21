@@ -75,7 +75,6 @@ All agents **must** use node-based workflows. Traditional single-prompt mode has
 | `stt` | object | ❌ No | Speech-to-Text configuration |
 | `rag` | object | ❌ No | RAG (knowledge base) configuration |
 | `auto_hangup` | object | ❌ No | Auto-hangup configuration |
-| `logging` | object | ❌ No | Logging level configuration |
 
 ---
 
@@ -786,7 +785,13 @@ If `max_transitions` exceeded with no `end_call` node configured:
 
 ## Transition Conditions
 
-Transitions move between nodes based on conditions. Conditions are evaluated in priority order (highest to lowest).
+Transitions move between nodes based on conditions. Conditions are evaluated in priority order (lower number = higher priority, like "1st priority", "2nd priority").
+
+**Priority Evaluation:**
+- Transitions are sorted by priority (ascending order)
+- Lower priority number = evaluated first (priority 1 before priority 2)
+- Transitions with the **same priority** maintain their **array order** (stable sort)
+- First matching condition wins (others are skipped)
 
 ### Transition Schema
 
@@ -802,7 +807,22 @@ Transitions move between nodes based on conditions. Conditions are evaluated in 
 |-------|------|----------|---------|-------------|
 | `condition` | string | ✅ Yes | - | Condition to evaluate |
 | `target` | string | ✅ Yes | - | Target node ID |
-| `priority` | integer | ❌ No | `0` | Evaluation priority (higher = first) |
+| `priority` | integer | ❌ No | `0` | Evaluation priority - lower number = checked first (1 before 2) |
+
+**Example with same priority:**
+
+```json
+{
+  "transitions": [
+    {"condition": "contains:goodbye", "target": "closing", "priority": 1},
+    {"condition": "contains:bye", "target": "closing", "priority": 1},
+    {"condition": "contains:exit", "target": "closing", "priority": 1},
+    {"condition": "max_turns:10", "target": "timeout", "priority": 2}
+  ]
+}
+```
+
+**Evaluation order:** goodbye → bye → exit (all priority 1, array order) → max_turns (priority 2)
 
 ### Condition Types
 
@@ -1370,6 +1390,131 @@ Configure Retrieval-Augmented Generation (knowledge base).
 | `bedrock_model` | string | ❌ No | `"amazon.titan-embed-text-v2:0"` | Bedrock embedding model |
 | `bedrock_dimensions` | integer | ❌ No | `1024` | Embedding dimensions |
 
+### Node-Level Override Support
+
+The following RAG parameters can be overridden at the node level:
+
+| Parameter | Global Default | Node Override | Description |
+|-----------|---------------|---------------|-------------|
+| `enabled` | `false` | ✅ Yes | Enable/disable RAG per node |
+| `search_mode` | `"hybrid"` | ✅ Yes | Search strategy: vector, fts, hybrid |
+| `top_k` | `5` | ✅ Yes | Number of chunks retrieved |
+| `rrf_k` | `60` | ✅ Yes | RRF fusion constant (hybrid mode) |
+| `vector_weight` | `0.6` | ✅ Yes | Semantic search weight (hybrid mode) |
+| `fts_weight` | `0.4` | ✅ Yes | Keyword search weight (hybrid mode) |
+| `relevance_filter` | `true` | ❌ No | Global only - query intent detection |
+| `faiss_index_path` | varies | ❌ No | Global only - FAISS index location |
+| `faiss_mapping_path` | varies | ❌ No | Global only - FAISS mapping location |
+| `sqlite_db_path` | varies | ❌ No | Global only - SQLite FTS5 database |
+| `hnsw_ef_search` | `64` | ❌ No | Global only - FAISS search parameter |
+| `bedrock_model` | varies | ❌ No | Global only - Embedding model |
+| `bedrock_dimensions` | `1024` | ❌ No | Global only - Embedding dimensions |
+
+**✅ = Supports node-level override** | **❌ = Global configuration only**
+
+### Search Parameters Explained
+
+#### Search Modes
+
+| Mode | Description | When to Use | Speed |
+|------|-------------|-------------|-------|
+| `"vector"` | Pure semantic search using embeddings | Conceptual questions, fuzzy matching | Fast |
+| `"fts"` | Pure keyword search (SQLite FTS5) | Exact terms, API names, technical jargon | Fastest |
+| `"hybrid"` | Combines vector + FTS using RRF | Best accuracy, balanced approach | Moderate |
+
+**Examples:**
+```json
+// Conceptual queries: "What are the benefits of GLP-1?"
+{"search_mode": "vector"}
+
+// Technical queries: "What is the IndexHNSWFlat parameter?"
+{"search_mode": "fts"}
+
+// General purpose: combines both approaches
+{"search_mode": "hybrid"}
+```
+
+#### Hybrid Search Parameters
+
+When `search_mode: "hybrid"`, three parameters control how results are fused:
+
+**`rrf_k` (Reciprocal Rank Fusion Constant)**
+- Default: `60`
+- Range: `1-200` (typical: `40-100`)
+- Higher values = more balanced fusion between vector and FTS results
+- Lower values = top-ranked results dominate more strongly
+
+**`vector_weight` (Semantic Search Weight)**
+- Default: `0.6` (60%)
+- Range: `0.0-1.0`
+- Controls influence of semantic/embedding-based search
+- Higher = favors conceptual similarity
+
+**`fts_weight` (Keyword Search Weight)**
+- Default: `0.4` (40%)
+- Range: `0.0-1.0`
+- Controls influence of exact keyword matching
+- Higher = favors precise term matches
+
+**Best Practices:**
+- `vector_weight + fts_weight` should sum to `1.0` for balanced results
+- Adjust based on your use case (see patterns below)
+
+#### Weight Configuration Patterns
+
+**Semantic-Focused (Conceptual Questions)**
+```json
+{
+  "vector_weight": 0.7,
+  "fts_weight": 0.3,
+  "rrf_k": 60
+}
+```
+Use for: Educational content, explanations, "how does X work" questions
+
+**Keyword-Focused (Technical Lookups)**
+```json
+{
+  "vector_weight": 0.3,
+  "fts_weight": 0.7,
+  "rrf_k": 60
+}
+```
+Use for: API documentation, error codes, configuration parameters
+
+**Balanced (General Purpose)**
+```json
+{
+  "vector_weight": 0.5,
+  "fts_weight": 0.5,
+  "rrf_k": 60
+}
+```
+Use for: Mixed content types, general Q&A
+
+**Highly Semantic (Research/Education)**
+```json
+{
+  "vector_weight": 0.8,
+  "fts_weight": 0.2,
+  "rrf_k": 80
+}
+```
+Use for: Medical education, complex topics, nuanced questions
+
+#### Top-K Parameter
+
+**`top_k`** - Number of knowledge chunks retrieved:
+- Default: `5`
+- Range: `1-50` (typical: `3-10`)
+- More chunks = more context but higher latency and LLM costs
+- Fewer chunks = faster but may miss relevant information
+
+**Guidelines:**
+- `3-5`: Simple questions with focused topics
+- `5-10`: Complex questions requiring multiple sources
+- `10+`: Comprehensive research or when precision is critical
+
 ### Per-Node RAG Override
 
 Nodes can override global RAG settings. When a node specifies RAG config, specified fields **completely override** the global config for those fields:
@@ -1379,7 +1524,10 @@ Nodes can override global RAG settings. When a node specifies RAG config, specif
   "rag": {
     "enabled": false,
     "search_mode": "hybrid",
-    "top_k": 5
+    "top_k": 5,
+    "rrf_k": 60,
+    "vector_weight": 0.6,
+    "fts_weight": 0.4
   },
   "workflow": {
     "nodes": [
@@ -1388,7 +1536,10 @@ Nodes can override global RAG settings. When a node specifies RAG config, specif
         "rag": {
           "enabled": true,          // ← Enables RAG for this node only
           "search_mode": "vector",  // ← Uses vector search (not hybrid)
-          "top_k": 10               // ← Returns 10 chunks (not 5)
+          "top_k": 10,              // ← Returns 10 chunks (not 5)
+          "rrf_k": 80,              // ← Custom RRF constant
+          "vector_weight": 0.8,     // ← 80% vector weight
+          "fts_weight": 0.2         // ← 20% FTS weight
         }
       }
     ]
@@ -1398,17 +1549,161 @@ Nodes can override global RAG settings. When a node specifies RAG config, specif
 
 **Override Behavior:**
 - Node-level settings take precedence over global
-- Only specified fields override (unspecified fields don't fall back to global defaults)
+- Only specified fields override (unspecified fields use global defaults)
 - If node-level `enabled: false`, RAG disabled for that node only
 - Each node can have different RAG behavior
+- Hybrid search weights update dynamically when transitioning between nodes
 
 **Field Compatibility:**
 
-Node-level RAG overrides only support: `enabled`, `search_mode`, `top_k`
+Node-level RAG overrides support: `enabled`, `search_mode`, `top_k`, `rrf_k`, `vector_weight`, `fts_weight`
 
-Other RAG fields (`rrf_k`, `vector_weight`, `fts_weight`, file paths) **cannot** be overridden per-node and always use global configuration.
+Other RAG fields (file paths, bedrock settings, `relevance_filter`) **cannot** be overridden per-node and always use global configuration.
 
-### Example
+**Weight Validation:**
+- `vector_weight` + `fts_weight` should sum to 1.0 for balanced hybrid search
+- Weights only apply when `search_mode` is `"hybrid"`
+- Common patterns:
+  - Semantic-focused: `vector_weight: 0.7, fts_weight: 0.3`
+  - Keyword-focused: `vector_weight: 0.3, fts_weight: 0.7`
+  - Balanced: `vector_weight: 0.5, fts_weight: 0.5`
+
+### Complete Multi-Node RAG Example
+
+This example shows a technical support agent with different RAG configurations per node:
+
+```json
+{
+  "agent": {
+    "id": "tech_support",
+    "name": "API Documentation Support"
+  },
+  "workflow": {
+    "initial_node": "greeting",
+    "nodes": [
+      {
+        "id": "greeting",
+        "type": "standard",
+        "name": "Greeting",
+        "system_prompt": "Greet the user and ask what they need help with.",
+        "rag": {
+          "enabled": false
+        },
+        "transitions": [
+          {"condition": "user_responded", "target": "triage"}
+        ]
+      },
+      {
+        "id": "triage",
+        "type": "standard",
+        "name": "Question Triage",
+        "system_prompt": "Understand the user's question and route to appropriate help.",
+        "rag": {
+          "enabled": true,
+          "search_mode": "hybrid",
+          "top_k": 5,
+          "vector_weight": 0.6,
+          "fts_weight": 0.4
+        },
+        "transitions": [
+          {"condition": "topic_is:api_reference", "target": "api_lookup"},
+          {"condition": "topic_is:conceptual", "target": "education"},
+          {"condition": "topic_is:error", "target": "error_troubleshooting"}
+        ]
+      },
+      {
+        "id": "api_lookup",
+        "type": "standard",
+        "name": "API Reference Lookup",
+        "system_prompt": "Provide precise API documentation and parameter details.",
+        "rag": {
+          "enabled": true,
+          "search_mode": "hybrid",
+          "top_k": 3,
+          "vector_weight": 0.3,
+          "fts_weight": 0.7,
+          "rrf_k": 50
+        },
+        "transitions": [
+          {"condition": "contains:goodbye", "target": "end"}
+        ]
+      },
+      {
+        "id": "education",
+        "type": "standard",
+        "name": "Conceptual Education",
+        "system_prompt": "Explain concepts and best practices in detail.",
+        "rag": {
+          "enabled": true,
+          "search_mode": "hybrid",
+          "top_k": 10,
+          "vector_weight": 0.8,
+          "fts_weight": 0.2,
+          "rrf_k": 80
+        },
+        "transitions": [
+          {"condition": "contains:goodbye", "target": "end"}
+        ]
+      },
+      {
+        "id": "error_troubleshooting",
+        "type": "standard",
+        "name": "Error Code Lookup",
+        "system_prompt": "Help diagnose and resolve error codes.",
+        "rag": {
+          "enabled": true,
+          "search_mode": "hybrid",
+          "top_k": 7,
+          "vector_weight": 0.4,
+          "fts_weight": 0.6,
+          "rrf_k": 60
+        },
+        "transitions": [
+          {"condition": "contains:goodbye", "target": "end"}
+        ]
+      },
+      {
+        "id": "end",
+        "type": "end_call",
+        "name": "End Call"
+      }
+    ]
+  },
+  "rag": {
+    "enabled": true,
+    "search_mode": "hybrid",
+    "top_k": 5,
+    "relevance_filter": true,
+    "rrf_k": 60,
+    "vector_weight": 0.6,
+    "fts_weight": 0.4,
+    "faiss_index_path": "data/faiss/index.faiss",
+    "faiss_mapping_path": "data/faiss/mapping.pkl",
+    "sqlite_db_path": "data/metadata/docs.db"
+  }
+}
+```
+
+**Node-by-Node RAG Behavior:**
+
+| Node | RAG Enabled | Search Mode | Top K | Vector:FTS | Purpose |
+|------|-------------|-------------|-------|------------|---------|
+| `greeting` | ❌ No | - | - | - | No knowledge needed for greeting |
+| `triage` | ✅ Yes | hybrid | 5 | 60:40 | Balanced search for routing |
+| `api_lookup` | ✅ Yes | hybrid | 3 | 30:70 | Keyword-heavy for exact API names |
+| `education` | ✅ Yes | hybrid | 10 | 80:20 | Semantic-heavy for concepts |
+| `error_troubleshooting` | ✅ Yes | hybrid | 7 | 40:60 | Balanced with keyword bias |
+
+**How It Works:**
+1. User enters `greeting` node - No RAG queries
+2. Transitions to `triage` - RAG uses balanced 60:40 weights
+3. Based on topic, routes to specialized node
+4. Each specialized node automatically reconfigures RAG weights
+5. `api_lookup` uses 30:70 for exact term matching
+6. `education` uses 80:20 for conceptual understanding
+7. Weights update dynamically on each transition
+
+### Simple Example
 
 ```json
 {
@@ -1472,44 +1767,32 @@ Controls whether call automatically ends or waits for manual termination:
 
 ## Logging Configuration
 
-Controls application logging verbosity:
+⚠️ **NOT SUPPORTED - Use Environment Variable**
 
-### Schema
+**Per-agent logging is not supported.** Logging is controlled globally via the `LOG_LEVEL` environment variable for all agents.
 
-```json
-{
-  "logging": {
-    "level": "INFO"
-  }
-}
+### How to Control Logging
+
+Use the `LOG_LEVEL` environment variable:
+
+```bash
+# Set in .env file
+LOG_LEVEL=DEBUG
+
+# Or pass directly
+LOG_LEVEL=DEBUG uv run uvicorn app.main:app --reload
 ```
-
-### Fields
-
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| `level` | string | ❌ No | `"INFO"` | Logging level |
 
 ### Logging Levels
 
 | Level | Output | Use Case |
 |-------|--------|----------|
-| `"DEBUG"` | Detailed debug info, SQL queries, LLM details | Development, troubleshooting |
-| `"INFO"` | Key events, transitions, metrics | Production, normal operation |
-| `"WARNING"` | Problems and warnings | Production monitoring |
-| `"ERROR"` | Errors only | Silent operation |
+| `DEBUG` | Detailed debug info, SQL queries, LLM details, pipeline frames | Development, troubleshooting |
+| `INFO` | Key events, transitions, metrics, user/bot messages | Production, normal operation (default) |
+| `WARNING` | Problems and warnings only | Production monitoring |
+| `ERROR` | Errors only | Silent operation |
 
-**Note**: Can also be set via `LOG_LEVEL` environment variable. Agent JSON config takes precedence over environment variable.
-
-### Example
-
-```json
-{
-  "logging": {
-    "level": "DEBUG"
-  }
-}
-```
+**Note**: Do not include `logging` section in agent JSON files - it is not supported and will be ignored if present.
 
 ---
 
@@ -1726,7 +2009,10 @@ Simplest valid configuration:
         "rag": {
           "enabled": true,
           "search_mode": "hybrid",
-          "top_k": 5
+          "top_k": 8,
+          "vector_weight": 0.75,
+          "fts_weight": 0.25,
+          "rrf_k": 70
         },
         "transitions": [
           {
@@ -1779,10 +2065,34 @@ Simplest valid configuration:
     "enabled": true,
     "search_mode": "hybrid",
     "top_k": 5,
-    "relevance_filter": true
+    "relevance_filter": true,
+    "rrf_k": 60,
+    "vector_weight": 0.6,
+    "fts_weight": 0.4,
+    "faiss_index_path": "data/faiss/medical_index.faiss",
+    "faiss_mapping_path": "data/faiss/medical_mapping.pkl",
+    "sqlite_db_path": "data/metadata/medical_rag.db",
+    "bedrock_model": "amazon.titan-embed-text-v2:0",
+    "bedrock_dimensions": 1024
   }
 }
 ```
+
+**RAG Configuration Notes:**
+- **Greeting node**: RAG disabled - no knowledge needed for welcome message
+- **Education node**: Uses semantic-focused weights (75% vector / 25% FTS)
+  - Higher `top_k: 8` to retrieve more medical information
+  - Higher `vector_weight: 0.75` for conceptual medical questions
+  - Higher `rrf_k: 70` for balanced fusion of diverse medical sources
+- **Closing node**: RAG disabled - standard farewell message
+- **Global defaults**: Balanced 60/40 weights as fallback
+
+This configuration optimizes for medical education where users ask conceptual questions like:
+- "What are the benefits of GLP-1 medications?"
+- "How do these medications work?"
+- "What are the side effects?"
+
+The semantic-heavy weights ensure the system understands the *meaning* of medical terms rather than just matching keywords.
 
 ---
 

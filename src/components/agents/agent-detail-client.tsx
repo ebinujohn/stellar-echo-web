@@ -424,6 +424,45 @@ export function AgentDetailClient({ agentId }: AgentDetailClientProps) {
                 </CardContent>
               </Card>
 
+              {/* RAG Settings */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>RAG Configuration</CardTitle>
+                  <CardDescription>Knowledge base retrieval settings</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <div className="text-muted-foreground">Enabled</div>
+                      <div className="font-medium">
+                        {agent.activeVersion.configJson.rag?.enabled ? 'Yes' : 'No'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">Search Mode</div>
+                      <div className="font-medium capitalize">
+                        {agent.activeVersion.configJson.rag?.search_mode || 'N/A'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">Top K</div>
+                      <div className="font-medium">
+                        {agent.activeVersion.configJson.rag?.top_k ?? 'N/A'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">Vector:FTS Weight</div>
+                      <div className="font-medium">
+                        {agent.activeVersion.configJson.rag?.vector_weight !== undefined &&
+                        agent.activeVersion.configJson.rag?.fts_weight !== undefined
+                          ? `${agent.activeVersion.configJson.rag.vector_weight}:${agent.activeVersion.configJson.rag.fts_weight}`
+                          : 'N/A'}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
               {/* Auto Hangup Settings */}
               <Card>
                 <CardHeader>

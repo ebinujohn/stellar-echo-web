@@ -10,7 +10,19 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, Trash2, Save } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { Plus, Trash2, Save, ChevronDown, ChevronRight, Database } from 'lucide-react';
 import type { WorkflowNodeData } from '../../utils/json-converter';
 
 interface StandardNodeFormProps {
@@ -38,6 +50,18 @@ export function StandardNodeForm({ nodeData, onUpdate }: StandardNodeFormProps) 
     nodeData.actions?.on_exit || []
   );
 
+  // RAG Override Settings
+  const [ragOverrideEnabled, setRagOverrideEnabled] = useState(
+    nodeData.rag !== undefined && nodeData.rag !== null
+  );
+  const [ragEnabled, setRagEnabled] = useState(nodeData.rag?.enabled ?? false);
+  const [ragSearchMode, setRagSearchMode] = useState(nodeData.rag?.search_mode || 'hybrid');
+  const [ragTopK, setRagTopK] = useState(nodeData.rag?.top_k ?? 5);
+  const [ragRrfK, setRagRrfK] = useState(nodeData.rag?.rrf_k ?? 60);
+  const [ragVectorWeight, setRagVectorWeight] = useState(nodeData.rag?.vector_weight ?? 0.6);
+  const [ragFtsWeight, setRagFtsWeight] = useState(nodeData.rag?.fts_weight ?? 0.4);
+  const [ragCollapsibleOpen, setRagCollapsibleOpen] = useState(false);
+
   // Apply changes immediately
   // Note: onUpdate is intentionally excluded from deps to prevent infinite loops
   useEffect(() => {
@@ -59,6 +83,20 @@ export function StandardNodeForm({ nodeData, onUpdate }: StandardNodeFormProps) 
       updates.system_prompt = systemPrompt;
     }
 
+    // Add RAG configuration if override is enabled
+    if (ragOverrideEnabled) {
+      updates.rag = {
+        enabled: ragEnabled,
+        search_mode: ragSearchMode,
+        top_k: ragTopK,
+        rrf_k: ragRrfK,
+        vector_weight: ragVectorWeight,
+        fts_weight: ragFtsWeight,
+      };
+    } else {
+      updates.rag = undefined;
+    }
+
     onUpdate(updates);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -70,6 +108,13 @@ export function StandardNodeForm({ nodeData, onUpdate }: StandardNodeFormProps) 
     transitions,
     onEntryActions,
     onExitActions,
+    ragOverrideEnabled,
+    ragEnabled,
+    ragSearchMode,
+    ragTopK,
+    ragRrfK,
+    ragVectorWeight,
+    ragFtsWeight,
   ]);
 
   const addTransition = () => {
@@ -389,6 +434,142 @@ export function StandardNodeForm({ nodeData, onUpdate }: StandardNodeFormProps) 
               </div>
             )}
           </div>
+        </div>
+
+        <Separator />
+
+        {/* RAG Override Configuration */}
+        <div className="space-y-4">
+          <Collapsible open={ragCollapsibleOpen} onOpenChange={setRagCollapsibleOpen}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="p-0 h-auto">
+                    {ragCollapsibleOpen ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                  </Button>
+                </CollapsibleTrigger>
+                <Label className="cursor-pointer" onClick={() => setRagCollapsibleOpen(!ragCollapsibleOpen)}>
+                  <Database className="h-4 w-4 inline mr-2" />
+                  RAG Overrides
+                </Label>
+              </div>
+              <Switch
+                checked={ragOverrideEnabled}
+                onCheckedChange={setRagOverrideEnabled}
+              />
+            </div>
+
+            <CollapsibleContent className="space-y-4 mt-4">
+              {ragOverrideEnabled && (
+                <>
+                  <div className="p-3 border rounded-lg bg-muted/50 space-y-4">
+                    <p className="text-xs text-muted-foreground">
+                      Override global RAG settings for this node only. Unset fields will use global defaults.
+                    </p>
+
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label className="text-sm">Enable RAG</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Enable/disable knowledge base for this node
+                        </p>
+                      </div>
+                      <Switch checked={ragEnabled} onCheckedChange={setRagEnabled} />
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-3">
+                      <div>
+                        <Label className="text-xs">Search Mode</Label>
+                        <Select value={ragSearchMode} onValueChange={setRagSearchMode}>
+                          <SelectTrigger className="h-8 mt-1.5">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="vector">Vector (Semantic)</SelectItem>
+                            <SelectItem value="fts">FTS (Keyword)</SelectItem>
+                            <SelectItem value="hybrid">Hybrid</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <Label className="text-xs">Top K Results</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          max="50"
+                          value={ragTopK}
+                          onChange={(e) => setRagTopK(parseInt(e.target.value) || 5)}
+                          className="h-8 mt-1.5"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Number of chunks (1-50)
+                        </p>
+                      </div>
+                    </div>
+
+                    <Separator />
+                    <div className="text-xs font-medium">Hybrid Search Weights</div>
+
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <Label className="text-xs">RRF K</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          max="200"
+                          value={ragRrfK}
+                          onChange={(e) => setRagRrfK(parseInt(e.target.value) || 60)}
+                          className="h-8 mt-1.5"
+                        />
+                      </div>
+
+                      <div>
+                        <Label className="text-xs">Vector Weight</Label>
+                        <Input
+                          type="number"
+                          step="0.05"
+                          min="0"
+                          max="1"
+                          value={ragVectorWeight}
+                          onChange={(e) => setRagVectorWeight(parseFloat(e.target.value) || 0.6)}
+                          className="h-8 mt-1.5"
+                        />
+                      </div>
+
+                      <div>
+                        <Label className="text-xs">FTS Weight</Label>
+                        <Input
+                          type="number"
+                          step="0.05"
+                          min="0"
+                          max="1"
+                          value={ragFtsWeight}
+                          onChange={(e) => setRagFtsWeight(parseFloat(e.target.value) || 0.4)}
+                          className="h-8 mt-1.5"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Weight validation warning */}
+                    {ragSearchMode === 'hybrid' && Math.abs((ragVectorWeight + ragFtsWeight) - 1.0) > 0.01 && (
+                      <div className="rounded border border-yellow-500/50 bg-yellow-500/10 p-2">
+                        <p className="text-xs text-yellow-600 dark:text-yellow-500">
+                          <strong>Warning:</strong> Weights should sum to 1.0. Current: {(ragVectorWeight + ragFtsWeight).toFixed(2)}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </CollapsibleContent>
+          </Collapsible>
         </div>
       </div>
     </ScrollArea>

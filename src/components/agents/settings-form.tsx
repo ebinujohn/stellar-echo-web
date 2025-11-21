@@ -50,6 +50,15 @@ export function SettingsForm({ agentId, currentConfig, onSave }: SettingsFormPro
   const [sttEotThreshold, setSttEotThreshold] = useState(currentConfig.stt?.eot_threshold ?? null);
   const [sttEotTimeoutMs, setSttEotTimeoutMs] = useState(currentConfig.stt?.eot_timeout_ms ?? null);
 
+  // RAG Settings
+  const [ragEnabled, setRagEnabled] = useState(currentConfig.rag?.enabled ?? false);
+  const [ragSearchMode, setRagSearchMode] = useState(currentConfig.rag?.search_mode || 'hybrid');
+  const [ragTopK, setRagTopK] = useState(currentConfig.rag?.top_k ?? 5);
+  const [ragRelevanceFilter, setRagRelevanceFilter] = useState(currentConfig.rag?.relevance_filter ?? true);
+  const [ragRrfK, setRagRrfK] = useState(currentConfig.rag?.rrf_k ?? 60);
+  const [ragVectorWeight, setRagVectorWeight] = useState(currentConfig.rag?.vector_weight ?? 0.6);
+  const [ragFtsWeight, setRagFtsWeight] = useState(currentConfig.rag?.fts_weight ?? 0.4);
+
   // Other Settings
   const [autoHangupEnabled, setAutoHangupEnabled] = useState(currentConfig.auto_hangup?.enabled ?? true);
 
@@ -87,6 +96,16 @@ export function SettingsForm({ agentId, currentConfig, onSave }: SettingsFormPro
           eager_eot_threshold: sttEagerEotThreshold,
           eot_threshold: sttEotThreshold,
           eot_timeout_ms: sttEotTimeoutMs,
+        },
+        rag: {
+          ...currentConfig.rag,
+          enabled: ragEnabled,
+          search_mode: ragSearchMode,
+          top_k: parseInt(String(ragTopK)),
+          relevance_filter: ragRelevanceFilter,
+          rrf_k: parseInt(String(ragRrfK)),
+          vector_weight: parseFloat(String(ragVectorWeight)),
+          fts_weight: parseFloat(String(ragFtsWeight)),
         },
         auto_hangup: {
           enabled: autoHangupEnabled,
@@ -389,6 +408,132 @@ export function SettingsForm({ agentId, currentConfig, onSave }: SettingsFormPro
               />
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* RAG Configuration */}
+      <Card>
+        <CardHeader>
+          <CardTitle>RAG Configuration</CardTitle>
+          <CardDescription>
+            Configure retrieval-augmented generation (knowledge base) settings
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between rounded-lg border p-4">
+            <div className="space-y-0.5">
+              <Label className="text-base">Enable RAG</Label>
+              <p className="text-sm text-muted-foreground">
+                Enable or disable knowledge base retrieval for this agent
+              </p>
+            </div>
+            <Switch checked={ragEnabled} onCheckedChange={setRagEnabled} />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="rag-search-mode">Search Mode</Label>
+              <Select value={ragSearchMode} onValueChange={setRagSearchMode}>
+                <SelectTrigger id="rag-search-mode">
+                  <SelectValue placeholder="Select search mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="vector">Vector (Semantic)</SelectItem>
+                  <SelectItem value="fts">FTS (Keyword)</SelectItem>
+                  <SelectItem value="hybrid">Hybrid (Vector + FTS)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Vector for concepts, FTS for exact terms, Hybrid for both
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="rag-top-k">Top K Results</Label>
+              <Input
+                id="rag-top-k"
+                type="number"
+                min="1"
+                max="50"
+                value={ragTopK}
+                onChange={(e) => setRagTopK(parseInt(e.target.value))}
+              />
+              <p className="text-xs text-muted-foreground">Number of chunks to retrieve (1-50)</p>
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div className="space-y-0.5">
+                <Label>Relevance Filter</Label>
+                <p className="text-xs text-muted-foreground">
+                  Only query for questions/info requests
+                </p>
+              </div>
+              <Switch checked={ragRelevanceFilter} onCheckedChange={setRagRelevanceFilter} />
+            </div>
+          </div>
+
+          <Separator />
+          <div className="text-sm font-medium">Hybrid Search Parameters</div>
+          <p className="text-xs text-muted-foreground">
+            These settings only apply when search mode is set to Hybrid
+          </p>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="space-y-2">
+              <Label htmlFor="rag-rrf-k">RRF K</Label>
+              <Input
+                id="rag-rrf-k"
+                type="number"
+                min="1"
+                max="200"
+                value={ragRrfK}
+                onChange={(e) => setRagRrfK(parseInt(e.target.value))}
+              />
+              <p className="text-xs text-muted-foreground">Reciprocal rank fusion constant</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="rag-vector-weight">Vector Weight</Label>
+              <Input
+                id="rag-vector-weight"
+                type="number"
+                step="0.05"
+                min="0"
+                max="1"
+                value={ragVectorWeight}
+                onChange={(e) => setRagVectorWeight(parseFloat(e.target.value))}
+              />
+              <p className="text-xs text-muted-foreground">Semantic search weight (0.0-1.0)</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="rag-fts-weight">FTS Weight</Label>
+              <Input
+                id="rag-fts-weight"
+                type="number"
+                step="0.05"
+                min="0"
+                max="1"
+                value={ragFtsWeight}
+                onChange={(e) => setRagFtsWeight(parseFloat(e.target.value))}
+              />
+              <p className="text-xs text-muted-foreground">Keyword search weight (0.0-1.0)</p>
+            </div>
+          </div>
+
+          {/* Weight validation warning */}
+          {ragSearchMode === 'hybrid' && Math.abs((ragVectorWeight + ragFtsWeight) - 1.0) > 0.01 && (
+            <div className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-3">
+              <p className="text-sm text-yellow-600 dark:text-yellow-500">
+                <strong>Warning:</strong> Vector weight and FTS weight should sum to 1.0 for balanced results.
+                Current sum: {(ragVectorWeight + ragFtsWeight).toFixed(2)}
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 

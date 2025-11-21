@@ -110,8 +110,9 @@ pnpm test:e2e:ui      # Run Playwright with UI
 
 - **Page components**: Client components with `"use client"` directive in `src/app/(dashboard)/`
 - **Feature components**: Domain-specific components in `src/components/[feature]/` (calls, dashboard, analytics, agents)
-  - Agent settings form: `src/components/agents/settings-form.tsx` - comprehensive global settings UI (LLM, TTS, STT, auto-hangup)
+  - Agent settings form: `src/components/agents/settings-form.tsx` - comprehensive global settings UI (LLM, TTS, STT, RAG, auto-hangup)
   - Agent detail tabs: Overview (with settings preview), Workflow Editor, Versions, Settings
+  - Workflow editor: `src/components/agents/workflow-editor/` - visual node editor with per-node RAG overrides
   - Call detail page: `src/components/calls/call-detail-client.tsx` - displays call info with download recording button (when available)
 - **Layout components**: Reusable layout pieces in `src/components/layout/` (sidebar, navbar, user-menu, theme-toggle)
 - **UI primitives**: shadcn/ui components in `src/components/ui/`
@@ -194,14 +195,19 @@ Agent configurations are stored as versioned JSONB documents in `agent_config_ve
   llm: { enabled, model, temperature, max_tokens, service_tier },
   tts: { enabled, model, voice_id, stability, similarity_boost, style, ... },
   stt: { model, sample_rate, eager_eot_threshold, eot_threshold, ... },
+  rag: { enabled, search_mode, top_k, relevance_filter, rrf_k, vector_weight, fts_weight, ... },
   auto_hangup: { enabled }
 }
 ```
 
 **Settings Management:**
-- **Overview Tab**: Displays all global settings in read-only cards (LLM, TTS, STT, Auto-Hangup)
+- **Overview Tab**: Displays all global settings in read-only cards (LLM, TTS, STT, RAG, Auto-Hangup)
 - **Settings Tab**: Full form for editing global settings with save button at top (creates new version)
+  - RAG configuration: Search mode (vector/fts/hybrid), top-k retrieval, hybrid search weights
+  - Infrastructure settings (file paths, advanced) preserved from existing config
 - **Workflow Tab**: Visual editor for workflow nodes and transitions
+  - Per-node RAG overrides: Standard nodes can override global RAG settings (enabled, search_mode, top_k, weights)
+  - Collapsible RAG section in node properties panel
 - All changes create a new configuration version via `/api/agents/[id]/versions`
 - Active version (`is_active=true`) is used for agent runtime behavior
 
@@ -219,7 +225,7 @@ Agent configurations are stored as versioned JSONB documents in `agent_config_ve
 - `tenants` - Organizations (multi-tenancy root)
 - `users` - User accounts with bcrypt-hashed passwords
 - `agents` - Agent definitions
-- `agent_config_versions` - Versioned agent configurations (stores workflow, LLM, TTS, STT, auto-hangup settings in `config_json` JSONB field)
+- `agent_config_versions` - Versioned agent configurations (stores workflow, LLM, TTS, STT, RAG, auto-hangup settings in `config_json` JSONB field)
 
 ### Call Tables
 
