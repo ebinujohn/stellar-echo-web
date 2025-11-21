@@ -69,6 +69,14 @@ export interface CallMetrics {
   avgSttDelayMs: number | null;
   minSttDelayMs: number | null;
   maxSttDelayMs: number | null;
+  // STT TTFB (Pipecat)
+  avgSttTtfbMs: number | null;
+  minSttTtfbMs: number | null;
+  maxSttTtfbMs: number | null;
+  // STT Processing (Pipecat) - Recommended for Deepgram Flux
+  avgSttProcessingMs: number | null;
+  minSttProcessingMs: number | null;
+  maxSttProcessingMs: number | null;
   // LLM Processing
   avgLlmProcessingMs: number | null;
   minLlmProcessingMs: number | null;
@@ -85,6 +93,10 @@ export interface CallMetrics {
   avgLlmToTtsGapMs: number | null;
   minLlmToTtsGapMs: number | null;
   maxLlmToTtsGapMs: number | null;
+  // TTS TTFB (Pipecat)
+  avgTtsTtfbMs: number | null;
+  minTtsTtfbMs: number | null;
+  maxTtsTtfbMs: number | null;
   // RAG Processing
   avgRagProcessingMs: number | null;
   minRagProcessingMs: number | null;
@@ -233,16 +245,16 @@ export async function getCallMetrics(callId: string, tenantId: string): Promise<
   if (!metrics) return null;
 
   // Parse metricsData JSONB field to get per-turn metrics
+  // Note: The metricsData field stores aggregated metric values, not per-turn data
+  // Per-turn data would need to come from call_messages or a separate structure
   let parsedMetricsData: TurnMetrics[] | null = null;
   if (metrics.metricsData && Array.isArray(metrics.metricsData)) {
     parsedMetricsData = metrics.metricsData as TurnMetrics[];
   }
 
-  // Count interruptions from turn metrics
-  let totalInterruptions = 0;
-  if (parsedMetricsData) {
-    totalInterruptions = parsedMetricsData.filter(turn => turn.wasInterrupted).length;
-  }
+  // Get actual turn count and interruptions from call data
+  const totalTurns = call.totalTurns || 0;
+  const totalInterruptions = call.totalUserInterruptions || 0;
 
   return {
     callId: metrics.callId,
@@ -258,6 +270,14 @@ export async function getCallMetrics(callId: string, tenantId: string): Promise<
     avgSttDelayMs: metrics.avgSttDelayMs ? Number(metrics.avgSttDelayMs) : null,
     minSttDelayMs: metrics.minSttDelayMs ? Number(metrics.minSttDelayMs) : null,
     maxSttDelayMs: metrics.maxSttDelayMs ? Number(metrics.maxSttDelayMs) : null,
+    // STT TTFB
+    avgSttTtfbMs: metrics.avgSttTtfbMs ? Number(metrics.avgSttTtfbMs) : null,
+    minSttTtfbMs: metrics.minSttTtfbMs ? Number(metrics.minSttTtfbMs) : null,
+    maxSttTtfbMs: metrics.maxSttTtfbMs ? Number(metrics.maxSttTtfbMs) : null,
+    // STT Processing
+    avgSttProcessingMs: metrics.avgSttProcessingMs ? Number(metrics.avgSttProcessingMs) : null,
+    minSttProcessingMs: metrics.minSttProcessingMs ? Number(metrics.minSttProcessingMs) : null,
+    maxSttProcessingMs: metrics.maxSttProcessingMs ? Number(metrics.maxSttProcessingMs) : null,
     // LLM Processing
     avgLlmProcessingMs: metrics.avgLlmProcessingMs ? Number(metrics.avgLlmProcessingMs) : null,
     minLlmProcessingMs: metrics.minLlmProcessingMs ? Number(metrics.minLlmProcessingMs) : null,
@@ -274,6 +294,10 @@ export async function getCallMetrics(callId: string, tenantId: string): Promise<
     avgLlmToTtsGapMs: metrics.avgLlmToTtsGapMs ? Number(metrics.avgLlmToTtsGapMs) : null,
     minLlmToTtsGapMs: metrics.minLlmToTtsGapMs ? Number(metrics.minLlmToTtsGapMs) : null,
     maxLlmToTtsGapMs: metrics.maxLlmToTtsGapMs ? Number(metrics.maxLlmToTtsGapMs) : null,
+    // TTS TTFB
+    avgTtsTtfbMs: metrics.avgTtsTtfbMs ? Number(metrics.avgTtsTtfbMs) : null,
+    minTtsTtfbMs: metrics.minTtsTtfbMs ? Number(metrics.minTtsTtfbMs) : null,
+    maxTtsTtfbMs: metrics.maxTtsTtfbMs ? Number(metrics.maxTtsTtfbMs) : null,
     // RAG Processing
     avgRagProcessingMs: metrics.avgRagProcessingMs ? Number(metrics.avgRagProcessingMs) : null,
     minRagProcessingMs: metrics.minRagProcessingMs ? Number(metrics.minRagProcessingMs) : null,
@@ -287,7 +311,7 @@ export async function getCallMetrics(callId: string, tenantId: string): Promise<
     totalTtsCharacters: metrics.totalTtsCharacters,
     // Turn data
     metricsData: parsedMetricsData,
-    totalTurns: parsedMetricsData ? parsedMetricsData.length : null,
+    totalTurns,
     totalInterruptions,
   };
 }

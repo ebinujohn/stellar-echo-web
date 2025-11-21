@@ -1,6 +1,6 @@
 "use client";
 
-import { LineChart, Line } from "recharts";
+import { LineChart, Line, BarChart, Bar } from "recharts";
 import {
   ChartContainer,
   ChartGrid,
@@ -42,30 +42,53 @@ export function CallVolumeChart({ days = 7, height = 280 }: CallVolumeChartProps
     calls: Number(item.count),
   }));
 
+  // Use bar chart for sparse data (< 3 data points), line chart otherwise
+  const useSparseVisualization = chartData.length < 3;
+
   return (
     <ChartContainer height={height}>
-      <LineChart data={chartData}>
-        <ChartGrid />
-        <ChartXAxis
-          dataKey="date"
-          angle={-45}
-          height={60}
-        />
-        <ChartYAxis
-          tickFormatter={(value) => Math.round(value).toString()}
-        />
-        <ChartTooltip
-          formatter={(value: number) => [`${value} calls`, "Calls"]}
-        />
-        <Line
-          type="monotone"
-          dataKey="calls"
-          stroke={chartColors.primary}
-          strokeWidth={2}
-          dot={{ fill: chartColors.primary, r: 4 }}
-          activeDot={{ r: 6 }}
-        />
-      </LineChart>
+      {useSparseVisualization ? (
+        <BarChart data={chartData}>
+          <ChartGrid />
+          <ChartXAxis
+            dataKey="date"
+          />
+          <ChartYAxis
+            tickFormatter={(value) => Math.round(value).toString()}
+          />
+          <ChartTooltip
+            formatter={(value: number) => [`${value} call${value === 1 ? '' : 's'}`, "Total"]}
+          />
+          <Bar
+            dataKey="calls"
+            fill={chartColors.primary}
+            radius={[4, 4, 0, 0]}
+          />
+        </BarChart>
+      ) : (
+        <LineChart data={chartData}>
+          <ChartGrid />
+          <ChartXAxis
+            dataKey="date"
+            angle={-45}
+            height={60}
+          />
+          <ChartYAxis
+            tickFormatter={(value) => Math.round(value).toString()}
+          />
+          <ChartTooltip
+            formatter={(value: number) => [`${value} call${value === 1 ? '' : 's'}`, "Total"]}
+          />
+          <Line
+            type="monotone"
+            dataKey="calls"
+            stroke={chartColors.primary}
+            strokeWidth={2}
+            dot={{ fill: chartColors.primary, r: 4 }}
+            activeDot={{ r: 6 }}
+          />
+        </LineChart>
+      )}
     </ChartContainer>
   );
 }

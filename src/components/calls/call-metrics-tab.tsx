@@ -2,12 +2,10 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
-import { Zap, MessageSquare, Activity, TrendingUp, Repeat, AlertCircle } from 'lucide-react';
+import { Zap, MessageSquare, Activity, TrendingUp, Repeat } from 'lucide-react';
 import { useCallMetrics } from '@/lib/hooks/use-call-detail';
 import { formatLatency, formatNumber, formatPercentage } from '@/lib/utils/formatters';
 import { TokenUsageChart } from './token-usage-chart';
-import { LatencyOverTimeChart } from './latency-over-time-chart';
 import { ComprehensiveMetricsTable } from './comprehensive-metrics-table';
 
 interface CallMetricsTabProps {
@@ -55,83 +53,107 @@ export function CallMetricsTab({ callId }: CallMetricsTabProps) {
 
   const metricsCards = [
     {
-      title: 'Avg Pipeline Time',
-      value: formatLatency(metrics.avgPipelineTotalMs),
-      description: `Min: ${formatLatency(metrics.minPipelineTotalMs)} | Max: ${formatLatency(metrics.maxPipelineTotalMs)}`,
+      title: 'User→Bot Latency',
+      value: formatLatency(metrics.avgUserToBotLatencyMs),
+      description: `Most important UX metric | Min: ${formatLatency(metrics.minUserToBotLatencyMs)} | Max: ${formatLatency(metrics.maxUserToBotLatencyMs)}`,
       icon: TrendingUp,
+      tooltip: 'User stopped speaking → Bot started speaking (500-2500ms expected)',
     },
     {
-      title: 'Avg LLM Processing',
-      value: formatLatency(metrics.avgLlmProcessingMs),
-      description: 'LLM response time',
-      icon: Zap,
+      title: 'STT Processing',
+      value: formatLatency(metrics.avgSttProcessingMs),
+      description: `Deepgram performance | Min: ${formatLatency(metrics.minSttProcessingMs)} | Max: ${formatLatency(metrics.maxSttProcessingMs)}`,
+      icon: Activity,
+      tooltip: 'Recommended metric for Deepgram Flux (100-300ms expected)',
     },
+    {
+      title: 'LLM Processing',
+      value: formatLatency(metrics.avgLlmProcessingMs),
+      description: `Response generation | Min: ${formatLatency(metrics.minLlmProcessingMs)} | Max: ${formatLatency(metrics.maxLlmProcessingMs)}`,
+      icon: Zap,
+      tooltip: 'LLM start → Response complete (400-2000ms expected)',
+    },
+    {
+      title: 'TTS TTFB',
+      value: formatLatency(metrics.avgTtsTtfbMs),
+      description: `ElevenLabs latency | Min: ${formatLatency(metrics.minTtsTtfbMs)} | Max: ${formatLatency(metrics.maxTtsTtfbMs)}`,
+      icon: MessageSquare,
+      tooltip: 'Time to first audio chunk (200-500ms expected)',
+    },
+  ];
+
+  const costMetricsCards = [
     {
       title: 'Total Turns',
-      value: formatNumber(metrics.totalTurns),
+      value: metrics.totalTurns ? formatNumber(metrics.totalTurns) : '0',
       description: metrics.totalInterruptions
-        ? `${metrics.totalInterruptions} interruptions (${formatPercentage((metrics.totalInterruptions / (metrics.totalTurns || 1)) * 100)})`
+        ? `${metrics.totalInterruptions} interruption${metrics.totalInterruptions > 1 ? 's' : ''} (${formatPercentage((metrics.totalInterruptions / (metrics.totalTurns || 1)) * 100)})`
         : 'No interruptions',
       icon: Repeat,
     },
     {
-      title: 'Total LLM Tokens',
+      title: 'LLM Tokens',
       value: formatNumber(metrics.totalLlmTokens),
-      description: `TTS: ${formatNumber(metrics.totalTtsCharacters)} chars`,
+      description: 'Total prompt + completion tokens',
       icon: MessageSquare,
+    },
+    {
+      title: 'TTS Characters',
+      value: formatNumber(metrics.totalTtsCharacters),
+      description: 'Total characters sent to TTS',
+      icon: Activity,
+    },
+    {
+      title: 'Pipeline Total',
+      value: formatLatency(metrics.avgPipelineTotalMs),
+      description: `Min: ${formatLatency(metrics.minPipelineTotalMs)} | Max: ${formatLatency(metrics.maxPipelineTotalMs)}`,
+      icon: TrendingUp,
     },
   ];
 
   return (
     <div className="space-y-6">
-      {/* Metrics Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {metricsCards.map((metric) => (
-          <Card key={metric.title}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{metric.title}</CardTitle>
-              <metric.icon className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{metric.value}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {metric.description}
-              </p>
-            </CardContent>
-          </Card>
-        ))}
+      {/* Primary Performance Metrics */}
+      <div>
+        <h3 className="text-sm font-medium text-muted-foreground mb-3">Primary Performance Metrics</h3>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {metricsCards.map((metric) => (
+            <Card key={metric.title}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">{metric.title}</CardTitle>
+                <metric.icon className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{metric.value}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {metric.description}
+                </p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
 
-
-      {/* Latency Over Time - PRIMARY CHART */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-start justify-between">
-            <div>
-              <CardTitle>Latency Over Time</CardTitle>
-              <CardDescription>
-                Per-turn latency metrics throughout the call
-                {(metrics.totalInterruptions ?? 0) > 0 && (
-                  <span className="ml-2">
-                    <Badge variant="destructive" className="text-xs">
-                      <AlertCircle className="mr-1 h-3 w-3" />
-                      {metrics.totalInterruptions} interruption{(metrics.totalInterruptions ?? 0) > 1 ? 's' : ''}
-                    </Badge>
-                  </span>
-                )}
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <LatencyOverTimeChart metricsData={metrics.metricsData} height={350} />
-          {(metrics.totalInterruptions ?? 0) > 0 && (
-            <p className="text-xs text-muted-foreground mt-2">
-              🔴 Red dots indicate turns where the user interrupted the bot
-            </p>
-          )}
-        </CardContent>
-      </Card>
+      {/* Cost Tracking & Usage Metrics */}
+      <div>
+        <h3 className="text-sm font-medium text-muted-foreground mb-3">Cost Tracking & Usage</h3>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {costMetricsCards.map((metric) => (
+            <Card key={metric.title}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">{metric.title}</CardTitle>
+                <metric.icon className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{metric.value}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {metric.description}
+                </p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
 
       {/* Comprehensive Metrics Table */}
       <Card>

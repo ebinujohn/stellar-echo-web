@@ -26,10 +26,10 @@ export function DashboardPageClient() {
       description: 'Average call length',
     },
     {
-      title: 'Avg Latency',
+      title: 'Avg Response Time',
       value: stats ? formatLatency(stats.averageLatency) : '...',
       icon: TrendingUp,
-      description: 'First token response',
+      description: 'User to bot latency',
     },
     {
       title: 'Success Rate',

@@ -29,33 +29,49 @@ export function ComprehensiveMetricsTable({ metrics }: ComprehensiveMetricsTable
   const metricRows: MetricRow[] = [
     // Primary Metrics
     {
-      name: "Pipeline Total",
-      description: "End-to-end response time",
-      avg: metrics.avgPipelineTotalMs,
-      min: metrics.minPipelineTotalMs,
-      max: metrics.maxPipelineTotalMs,
-      category: "primary",
-    },
-    {
       name: "User→Bot Latency",
-      description: "User message to bot response",
+      description: "Most important UX metric - User stopped speaking → Bot started speaking",
       avg: metrics.avgUserToBotLatencyMs,
       min: metrics.minUserToBotLatencyMs,
       max: metrics.maxUserToBotLatencyMs,
       category: "primary",
     },
+    {
+      name: "Pipeline Total",
+      description: "User stopped speaking → TTS audio ready",
+      avg: metrics.avgPipelineTotalMs,
+      min: metrics.minPipelineTotalMs,
+      max: metrics.maxPipelineTotalMs,
+      category: "primary",
+    },
     // Processing Metrics
     {
+      name: "STT Processing",
+      description: "Recommended metric for Deepgram Flux (100-300ms)",
+      avg: metrics.avgSttProcessingMs,
+      min: metrics.minSttProcessingMs,
+      max: metrics.maxSttProcessingMs,
+      category: "processing",
+    },
+    {
       name: "STT Delay",
-      description: "Speech-to-Text processing",
+      description: "User stopped → Transcript received (usually 0-10ms for Flux)",
       avg: metrics.avgSttDelayMs,
       min: metrics.minSttDelayMs,
       max: metrics.maxSttDelayMs,
       category: "processing",
     },
     {
+      name: "STT TTFB",
+      description: "Deepgram API → First response (N/A for Flux)",
+      avg: metrics.avgSttTtfbMs,
+      min: metrics.minSttTtfbMs,
+      max: metrics.maxSttTtfbMs,
+      category: "processing",
+    },
+    {
       name: "LLM Processing",
-      description: "LLM response generation",
+      description: "LLM start → Response complete (400-2000ms)",
       avg: metrics.avgLlmProcessingMs,
       min: metrics.minLlmProcessingMs,
       max: metrics.maxLlmProcessingMs,
@@ -63,16 +79,24 @@ export function ComprehensiveMetricsTable({ metrics }: ComprehensiveMetricsTable
     },
     {
       name: "LLM TTFB",
-      description: "Time to first byte from LLM",
+      description: "OpenAI API → First token (200-800ms)",
       avg: metrics.avgLlmTtfbMs,
       min: metrics.minLlmTtfbMs,
       max: metrics.maxLlmTtfbMs,
       category: "processing",
     },
+    {
+      name: "TTS TTFB",
+      description: "ElevenLabs API → First audio chunk (200-500ms)",
+      avg: metrics.avgTtsTtfbMs,
+      min: metrics.minTtsTtfbMs,
+      max: metrics.maxTtsTtfbMs,
+      category: "processing",
+    },
     // Gap Metrics
     {
       name: "Transcript→LLM Gap",
-      description: "Transcript to LLM request",
+      description: "Framework overhead between transcript and LLM (1-50ms)",
       avg: metrics.avgTranscriptLlmGapMs,
       min: metrics.minTranscriptLlmGapMs,
       max: metrics.maxTranscriptLlmGapMs,
@@ -80,7 +104,7 @@ export function ComprehensiveMetricsTable({ metrics }: ComprehensiveMetricsTable
     },
     {
       name: "LLM→TTS Gap",
-      description: "LLM response to TTS",
+      description: "Framework overhead between LLM and TTS (100-300ms)",
       avg: metrics.avgLlmToTtsGapMs,
       min: metrics.minLlmToTtsGapMs,
       max: metrics.maxLlmToTtsGapMs,
@@ -89,7 +113,7 @@ export function ComprehensiveMetricsTable({ metrics }: ComprehensiveMetricsTable
     // Optional Metrics
     {
       name: "RAG Processing",
-      description: "Vector DB retrieval",
+      description: "Knowledge base query time (300-800ms)",
       avg: metrics.avgRagProcessingMs,
       min: metrics.minRagProcessingMs,
       max: metrics.maxRagProcessingMs,
@@ -97,7 +121,7 @@ export function ComprehensiveMetricsTable({ metrics }: ComprehensiveMetricsTable
     },
     {
       name: "Variable Extraction",
-      description: "Data extraction processing",
+      description: "LLM-based variable extraction (500-2000ms)",
       avg: metrics.avgVariableExtractionMs,
       min: metrics.minVariableExtractionMs,
       max: metrics.maxVariableExtractionMs,

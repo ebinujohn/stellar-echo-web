@@ -163,10 +163,10 @@ export async function getCallsStats(tenantId: string, filters?: CallFilters) {
     .where(whereClause)
     .then(result => result[0]);
 
-  // Get average latency from metrics
+  // Get average latency from metrics (using User→Bot Latency - most important UX metric)
   const latencyStats = await db
     .select({
-      avgLatency: sql<number>`AVG(${callMetricsSummary.avgLlmTtfbMs})`,
+      avgLatency: sql<number>`AVG(${callMetricsSummary.avgUserToBotLatencyMs})`,
     })
     .from(callMetricsSummary)
     .innerJoin(calls, eq(calls.callId, callMetricsSummary.callId))
@@ -265,14 +265,14 @@ export async function getSentimentDistribution(tenantId: string) {
 }
 
 /**
- * Get average latency grouped by agent
+ * Get average latency grouped by agent (using User→Bot Latency - most important UX metric)
  */
 export async function getLatencyByAgent(tenantId: string) {
   const results = await db
     .select({
       agentId: calls.agentId,
       agentName: calls.agentName,
-      avgLatency: sql<number>`AVG(${callMetricsSummary.avgLlmTtfbMs})`,
+      avgLatency: sql<number>`AVG(${callMetricsSummary.avgUserToBotLatencyMs})`,
       callCount: count(),
     })
     .from(calls)

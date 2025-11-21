@@ -40,14 +40,17 @@ export function LatencyByAgentChart({ height = 300 }: LatencyByAgentChartProps) 
     calls: Number(item.callCount),
   }));
 
+  // Only rotate labels if there are multiple agents
+  const shouldRotateLabels = chartData.length > 1;
+
   return (
     <ChartContainer height={height}>
       <BarChart data={chartData}>
         <ChartGrid />
         <ChartXAxis
           dataKey="agent"
-          angle={-45}
-          height={80}
+          angle={shouldRotateLabels ? -45 : 0}
+          height={shouldRotateLabels ? 80 : 60}
         />
         <ChartYAxis
           tickFormatter={(value) => formatLatency(value)}
