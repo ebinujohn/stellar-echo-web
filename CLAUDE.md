@@ -112,6 +112,7 @@ pnpm test:e2e:ui      # Run Playwright with UI
 - **Feature components**: Domain-specific components in `src/components/[feature]/` (calls, dashboard, analytics, agents)
   - Agent settings form: `src/components/agents/settings-form.tsx` - comprehensive global settings UI (LLM, TTS, STT, auto-hangup)
   - Agent detail tabs: Overview (with settings preview), Workflow Editor, Versions, Settings
+  - Call detail page: `src/components/calls/call-detail-client.tsx` - displays call info with download recording button (when available)
 - **Layout components**: Reusable layout pieces in `src/components/layout/` (sidebar, navbar, user-menu, theme-toggle)
 - **UI primitives**: shadcn/ui components in `src/components/ui/`
 - **Providers**: React context providers in `src/components/providers/`
@@ -222,7 +223,7 @@ Agent configurations are stored as versioned JSONB documents in `agent_config_ve
 
 ### Call Tables
 
-- `calls` - Call metadata (status, duration, phone numbers, timestamps)
+- `calls` - Call metadata (status, duration, phone numbers, timestamps, recording_url for S3 recordings)
 - `call_messages` - Conversation messages with role, content, turn_number, was_interrupted
 - `call_transitions` - Workflow state transitions with from/to nodes and reasons
 - `call_transcripts` - Full transcripts with transcript_text and transcript_data (JSONB)
@@ -237,6 +238,7 @@ Required environment variables in `.env.local`:
 - `JWT_SECRET` - Secret key for JWT signing (change in production!)
 - `NEXT_PUBLIC_API_URL` - API base URL
 - `NODE_ENV` - development/production
+- `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` - AWS S3 credentials for call recording downloads (optional)
 
 Default test credentials: `admin@example.com` / `password123`
 
@@ -316,6 +318,14 @@ export function ResourceComponent({ id }: { id: string }) {
 
 Always use these formatters for consistency across the UI.
 
+### S3 Presigned URLs (`src/lib/s3/presigned-url.ts`)
+
+- `generatePresignedDownloadUrl(s3Url, options)` - Generate secure temporary download URLs for S3 objects
+- `isValidS3Url(url)` - Validate S3 URL format
+- Supports multiple S3 URL formats: `s3://`, `https://bucket.s3.region.amazonaws.com/`, and `https://s3.region.amazonaws.com/bucket/`
+- Default expiration: 1 hour (configurable from 60s to 7 days)
+- Used by `/api/calls/[call_id]/recording/download` endpoint for secure call recording downloads
+
 ## Common Issues & Solutions
 
 ### "Unauthorized" errors
@@ -341,3 +351,10 @@ Always use these formatters for consistency across the UI.
 - Check browser network tab for API errors
 - Verify TanStack Query cache with React DevTools Query tab
 - Ensure tenant filtering is correct in database queries
+
+### S3 recording download errors
+
+- Verify AWS credentials are set in `.env.local` (AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
+- Check that recording URL in database is valid S3 format
+- Ensure S3 bucket permissions allow GetObject with the configured IAM credentials
+- Presigned URLs expire after 1 hour by default

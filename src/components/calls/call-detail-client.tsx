@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Phone, Clock, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Phone, Clock, MessageSquare, Download } from 'lucide-react';
+import { toast } from 'sonner';
 import { useCallDetail } from '@/lib/hooks/use-call-detail';
 import {
   formatDateTime,
@@ -27,6 +28,32 @@ interface CallDetailClientProps {
 export function CallDetailClient({ callId }: CallDetailClientProps) {
   const { data: call, isLoading, error } = useCallDetail(callId);
   const [activeTab, setActiveTab] = useState('timeline');
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const handleDownloadRecording = async () => {
+    if (!call?.recordingUrl) {
+      toast.error('No recording available');
+      return;
+    }
+
+    setIsDownloading(true);
+    try {
+      const response = await fetch(`/api/calls/${callId}/recording/download`);
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to generate download URL');
+      }
+
+      window.open(result.data.presignedUrl, '_blank');
+      toast.success('Recording download started');
+    } catch (error) {
+      console.error('Error downloading recording:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to download recording');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -50,7 +77,7 @@ export function CallDetailClient({ callId }: CallDetailClientProps) {
         <Card>
           <CardContent className="pt-6">
             <div className="text-center py-8 text-muted-foreground">
-              <p>Call not found or you don't have access to view it.</p>
+              <p>Call not found or you don&apos;t have access to view it.</p>
             </div>
           </CardContent>
         </Card>
@@ -74,9 +101,22 @@ export function CallDetailClient({ callId }: CallDetailClientProps) {
             <p className="text-sm text-muted-foreground font-mono">{call.callId}</p>
           </div>
         </div>
-        <Badge variant={getStatusVariant(call.status)} className="text-sm px-3 py-1">
-          {call.status}
-        </Badge>
+        <div className="flex items-center gap-3">
+          {call.recordingUrl && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadRecording}
+              disabled={isDownloading}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              {isDownloading ? 'Generating...' : 'Download Recording'}
+            </Button>
+          )}
+          <Badge variant={getStatusVariant(call.status)} className="text-sm px-3 py-1">
+            {call.status}
+          </Badge>
+        </div>
       </div>
 
       {/* Call Info Summary */}
