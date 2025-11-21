@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, Phone, LayoutDashboard, PhoneCall, Sparkles } from 'lucide-react';
+import { BarChart3, Phone, LayoutDashboard, PhoneCall, Sparkles, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navigation = [
@@ -25,6 +25,11 @@ const navigation = [
     name: 'Agents',
     href: '/agents',
     icon: PhoneCall,
+  },
+  {
+    name: 'Settings',
+    href: '/settings',
+    icon: Settings,
   },
 ];
 

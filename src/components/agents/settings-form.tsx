@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,17 +15,33 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Loader2, Save } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Loader2, Save, ExternalLink, Database, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
+import { useRagConfigsDropdown, useRagConfig } from '@/lib/hooks/use-rag-configs';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface SettingsFormProps {
   agentId: string;
   currentConfig: any;
-  onSave: (config: any) => Promise<void>;
+  ragEnabled?: boolean;
+  ragConfigId?: string | null;
+  onSave: (config: any, ragEnabled?: boolean, ragConfigId?: string | null) => Promise<void>;
 }
 
-export function SettingsForm({ agentId, currentConfig, onSave }: SettingsFormProps) {
+export function SettingsForm({ agentId, currentConfig, ragEnabled: initialRagEnabled, ragConfigId: initialRagConfigId, onSave }: SettingsFormProps) {
   const [isSaving, setIsSaving] = useState(false);
+
+  // Fetch available RAG configs
+  const { data: ragConfigs } = useRagConfigsDropdown();
+
+  // RAG Config Selection (external shared config)
+  const [useSharedRagConfig, setUseSharedRagConfig] = useState(!!initialRagConfigId);
+  const [selectedRagConfigId, setSelectedRagConfigId] = useState(initialRagConfigId || '');
+  const [ragEnabledState, setRagEnabledState] = useState(initialRagEnabled ?? false);
+
+  // Fetch selected RAG config details for preview
+  const { data: selectedRagConfig } = useRagConfig(selectedRagConfigId || '');
 
   // LLM Settings
   const [llmEnabled, setLlmEnabled] = useState(currentConfig.llm?.enabled ?? true);
@@ -67,6 +84,31 @@ export function SettingsForm({ agentId, currentConfig, onSave }: SettingsFormPro
     setIsSaving(true);
 
     try {
+      // Build RAG config based on selection mode
+      let ragConfig = currentConfig.rag;
+      let finalRagEnabled = ragEnabledState;
+      let finalRagConfigId: string | null = null;
+
+      if (useSharedRagConfig && selectedRagConfigId) {
+        // Using shared RAG config from database
+        finalRagConfigId = selectedRagConfigId;
+        // Clear inline RAG settings when using shared config
+        ragConfig = undefined;
+      } else {
+        // Using inline RAG settings
+        ragConfig = {
+          ...currentConfig.rag,
+          enabled: ragEnabled,
+          search_mode: ragSearchMode,
+          top_k: parseInt(String(ragTopK)),
+          relevance_filter: ragRelevanceFilter,
+          rrf_k: parseInt(String(ragRrfK)),
+          vector_weight: parseFloat(String(ragVectorWeight)),
+          fts_weight: parseFloat(String(ragFtsWeight)),
+        };
+        finalRagEnabled = ragEnabled;
+      }
+
       // Merge the form data with the existing config
       const updatedConfig = {
         ...currentConfig,
@@ -97,22 +139,13 @@ export function SettingsForm({ agentId, currentConfig, onSave }: SettingsFormPro
           eot_threshold: sttEotThreshold,
           eot_timeout_ms: sttEotTimeoutMs,
         },
-        rag: {
-          ...currentConfig.rag,
-          enabled: ragEnabled,
-          search_mode: ragSearchMode,
-          top_k: parseInt(String(ragTopK)),
-          relevance_filter: ragRelevanceFilter,
-          rrf_k: parseInt(String(ragRrfK)),
-          vector_weight: parseFloat(String(ragVectorWeight)),
-          fts_weight: parseFloat(String(ragFtsWeight)),
-        },
+        rag: ragConfig,
         auto_hangup: {
           enabled: autoHangupEnabled,
         },
       };
 
-      await onSave(updatedConfig);
+      await onSave(updatedConfig, finalRagEnabled, finalRagConfigId);
       toast.success('Settings saved successfully');
     } catch (error: any) {
       toast.error(error.message || 'Failed to save settings');
@@ -414,125 +447,243 @@ export function SettingsForm({ agentId, currentConfig, onSave }: SettingsFormPro
       {/* RAG Configuration */}
       <Card>
         <CardHeader>
-          <CardTitle>RAG Configuration</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Database className="h-5 w-5" />
+            RAG Configuration
+          </CardTitle>
           <CardDescription>
             Configure retrieval-augmented generation (knowledge base) settings
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* RAG Enable Toggle */}
           <div className="flex items-center justify-between rounded-lg border p-4">
             <div className="space-y-0.5">
               <Label className="text-base">Enable RAG</Label>
               <p className="text-sm text-muted-foreground">
-                Enable or disable knowledge base retrieval for this agent
+                Enable knowledge base retrieval for this agent
               </p>
             </div>
-            <Switch checked={ragEnabled} onCheckedChange={setRagEnabled} />
+            <Switch checked={ragEnabledState} onCheckedChange={setRagEnabledState} />
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="rag-search-mode">Search Mode</Label>
-              <Select value={ragSearchMode} onValueChange={setRagSearchMode}>
-                <SelectTrigger id="rag-search-mode">
-                  <SelectValue placeholder="Select search mode" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="vector">Vector (Semantic)</SelectItem>
-                  <SelectItem value="fts">FTS (Keyword)</SelectItem>
-                  <SelectItem value="hybrid">Hybrid (Vector + FTS)</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Vector for concepts, FTS for exact terms, Hybrid for both
-              </p>
-            </div>
+          {ragEnabledState && (
+            <>
+              <Separator />
 
-            <div className="space-y-2">
-              <Label htmlFor="rag-top-k">Top K Results</Label>
-              <Input
-                id="rag-top-k"
-                type="number"
-                min="1"
-                max="50"
-                value={ragTopK}
-                onChange={(e) => setRagTopK(parseInt(e.target.value))}
-              />
-              <p className="text-xs text-muted-foreground">Number of chunks to retrieve (1-50)</p>
-            </div>
-          </div>
+              {/* Configuration Source Selection */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-0.5">
+                    <Label className="text-base">Use Shared RAG Configuration</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Select a pre-configured RAG setup from Settings
+                    </p>
+                  </div>
+                  <Switch checked={useSharedRagConfig} onCheckedChange={setUseSharedRagConfig} />
+                </div>
 
-          <Separator />
+                {useSharedRagConfig ? (
+                  /* Shared RAG Config Selection */
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="rag-config-select">RAG Configuration</Label>
+                      <Select
+                        value={selectedRagConfigId}
+                        onValueChange={setSelectedRagConfigId}
+                      >
+                        <SelectTrigger id="rag-config-select">
+                          <SelectValue placeholder="Select a RAG configuration" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ragConfigs?.map((config) => (
+                            <SelectItem key={config.id} value={config.id}>
+                              <div className="flex flex-col">
+                                <span>{config.name}</span>
+                                {config.description && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {config.description}
+                                  </span>
+                                )}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <div className="flex items-center gap-2">
+                        <Link href="/settings/rag" target="_blank">
+                          <Button type="button" variant="link" size="sm" className="h-auto p-0">
+                            Manage RAG Configurations
+                            <ExternalLink className="ml-1 h-3 w-3" />
+                          </Button>
+                        </Link>
+                      </div>
+                    </div>
 
-          <div className="space-y-4">
-            <div className="flex items-center justify-between rounded-lg border p-3">
-              <div className="space-y-0.5">
-                <Label>Relevance Filter</Label>
-                <p className="text-xs text-muted-foreground">
-                  Only query for questions/info requests
-                </p>
+                    {/* Show selected config preview */}
+                    {selectedRagConfig?.activeVersion && (
+                      <div className="rounded-lg border bg-muted/50 p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium">{selectedRagConfig.name}</span>
+                          <Badge variant="secondary">v{selectedRagConfig.activeVersion.version}</Badge>
+                        </div>
+                        <div className="grid gap-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Search Mode:</span>
+                            <span className="capitalize">{selectedRagConfig.activeVersion.searchMode}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Top K:</span>
+                            <span>{selectedRagConfig.activeVersion.topK}</span>
+                          </div>
+                          {selectedRagConfig.activeVersion.searchMode === 'hybrid' && (
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Weights:</span>
+                              <span>
+                                {parseFloat(selectedRagConfig.activeVersion.vectorWeight) * 100}% Vector /{' '}
+                                {parseFloat(selectedRagConfig.activeVersion.ftsWeight) * 100}% FTS
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {!ragConfigs?.length && (
+                      <Alert>
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertDescription>
+                          No RAG configurations available.{' '}
+                          <Link href="/settings/rag/new" className="underline">
+                            Create one
+                          </Link>{' '}
+                          to get started.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
+                ) : (
+                  /* Inline RAG Settings */
+                  <>
+                    <div className="flex items-center justify-between rounded-lg border p-4">
+                      <div className="space-y-0.5">
+                        <Label className="text-base">Enable Inline RAG</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Use custom RAG settings for this agent only
+                        </p>
+                      </div>
+                      <Switch checked={ragEnabled} onCheckedChange={setRagEnabled} />
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="rag-search-mode">Search Mode</Label>
+                        <Select value={ragSearchMode} onValueChange={setRagSearchMode}>
+                          <SelectTrigger id="rag-search-mode">
+                            <SelectValue placeholder="Select search mode" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="vector">Vector (Semantic)</SelectItem>
+                            <SelectItem value="fts">FTS (Keyword)</SelectItem>
+                            <SelectItem value="hybrid">Hybrid (Vector + FTS)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          Vector for concepts, FTS for exact terms, Hybrid for both
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="rag-top-k">Top K Results</Label>
+                        <Input
+                          id="rag-top-k"
+                          type="number"
+                          min="1"
+                          max="50"
+                          value={ragTopK}
+                          onChange={(e) => setRagTopK(parseInt(e.target.value))}
+                        />
+                        <p className="text-xs text-muted-foreground">Number of chunks to retrieve (1-50)</p>
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between rounded-lg border p-3">
+                        <div className="space-y-0.5">
+                          <Label>Relevance Filter</Label>
+                          <p className="text-xs text-muted-foreground">
+                            Only query for questions/info requests
+                          </p>
+                        </div>
+                        <Switch checked={ragRelevanceFilter} onCheckedChange={setRagRelevanceFilter} />
+                      </div>
+                    </div>
+
+                    <Separator />
+                    <div className="text-sm font-medium">Hybrid Search Parameters</div>
+                    <p className="text-xs text-muted-foreground">
+                      These settings only apply when search mode is set to Hybrid
+                    </p>
+
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="rag-rrf-k">RRF K</Label>
+                        <Input
+                          id="rag-rrf-k"
+                          type="number"
+                          min="1"
+                          max="200"
+                          value={ragRrfK}
+                          onChange={(e) => setRagRrfK(parseInt(e.target.value))}
+                        />
+                        <p className="text-xs text-muted-foreground">Reciprocal rank fusion constant</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="rag-vector-weight">Vector Weight</Label>
+                        <Input
+                          id="rag-vector-weight"
+                          type="number"
+                          step="0.05"
+                          min="0"
+                          max="1"
+                          value={ragVectorWeight}
+                          onChange={(e) => setRagVectorWeight(parseFloat(e.target.value))}
+                        />
+                        <p className="text-xs text-muted-foreground">Semantic search weight (0.0-1.0)</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="rag-fts-weight">FTS Weight</Label>
+                        <Input
+                          id="rag-fts-weight"
+                          type="number"
+                          step="0.05"
+                          min="0"
+                          max="1"
+                          value={ragFtsWeight}
+                          onChange={(e) => setRagFtsWeight(parseFloat(e.target.value))}
+                        />
+                        <p className="text-xs text-muted-foreground">Keyword search weight (0.0-1.0)</p>
+                      </div>
+                    </div>
+
+                    {/* Weight validation warning */}
+                    {ragSearchMode === 'hybrid' && Math.abs((ragVectorWeight + ragFtsWeight) - 1.0) > 0.01 && (
+                      <Alert variant="destructive">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertDescription>
+                          Vector weight and FTS weight should sum to 1.0 for balanced results.
+                          Current sum: {(ragVectorWeight + ragFtsWeight).toFixed(2)}
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </>
+                )}
               </div>
-              <Switch checked={ragRelevanceFilter} onCheckedChange={setRagRelevanceFilter} />
-            </div>
-          </div>
-
-          <Separator />
-          <div className="text-sm font-medium">Hybrid Search Parameters</div>
-          <p className="text-xs text-muted-foreground">
-            These settings only apply when search mode is set to Hybrid
-          </p>
-
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label htmlFor="rag-rrf-k">RRF K</Label>
-              <Input
-                id="rag-rrf-k"
-                type="number"
-                min="1"
-                max="200"
-                value={ragRrfK}
-                onChange={(e) => setRagRrfK(parseInt(e.target.value))}
-              />
-              <p className="text-xs text-muted-foreground">Reciprocal rank fusion constant</p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="rag-vector-weight">Vector Weight</Label>
-              <Input
-                id="rag-vector-weight"
-                type="number"
-                step="0.05"
-                min="0"
-                max="1"
-                value={ragVectorWeight}
-                onChange={(e) => setRagVectorWeight(parseFloat(e.target.value))}
-              />
-              <p className="text-xs text-muted-foreground">Semantic search weight (0.0-1.0)</p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="rag-fts-weight">FTS Weight</Label>
-              <Input
-                id="rag-fts-weight"
-                type="number"
-                step="0.05"
-                min="0"
-                max="1"
-                value={ragFtsWeight}
-                onChange={(e) => setRagFtsWeight(parseFloat(e.target.value))}
-              />
-              <p className="text-xs text-muted-foreground">Keyword search weight (0.0-1.0)</p>
-            </div>
-          </div>
-
-          {/* Weight validation warning */}
-          {ragSearchMode === 'hybrid' && Math.abs((ragVectorWeight + ragFtsWeight) - 1.0) > 0.01 && (
-            <div className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-3">
-              <p className="text-sm text-yellow-600 dark:text-yellow-500">
-                <strong>Warning:</strong> Vector weight and FTS weight should sum to 1.0 for balanced results.
-                Current sum: {(ragVectorWeight + ragFtsWeight).toFixed(2)}
-              </p>
-            </div>
+            </>
           )}
         </CardContent>
       </Card>

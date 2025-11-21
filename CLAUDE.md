@@ -84,7 +84,7 @@ pnpm test:e2e:ui      # Run Playwright with UI
 
 ### Database Layer (Drizzle ORM)
 
-- **Schema location**: `src/lib/db/schema/` with separate files for `tenants.ts`, `users.ts`, `agents.ts`, `calls.ts`
+- **Schema location**: `src/lib/db/schema/` with separate files for `tenants.ts`, `users.ts`, `agents.ts`, `calls.ts`, `rag-configs.ts`
 - **Connection**: `src/lib/db/index.ts` manages PostgreSQL connection pooling (max 10 connections, 20s idle timeout)
 - **Query functions**: `src/lib/db/queries/` contains reusable query logic with tenant isolation built-in
 - **JSONB fields**: `call_metrics_summary.metrics_data` (per-turn metrics) and `call_transcripts.transcript_data` (conversation data) require special parsing
@@ -109,11 +109,12 @@ pnpm test:e2e:ui      # Run Playwright with UI
 ### Component Organization
 
 - **Page components**: Client components with `"use client"` directive in `src/app/(dashboard)/`
-- **Feature components**: Domain-specific components in `src/components/[feature]/` (calls, dashboard, analytics, agents)
+- **Feature components**: Domain-specific components in `src/components/[feature]/` (calls, dashboard, analytics, agents, settings)
   - Agent settings form: `src/components/agents/settings-form.tsx` - comprehensive global settings UI (LLM, TTS, STT, RAG, auto-hangup)
   - Agent detail tabs: Overview (with settings preview), Workflow Editor, Versions, Settings
   - Workflow editor: `src/components/agents/workflow-editor/` - visual node editor with per-node RAG overrides
   - Call detail page: `src/components/calls/call-detail-client.tsx` - displays call info with download recording button (when available)
+  - RAG config management: `src/components/settings/rag/` - CRUD UI for shared RAG configurations
 - **Layout components**: Reusable layout pieces in `src/components/layout/` (sidebar, navbar, user-menu, theme-toggle)
 - **UI primitives**: shadcn/ui components in `src/components/ui/`
 - **Providers**: React context providers in `src/components/providers/`
@@ -203,13 +204,33 @@ Agent configurations are stored as versioned JSONB documents in `agent_config_ve
 **Settings Management:**
 - **Overview Tab**: Displays all global settings in read-only cards (LLM, TTS, STT, RAG, Auto-Hangup)
 - **Settings Tab**: Full form for editing global settings with save button at top (creates new version)
-  - RAG configuration: Search mode (vector/fts/hybrid), top-k retrieval, hybrid search weights
+  - RAG configuration: Can use shared RAG config (dropdown) or inline settings
   - Infrastructure settings (file paths, advanced) preserved from existing config
 - **Workflow Tab**: Visual editor for workflow nodes and transitions
   - Per-node RAG overrides: Standard nodes can override global RAG settings (enabled, search_mode, top_k, weights)
   - Collapsible RAG section in node properties panel
 - All changes create a new configuration version via `/api/agents/[id]/versions`
 - Active version (`is_active=true`) is used for agent runtime behavior
+
+### RAG Configuration Management
+
+Shared RAG configurations are stored in database tables (`rag_configs`, `rag_config_versions`) and can be reused across multiple agents:
+
+**Database Structure:**
+- `rag_configs` - Base entity (id, tenant_id, name, description, is_active)
+- `rag_config_versions` - Versioned settings (search_mode, top_k, relevance_filter, rrf_k, vector_weight, fts_weight, hnsw_ef_search, bedrock_model, bedrock_dimensions, faiss paths, sqlite_db_path)
+- `agent_config_versions.rag_config_id` - References shared RAG config
+
+**Settings Page (`/settings/rag`):**
+- List all RAG configurations with active version preview
+- Create new configs with all RAG parameters
+- Edit configs with version history
+- Activate specific versions
+
+**Agent Integration:**
+- Toggle between shared RAG config (dropdown) or inline settings in agent Settings tab
+- When using shared config, shows preview of active version settings
+- `ragEnabled` and `ragConfigId` stored on agent config version
 
 ### Session & Cookie Management
 
