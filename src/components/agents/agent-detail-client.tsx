@@ -378,128 +378,80 @@ export function AgentDetailClient({ agentId }: AgentDetailClientProps) {
                     <div>
                       <div className="text-muted-foreground">Enabled</div>
                       <div className="font-medium">
-                        {agent.activeVersion.configJson.llm?.enabled ? 'Yes' : 'No'}
+                        {(agent.activeVersion.configJson.workflow as any)?.llm?.enabled !== false ? 'Yes' : 'No'}
                       </div>
                     </div>
                     <div>
                       <div className="text-muted-foreground">Model</div>
                       <div className="font-mono text-xs">
-                        {agent.activeVersion.configJson.llm?.model || 'N/A'}
+                        {(agent.activeVersion.configJson.workflow as any)?.llm?.model_name || 'N/A'}
                       </div>
                     </div>
                     <div>
                       <div className="text-muted-foreground">Temperature</div>
                       <div className="font-medium">
-                        {agent.activeVersion.configJson.llm?.temperature ?? 'N/A'}
+                        {(agent.activeVersion.configJson.workflow as any)?.llm?.temperature ?? 'N/A'}
                       </div>
                     </div>
                     <div>
                       <div className="text-muted-foreground">Max Tokens</div>
                       <div className="font-medium">
-                        {agent.activeVersion.configJson.llm?.max_tokens || 'N/A'}
+                        {(agent.activeVersion.configJson.workflow as any)?.llm?.max_tokens || 'N/A'}
                       </div>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              {/* TTS Settings */}
+              {/* TTS Settings - Database-backed */}
               <Card>
                 <CardHeader>
                   <CardTitle>TTS Configuration</CardTitle>
-                  <CardDescription>Text-to-speech settings</CardDescription>
+                  <CardDescription>Voice configuration (database-backed)</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <div className="text-muted-foreground">Enabled</div>
-                      <div className="font-medium">
-                        {agent.activeVersion.configJson.tts?.enabled ? 'Yes' : 'No'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-muted-foreground">Model</div>
-                      <div className="font-mono text-xs">
-                        {agent.activeVersion.configJson.tts?.model || 'N/A'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-muted-foreground">Stability</div>
-                      <div className="font-medium">
-                        {agent.activeVersion.configJson.tts?.stability ?? 'N/A'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-muted-foreground">Similarity Boost</div>
-                      <div className="font-medium">
-                        {agent.activeVersion.configJson.tts?.similarity_boost ?? 'N/A'}
-                      </div>
-                    </div>
+                  <div className="text-sm text-muted-foreground">
+                    Voice/TTS settings are managed via shared configurations in Settings → Voice Configurations.
                   </div>
                 </CardContent>
               </Card>
 
-              {/* STT Settings */}
+              {/* STT Settings - Environment-based */}
               <Card>
                 <CardHeader>
                   <CardTitle>STT Configuration</CardTitle>
-                  <CardDescription>Speech-to-text settings</CardDescription>
+                  <CardDescription>Speech-to-text settings (system-wide)</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <div className="text-muted-foreground">Model</div>
-                      <div className="font-mono text-xs">
-                        {agent.activeVersion.configJson.stt?.model || 'N/A'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-muted-foreground">Sample Rate</div>
-                      <div className="font-medium">
-                        {agent.activeVersion.configJson.stt?.sample_rate
-                          ? `${agent.activeVersion.configJson.stt.sample_rate} Hz`
-                          : 'N/A'}
-                      </div>
-                    </div>
+                  <div className="text-sm text-muted-foreground">
+                    STT settings are configured via environment variables (DEEPGRAM_MODEL, AUDIO_SAMPLE_RATE).
                   </div>
                 </CardContent>
               </Card>
 
-              {/* RAG Settings */}
+              {/* RAG Settings - Database-backed */}
               <Card>
                 <CardHeader>
                   <CardTitle>RAG Configuration</CardTitle>
-                  <CardDescription>Knowledge base retrieval settings</CardDescription>
+                  <CardDescription>Knowledge base retrieval (database-backed)</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div>
-                      <div className="text-muted-foreground">Enabled</div>
+                      <div className="text-muted-foreground">RAG Enabled</div>
                       <div className="font-medium">
-                        {agent.activeVersion.configJson.rag?.enabled ? 'Yes' : 'No'}
+                        {(agent.activeVersion as any).ragEnabled ? 'Yes' : 'No'}
                       </div>
                     </div>
                     <div>
-                      <div className="text-muted-foreground">Search Mode</div>
-                      <div className="font-medium capitalize">
-                        {agent.activeVersion.configJson.rag?.search_mode || 'N/A'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-muted-foreground">Top K</div>
+                      <div className="text-muted-foreground">Configuration</div>
                       <div className="font-medium">
-                        {agent.activeVersion.configJson.rag?.top_k ?? 'N/A'}
+                        {(agent.activeVersion as any).ragConfigId ? 'Linked' : 'Not Configured'}
                       </div>
                     </div>
-                    <div>
-                      <div className="text-muted-foreground">Vector:FTS Weight</div>
-                      <div className="font-medium">
-                        {agent.activeVersion.configJson.rag?.vector_weight !== undefined &&
-                        agent.activeVersion.configJson.rag?.fts_weight !== undefined
-                          ? `${agent.activeVersion.configJson.rag.vector_weight}:${agent.activeVersion.configJson.rag.fts_weight}`
-                          : 'N/A'}
-                      </div>
-                    </div>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    RAG settings are managed via shared configurations in Settings → RAG Configurations.
                   </div>
                 </CardContent>
               </Card>

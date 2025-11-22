@@ -100,6 +100,8 @@ export async function POST(request: NextRequest) {
 
 /**
  * Create a default workflow configuration for a new agent
+ * Note: LLM config is in workflow.llm section per AGENT_JSON_SCHEMA.md
+ * TTS, STT, RAG are database-backed and not stored in agent JSON
  */
 function createDefaultWorkflowConfig(agentName: string) {
   return {
@@ -118,6 +120,13 @@ function createDefaultWorkflowConfig(agentName: string) {
         enabled: true,
         delay_ms: 300,
         resume_prompt: 'Go ahead',
+      },
+      llm: {
+        enabled: true,
+        model_name: 'gpt-4o-mini',
+        temperature: 0.8,
+        max_tokens: 150,
+        service_tier: 'auto',
       },
       nodes: [
         {
@@ -139,22 +148,6 @@ function createDefaultWorkflowConfig(agentName: string) {
           name: 'End Call',
         },
       ],
-    },
-    llm: {
-      enabled: true,
-      model: 'gpt-4o-mini',
-      temperature: 0.8,
-      max_tokens: 150,
-    },
-    tts: {
-      enabled: true,
-      model: 'eleven_turbo_v2_5',
-      stability: 0.5,
-      similarity_boost: 0.75,
-    },
-    stt: {
-      model: 'flux-general-en',
-      sample_rate: 8000,
     },
     auto_hangup: {
       enabled: true,

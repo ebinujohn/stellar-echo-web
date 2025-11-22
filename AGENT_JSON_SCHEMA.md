@@ -23,10 +23,9 @@ This document provides a comprehensive specification of the JSON schema used for
 6. [Variable Substitution](#variable-substitution)
 7. [Transition Conditions](#transition-conditions)
 8. [Actions](#actions)
-9. [LLM Configuration](#llm-configuration)
-   - [Environment Variable Fallbacks](#environment-variable-fallbacks)
-   - [Service Tier](#service-tier)
-   - [Temperature and Randomness](#temperature-and-randomness)
+9. [LLM Configuration (JSON-based)](#llm-configuration-json-based)
+   - [Per-Node LLM Override](#per-node-llm-override)
+   - [Available Models](#available-models-default-seed)
 10. [Voice/TTS Configuration (Database-Backed)](#voicetts-configuration-database-backed)
 11. [STT Configuration (Environment-Based)](#stt-configuration-environment-based)
 12. [RAG Configuration](#rag-configuration)
@@ -35,6 +34,7 @@ This document provides a comprehensive specification of the JSON schema used for
 14. [Logging Configuration](#logging-configuration)
 15. [Complete Examples](#complete-examples)
 16. [Validation Rules](#validation-rules)
+17. [Configuration Type Reference](#configuration-type-reference)
 
 ---
 
@@ -53,8 +53,7 @@ All agents **must** use node-based workflows. Traditional single-prompt mode has
 ```json
 {
   "agent": { ... },
-  "workflow": { ... },
-  "llm": { ... }
+  "workflow": { ... }
 }
 ```
 
@@ -64,11 +63,11 @@ All agents **must** use node-based workflows. Traditional single-prompt mode has
 |-------|------|----------|-------------|
 | `agent` | object | ✅ Yes | Agent metadata (ID, name, description) |
 | `workflow` | object | ✅ Yes | Workflow configuration with nodes and transitions |
-| `llm` | object | ❌ No | LLM configuration (defaults to environment settings) |
 
 > **Note:** The following configurations are managed outside the agent JSON:
 >
 > **Database-backed:**
+> - **LLM**: Stored in agent JSON (`workflow.llm` section), `llm_models` table for model catalog
 > - **RAG**: `rag_configs` and `rag_config_versions` tables
 > - **Voice/TTS**: `voice_configs` and `voice_config_versions` tables
 > - **Phone Numbers**: `phone_configs` table (phone number pool) + `phone_mappings` table
@@ -76,6 +75,7 @@ All agents **must** use node-based workflows. Traditional single-prompt mode has
 > **Environment variables (.env):**
 > - **STT**: `DEEPGRAM_MODEL`, `AUDIO_SAMPLE_RATE`, EOT thresholds
 > - **Recording Settings**: `RECORDING_TRACK`, `RECORDING_CHANNELS` (when recording enabled per-agent)
+> - **LLM Connection**: `OPENAI_BASE_URL`, `OPENAI_API_VERSION`, `OPENAI_API_KEY`
 >
 > See respective sections for details.
 
@@ -326,6 +326,7 @@ Regular conversation node with system prompt and LLM processing.
   "interruptions_enabled": true,
   "transitions": [ ... ],
   "rag": { ... },
+  "llm_override": { ... },
   "actions": { ... }
 }
 ```
@@ -342,6 +343,7 @@ Regular conversation node with system prompt and LLM processing.
 | `interruptions_enabled` | boolean | ❌ No | `null` | Override global interruption setting |
 | `transitions` | array | ❌ No | `[]` | Transition conditions to other nodes |
 | `rag` | object | ❌ No | `null` | Per-node RAG configuration override |
+| `llm_override` | object | ❌ No | `null` | Per-node LLM configuration override (model, temperature, etc.) |
 | `actions` | object | ❌ No | `{}` | Actions to execute on entry/exit |
 
 **Important**: Node must have **either** `system_prompt` OR `static_text`, but not both.
@@ -1054,151 +1056,143 @@ Actions support variable substitution with `{{variable_name}}`:
 
 ---
 
-## LLM Configuration
+## LLM Configuration (JSON-based)
 
-Configure the Large Language Model for conversation generation.
+LLM configuration is stored in the agent's JSON config (`workflow.llm` section), with model name resolution via the `llm_models` database table.
 
-### Schema
+### Architecture
+
+**Agent JSON (`workflow.llm` section):**
+- Agent-level LLM settings in the workflow JSON
+- Includes model_name, temperature, max_tokens, service_tier
+- Simple and direct configuration without database overhead
+
+**System-Level Model Catalog (`llm_models` table):**
+- Maps friendly `model_name` to actual API `model_id`
+- Examples: `gpt4.1` → `gpt-4.1`, `gpt4o-mini` → `gpt-4o-mini`
+- ConfigManager resolves model_name at runtime
+
+### Agent JSON Schema
 
 ```json
 {
-  "llm": {
-    "enabled": true,
-    "model": "gpt-4.1",
-    "service_tier": "auto",
-    "temperature": 0.8,
-    "max_tokens": 150,
-    "base_url": "",
-    "api_version": ""
+  "workflow": {
+    "llm": {
+      "enabled": true,
+      "model_name": "gpt4.1",
+      "temperature": 1.0,
+      "max_tokens": 150,
+      "service_tier": "auto"
+    },
+    "nodes": [...]
   }
 }
 ```
 
-### Fields
+### LLM Configuration Fields
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `enabled` | boolean | ❌ No | `true` | Enable/disable LLM |
-| `model` | string | ❌ No | `"gpt-5-mini-2025-08-07"` | Model name or deployment name (Azure) |
-| `service_tier` | string | ❌ No | `"auto"` | Service tier (`"auto"`, `"default"`) |
-| `temperature` | float | ❌ No | `1.0` | Sampling temperature (0.0-2.0) |
-| `max_tokens` | integer | ❌ No | `150` | Maximum completion tokens |
-| `base_url` | string | ❌ No | `""` | Custom API endpoint (Azure) |
-| `api_version` | string | ❌ No | `""` | API version (Azure) |
+| `enabled` | boolean | ❌ No | `true` | Enable/disable LLM for this agent |
+| `model_name` | string | ✅ Yes | - | Friendly model name (e.g., "gpt4.1", "gpt4o-mini") |
+| `temperature` | float | ❌ No | `1.0` | Response randomness (0.0-2.0) |
+| `max_tokens` | integer | ❌ No | `150` | Maximum tokens in response |
+| `service_tier` | string | ❌ No | `"auto"` | OpenAI service tier ("auto", "default", "flex") |
 
-### Environment Variable Fallbacks
+### Database Schema (Model Catalog)
 
-If not specified in JSON, values fall back to environment variables:
-- `LLM_MODEL` → `model`
-- `OPENAI_BASE_URL` → `base_url`
-- `OPENAI_API_VERSION` → `api_version`
+```sql
+-- System-level model definitions (maps friendly names to API model IDs)
+llm_models:
+  - model_name (unique): Friendly name (e.g., "gpt4.1", "gpt4o-mini")
+  - provider: LLM provider (e.g., "openai", "azure")
+  - actual_model_id: Real API model ID (e.g., "gpt-4.1", "gpt-4o-mini")
+  - default_temperature: Default temperature (0.0-2.0)
+  - default_max_tokens: Default max tokens
+  - default_service_tier: Default service tier
+```
 
-### Examples
+### Environment Variables
 
-#### OpenAI
+Connection settings come from environment variables:
+- `OPENAI_API_KEY` - API key for OpenAI/Azure
+- `OPENAI_BASE_URL` - Custom API endpoint (for Azure)
+- `OPENAI_API_VERSION` - API version (for Azure)
+
+### Per-Node LLM Override
+
+Individual nodes can override the agent's default LLM settings using `llm_override`:
 
 ```json
 {
-  "llm": {
-    "model": "gpt-4.1",
-    "temperature": 0.8,
-    "max_tokens": 150
-  }
+  "nodes": [
+    {
+      "id": "simple_response",
+      "type": "standard",
+      "name": "Quick Response",
+      "system_prompt": "Give a brief answer.",
+      "llm_override": {
+        "model_name": "gpt4o-mini",
+        "temperature": 0.5,
+        "max_tokens": 100
+      }
+    },
+    {
+      "id": "complex_reasoning",
+      "type": "standard",
+      "name": "Complex Analysis",
+      "system_prompt": "Analyze the situation carefully.",
+      "llm_override": {
+        "model_name": "gpt4.1",
+        "temperature": 0.8,
+        "max_tokens": 300
+      }
+    }
+  ]
 }
 ```
 
-#### Azure OpenAI
+### llm_override Fields
 
-```json
-{
-  "llm": {
-    "model": "your-deployment-name",
-    "temperature": 0.8,
-    "max_tokens": 150,
-    "base_url": "https://your-resource.cognitiveservices.azure.com",
-    "api_version": "2024-12-01-preview"
-  }
-}
-```
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `model_name` | string | ❌ No | Agent default | Override model (references llm_models.model_name) |
+| `temperature` | float | ❌ No | Agent default | Override temperature (0.0-2.0) |
+| `max_tokens` | integer | ❌ No | Agent default | Override max tokens |
+| `service_tier` | string | ❌ No | Agent default | Override service tier ("auto", "default", "flex") |
 
-**Note**: For Azure, `model` is the deployment name, not the model name.
+### Available Models (Default Seed)
 
-### Environment Variable Fallbacks
+| Model Name | Provider | Actual Model ID | Description |
+|------------|----------|-----------------|-------------|
+| `gpt4.1` | openai | gpt-4.1 | Advanced reasoning model with broad capabilities |
+| `gpt4o-mini` | openai | gpt-4o-mini | Fast and cost-effective for simple tasks |
 
-LLM configuration fields fall back to environment variables if not specified in JSON:
+> **Note**: Administrators can add new models to `llm_models` table. They become immediately available for use in agent configurations.
 
-```json
-{
-  "llm": {
-    "model": "gpt-4.1",           // Falls back to: LLM_MODEL env var
-    "base_url": "",               // Falls back to: OPENAI_BASE_URL env var
-    "api_version": ""             // Falls back to: OPENAI_API_VERSION env var
-  }
-}
-```
+### Extraction LLM Configuration
 
-**Fallback Priority** (highest to lowest):
-1. Agent JSON config values
-2. Environment variables (`.env` file)
-3. Code defaults (see LLMConfig dataclass)
+Variable extraction and semantic transition evaluation use a separate configuration:
 
-**Extraction LLM Fallback Chain:**
-
-Variable extraction and semantic transition evaluation use a separate LLM configuration:
-
-1. Agent's `llm` config (if present)
-2. `EXTRACTION_LLM_*` environment variables (if set)
-3. `OPENAI_*` environment variables (if set)
-4. Code defaults (model: `gpt-4o-mini`, temperature: `0.0`)
-
-**Example:**
-```bash
-# .env
-LLM_MODEL=gpt-4.1
-OPENAI_BASE_URL=https://api.openai.com/v1
-
-# agent.json (overrides .env)
-{
-  "llm": {
-    "model": "gpt-3.5-turbo"  // ← This wins (specific to agent)
-  }
-}
-```
-
-**Important**: Always specify `model` in agent JSON OR as `LLM_MODEL` env var. There is no code default for production models.
+- Controlled by `EXTRACTION_LLM_*` environment variables
+- Falls back to `OPENAI_*` environment variables
+- Default model: `gpt-4o-mini`, temperature: `0.0`
 
 ### Service Tier
 
-Controls resource allocation and priority with OpenAI's models:
-
-```json
-{
-  "llm": {
-    "service_tier": "auto"
-  }
-}
-```
+The `service_tier` parameter in LLM config controls resource allocation with OpenAI:
 
 | Value | Description | Use Case |
 |-------|-------------|----------|
 | `"auto"` (default) | OpenAI manages resource allocation | Standard usage |
 | `"default"` | Standard tier | Baseline performance |
+| `"flex"` | Flexible tier | Cost optimization |
 
-**Note**: Service tier is passed to OpenAI API and applies to your OpenAI account tier. Not available with Azure or custom endpoints.
+**Note**: Service tier applies to your OpenAI account tier. Not available with Azure or custom endpoints.
 
-**Azure & Custom Endpoints**: `service_tier` is ignored when using `base_url` + `api_version` (Azure) or custom endpoints.
+### Temperature Guidelines
 
-### Temperature and Randomness
-
-```json
-{
-  "llm": {
-    "temperature": 0.8
-  }
-}
-```
-
-**Value Range**: 0.0 - 2.0
+Temperature controls response randomness:
 
 | Temperature | Behavior | Use Case |
 |-------------|----------|----------|
@@ -1207,11 +1201,6 @@ Controls resource allocation and priority with OpenAI's models:
 | `0.8` - `1.0` (default) | Balanced | Natural conversation, general purpose |
 | `1.0` - `1.5` | Creative - varied responses | Personalized greetings, sales calls |
 | `1.5` - `2.0` | Very creative - highly unpredictable | Brainstorming (NOT for critical tasks) |
-
-**Recommendations:**
-- Use `0.0` for extraction and semantic evaluations (internal LLM calls)
-- Use `0.8-1.0` for conversational nodes
-- Avoid > 1.5 for anything with user-facing consistency requirements
 
 **Note**: Variable extraction and semantic evaluation always use `temperature: 0.0` internally, regardless of this setting.
 
@@ -1666,14 +1655,11 @@ This example shows a technical support agent with different RAG configurations p
         "name": "End Call"
       }
     ]
-  },
-  "llm": {
-    "model": "gpt-4.1"
   }
 }
 ```
 
-> **Note:** Global RAG configuration (file paths, bedrock settings, relevance_filter) is stored in the database via `rag_configs` and `rag_config_versions` tables. The agent references this via `agent_config_versions.rag_config_id`. Voice/TTS and phone configs are also database-backed via `voice_config_id` and `phone_config_id`.
+> **Note:** Global RAG configuration (file paths, bedrock settings, relevance_filter) is stored in the database via `rag_configs` and `rag_config_versions` tables. Voice/TTS and phone configs are also database-backed via `voice_config_id` and related tables. LLM configuration is stored in the agent JSON (`workflow.llm` section).
 
 **Node-by-Node RAG Behavior:**
 
@@ -1845,14 +1831,11 @@ Simplest valid configuration:
         "name": "End Call"
       }
     ]
-  },
-  "llm": {
-    "model": "gpt-4.1"
   }
 }
 ```
 
-> **Note:** Voice/TTS and phone configurations are set via the database. See [Voice/TTS Configuration](#voicetts-configuration-database-backed) and [Phone/Call Configuration](#phonecall-configuration-database-backed).
+> **Note:** LLM configuration is in the agent JSON (`workflow.llm` section). Voice/TTS and phone configurations are set via the database. See [LLM Configuration](#llm-configuration-json-based), [Voice/TTS Configuration](#voicetts-configuration-database-backed), and [Phone Number Pool](#phone-number-pool-database-backed).
 
 ### Multi-Stage Workflow with Variable Extraction
 
@@ -1968,16 +1951,11 @@ Simplest valid configuration:
         "name": "End Call"
       }
     ]
-  },
-  "llm": {
-    "model": "gpt-4.1",
-    "temperature": 0.7,
-    "max_tokens": 100
   }
 }
 ```
 
-> **Note:** Voice/TTS and phone configurations are set via the database.
+> **Note:** LLM configuration is in the agent JSON (`workflow.llm` section). Voice/TTS and phone configurations are set via the database.
 
 ### Medical Assistant with RAG
 
@@ -2060,19 +2038,14 @@ Simplest valid configuration:
         "name": "End Call"
       }
     ]
-  },
-  "llm": {
-    "model": "gpt-4.1",
-    "temperature": 0.8,
-    "max_tokens": 200
   }
 }
 ```
 
-> **Note:** This agent requires database configuration:
+> **Note:** This agent requires:
+> - `workflow.llm` section in agent JSON with `enabled: true` and appropriate model selection
 > - `rag_enabled=true` and `rag_config_id` set in the database pointing to a RAG config with appropriate paths for medical knowledge base
-> - `voice_config_id` with pronunciation dictionaries enabled for medical terms
-> - `phone_config_id` for recording/auto-hangup settings
+> - `voice_config_id` set in the database with pronunciation dictionaries enabled for medical terms
 
 **RAG Configuration Notes:**
 - **Greeting node**: RAG disabled - no knowledge needed for welcome message
@@ -2161,6 +2134,85 @@ uv run uvicorn app.main:app --reload
 
 ---
 
+## Configuration Type Reference
+
+This section provides a comprehensive reference for all workflow configuration types. These types are also available in the `workflow_config_types` database table for client UI applications.
+
+### Node Types
+
+| Type | Display Name | Description | Required Fields |
+|------|--------------|-------------|-----------------|
+| `standard` | Standard Node | Regular conversation node with LLM-generated or static text responses. Must have either `system_prompt` OR `static_text`, not both. | `id`, `name`, + (`system_prompt` OR `static_text`) |
+| `retrieve_variable` | Variable Extraction Node | Extracts structured data from conversation history using LLM. Supports batch (`variables` array) or single variable extraction. Transitions evaluated automatically after extraction. | `id`, `name`, `type`, + (`variables` OR `variable_name`+`extraction_prompt`) |
+| `end_call` | End Call Node | Terminal node that terminates the call. No transitions allowed. Requires Twilio credentials in environment. | `id`, `name`, `type` |
+
+### Transition Conditions
+
+#### Pattern-Based Conditions (Deterministic, ~0ms)
+
+| Condition | Syntax | Description | Applicable To |
+|-----------|--------|-------------|---------------|
+| `timeout` | `timeout:{seconds}s` | Triggers after specified seconds of inactivity. Supports decimals. | standard, retrieve_variable |
+| `max_turns` | `max_turns:{count}` | Triggers after N user inputs in current node. | standard |
+| `contains` | `contains:{keyword}` | Triggers if user input contains keyword (case-insensitive). | standard |
+| `user_responded` | `user_responded` | Triggers after any non-empty user input. | standard |
+| `skip_response` | `skip_response` | Event-based: fires ~300ms after bot stops speaking. User input buffered for next node. | standard |
+| `always` | `always` | Always evaluates to True (immediate transition). | standard, retrieve_variable |
+| `variables_extracted` | `variables_extracted:{var1,var2}` | True if ALL specified variables are present and non-null. | retrieve_variable |
+| `extraction_failed` | `extraction_failed:{var1,var2}` | True if ANY specified variable is missing or null. | retrieve_variable |
+
+#### Semantic Conditions (LLM-Based, ~100-300ms)
+
+| Condition | Description | Examples |
+|-----------|-------------|----------|
+| Any arbitrary string | Evaluated by GPT-4o-mini against last 6 messages. Returns YES/NO with reasoning. | `user_satisfied`, `user_wants_help`, `ready_to_close`, `user_frustrated`, `topic_is:diabetes` |
+
+### Action Types
+
+| Type | Syntax | Description | Applicable To |
+|------|--------|-------------|---------------|
+| `log` | `log:{message}` | Logs message with variable substitution (`{{variable}}`). Use `log:variables` to log all extracted variables as JSON. | standard, retrieve_variable, end_call |
+| `webhook` | `webhook:{url}` | POSTs JSON payload (action_type, node_id, timestamp, session_id, collected_data) to URL. Async, 10s timeout. | standard, retrieve_variable, end_call |
+| `hangup` | `hangup` | Terminates call via Twilio REST API. Requires TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN. | standard, end_call |
+| `custom` | `custom:{function_name}` | Executes registered Python function. Receives context: node_id, node_name, collected_data, session_id, timestamp. | standard, retrieve_variable, end_call |
+
+### RAG Search Modes
+
+| Mode | Display Name | Description |
+|------|--------------|-------------|
+| `vector` | Vector Search | Semantic similarity search using FAISS and Bedrock embeddings. Best for conceptual/meaning-based queries. |
+| `fts` | Full-Text Search | Keyword-based search using SQLite FTS5. Best for exact keyword matching, technical terms, proper nouns. |
+| `hybrid` | Hybrid Search | Combines vector and FTS results using Reciprocal Rank Fusion (RRF). Configurable weights (default: 60% vector, 40% FTS). |
+
+### Database: workflow_config_types Table
+
+Client UI applications can query the `workflow_config_types` table for configuration options:
+
+```sql
+SELECT category, value, display_name, description, parameter_schema, examples
+FROM workflow_config_types
+WHERE is_active = true
+ORDER BY category, display_order;
+```
+
+**Table Schema:**
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID | Primary key |
+| `category` | ENUM | `node_type`, `transition_condition`, `action_type`, `search_mode` |
+| `value` | VARCHAR(100) | Type value (e.g., 'standard', 'timeout', 'log') |
+| `display_name` | VARCHAR(255) | Human-readable name for UI |
+| `description` | TEXT | Full description |
+| `parameter_schema` | JSONB | JSON schema for parameterized types (pattern, parameters) |
+| `is_pattern_based` | BOOLEAN | For transitions: True=deterministic, False=LLM-based |
+| `applicable_to` | ARRAY | Node types this can be used with |
+| `examples` | ARRAY | Usage examples |
+| `display_order` | INTEGER | Order for UI display (lower = first) |
+| `is_active` | BOOLEAN | Whether available for use |
+
+---
+
 ## Additional Resources
 
 - **Workflow Guide**: `docs/WORKFLOW_GUIDE.md` - Quick start and common patterns
@@ -2171,4 +2223,4 @@ uv run uvicorn app.main:app --reload
 
 ---
 
-**Last Updated**: 2025-11-21 (Phone number pool restructure, STT moved to .env)
+**Last Updated**: 2025-11-22 (LLM configuration simplified to JSON-based approach in `workflow.llm` section; llm_models table retained for model catalog; removed llm_configs table; per-node llm_override support maintained)

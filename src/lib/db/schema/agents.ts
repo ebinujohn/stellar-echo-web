@@ -22,6 +22,7 @@ export const agentConfigVersions = pgTable('agent_config_versions', {
   version: integer('version').notNull(),
   configJson: jsonb('config_json').notNull(),
   globalPrompt: text('global_prompt'),
+  // Note: LLM settings are stored in configJson.workflow.llm (no separate column needed)
   // RAG Configuration Reference
   ragEnabled: boolean('rag_enabled').default(false).notNull(),
   ragConfigId: uuid('rag_config_id').references(() => ragConfigs.id),

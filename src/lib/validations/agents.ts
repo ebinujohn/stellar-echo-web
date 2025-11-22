@@ -89,11 +89,10 @@ const interruptionSettingsSchema = z.object({
 
 /**
  * Recording configuration schema
+ * Note: Only 'enabled' is per-agent. 'track' and 'channels' are environment variables (system-wide)
  */
 const recordingSchema = z.object({
   enabled: z.boolean().optional().default(false),
-  track: z.enum(['inbound', 'outbound', 'both']).optional().default('both'),
-  channels: z.enum(['mono', 'dual']).optional().default('dual'),
 });
 
 /**
@@ -123,7 +122,7 @@ const variableExtractionSchema = z.object({
 });
 
 /**
- * RAG configuration schema
+ * RAG configuration schema (per-node override)
  */
 const ragConfigSchema = z.object({
   enabled: z.boolean().optional(),
@@ -142,26 +141,71 @@ const ragConfigSchema = z.object({
 });
 
 /**
+ * LLM override configuration schema (per-node override)
+ * References llm_models.model_name for model selection
+ */
+const llmOverrideSchema = z.object({
+  model_name: z.string().optional(), // References llm_models.model_name (e.g., "gpt4o-mini", "gpt4.1")
+  temperature: z.number().min(0).max(2).optional(),
+  max_tokens: z.number().int().min(1).max(10000).optional(),
+  service_tier: z.enum(['auto', 'default', 'flex']).optional(),
+});
+
+/**
  * Base node schema (shared fields)
  */
 const baseNodeSchema = z.object({
   id: z.string().min(1, 'Node ID is required'),
   name: z.string().min(1, 'Node name is required'),
-  type: z.enum(['standard', 'retrieve_variable', 'end_call']).optional().default('standard'),
   interruptions_enabled: z.boolean().nullable().optional(),
   transitions: z.array(transitionSchema).optional(),
   actions: actionsSchema.optional(),
 });
 
 /**
- * Standard node schema
+ * Standard node schema (raw, without refinements)
  */
-const standardNodeSchema = baseNodeSchema.extend({
-  type: z.literal('standard').optional(),
+const standardNodeSchemaBase = baseNodeSchema.extend({
+  type: z.literal('standard'),
   system_prompt: z.string().optional(),
   static_text: z.string().optional(),
   rag: ragConfigSchema.optional(),
-}).refine(
+  llm_override: llmOverrideSchema.optional(),
+});
+
+/**
+ * Retrieve variable node schema (raw, without refinements)
+ */
+const retrieveVariableNodeSchemaBase = baseNodeSchema.extend({
+  type: z.literal('retrieve_variable'),
+  // Batch mode (recommended)
+  variables: z.array(variableExtractionSchema).optional(),
+  // Legacy mode (single variable)
+  variable_name: z.string().optional(),
+  extraction_prompt: z.string().optional(),
+  default_value: z.union([z.string(), z.null()]).optional(),
+});
+
+/**
+ * End call node schema
+ */
+const endCallNodeSchema = baseNodeSchema.extend({
+  type: z.literal('end_call'),
+});
+
+/**
+ * Union of all node types (using discriminatedUnion with base schemas)
+ */
+const nodeSchema = z.discriminatedUnion('type', [
+  standardNodeSchemaBase,
+  retrieveVariableNodeSchemaBase,
+  endCallNodeSchema,
+]);
+
+/**
+ * Standard node schema with refinements (for exports)
+ */
+const standardNodeSchema = standardNodeSchemaBase.refine(
   (data) => {
     // Must have either system_prompt OR static_text, but not both
     const hasSystemPrompt = !!data.system_prompt;
@@ -174,17 +218,9 @@ const standardNodeSchema = baseNodeSchema.extend({
 );
 
 /**
- * Retrieve variable node schema
+ * Retrieve variable node schema with refinements (for exports)
  */
-const retrieveVariableNodeSchema = baseNodeSchema.extend({
-  type: z.literal('retrieve_variable'),
-  // Batch mode (recommended)
-  variables: z.array(variableExtractionSchema).optional(),
-  // Legacy mode (single variable)
-  variable_name: z.string().optional(),
-  extraction_prompt: z.string().optional(),
-  default_value: z.union([z.string(), z.null()]).optional(),
-}).refine(
+const retrieveVariableNodeSchema = retrieveVariableNodeSchemaBase.refine(
   (data) => {
     // Must have either variables array OR variable_name + extraction_prompt
     const hasBatchMode = Array.isArray(data.variables) && data.variables.length > 0;
@@ -197,29 +233,21 @@ const retrieveVariableNodeSchema = baseNodeSchema.extend({
 );
 
 /**
- * End call node schema
+ * LLM configuration schema (workflow.llm section)
+ * Note: model_name references llm_models.model_name (e.g., "gpt4.1", "gpt4o-mini")
+ * Connection settings (base_url, api_version) are from environment variables
  */
-const endCallNodeSchema = baseNodeSchema.extend({
-  type: z.literal('end_call'),
-  // End call nodes don't have prompts, transitions, or actions
-  system_prompt: z.undefined(),
-  static_text: z.undefined(),
-  transitions: z.undefined(),
-  actions: z.undefined(),
-  rag: z.undefined(),
+const llmConfigSchema = z.object({
+  enabled: z.boolean().optional().default(true),
+  model_name: z.string().optional(), // References llm_models.model_name
+  temperature: z.number().min(0).max(2).optional().default(1.0),
+  max_tokens: z.number().int().min(1).max(10000).optional().default(150),
+  service_tier: z.enum(['auto', 'default', 'flex']).optional().default('auto'),
 });
 
 /**
- * Union of all node types
- */
-const nodeSchema = z.discriminatedUnion('type', [
-  standardNodeSchema,
-  retrieveVariableNodeSchema,
-  endCallNodeSchema,
-]);
-
-/**
  * Workflow configuration schema
+ * Note: llm config is inside workflow section per AGENT_JSON_SCHEMA.md
  */
 const workflowSchema = z.object({
   initial_node: z.string().min(1, 'Initial node is required'),
@@ -228,20 +256,8 @@ const workflowSchema = z.object({
   max_transitions: z.number().int().min(1).max(1000).optional().default(50),
   interruption_settings: interruptionSettingsSchema.optional(),
   recording: recordingSchema.optional(),
+  llm: llmConfigSchema.optional(), // LLM config lives in workflow section
   nodes: z.array(nodeSchema).min(1, 'At least one node is required'),
-});
-
-/**
- * LLM configuration schema
- */
-const llmConfigSchema = z.object({
-  enabled: z.boolean().optional().default(true),
-  model: z.string().optional(),
-  service_tier: z.enum(['auto', 'default']).optional().default('auto'),
-  temperature: z.number().min(0).max(2).optional().default(1.0),
-  max_tokens: z.number().int().min(1).max(10000).optional().default(150),
-  base_url: z.string().url().optional().or(z.literal('')),
-  api_version: z.string().optional(),
 });
 
 /**
@@ -281,14 +297,16 @@ const autoHangupSchema = z.object({
 /**
  * Complete workflow configuration schema
  * This validates the entire config JSON that goes into agentConfigVersions.configJson
+ *
+ * Note: LLM config is in workflow.llm section (not root level)
+ * TTS, STT, RAG are database-backed and not stored in agent JSON
+ * Only auto_hangup remains at root level for backward compatibility
  */
 export const workflowConfigSchema = z.object({
   agent: agentMetadataSchema,
   workflow: workflowSchema,
-  llm: llmConfigSchema.optional(),
-  tts: ttsConfigSchema.optional(),
-  stt: sttConfigSchema.optional(),
-  rag: ragConfigSchema.optional(),
+  // Note: tts, stt, rag configs are database-backed (voice_configs, rag_configs tables)
+  // llm is now in workflow.llm section
   auto_hangup: autoHangupSchema.optional(),
 }).refine(
   (data) => {
@@ -349,3 +367,5 @@ export type StandardNode = z.infer<typeof standardNodeSchema>;
 export type RetrieveVariableNode = z.infer<typeof retrieveVariableNodeSchema>;
 export type EndCallNode = z.infer<typeof endCallNodeSchema>;
 export type Transition = z.infer<typeof transitionSchema>;
+export type LlmOverride = z.infer<typeof llmOverrideSchema>;
+export type RagOverride = z.infer<typeof ragConfigSchema>;

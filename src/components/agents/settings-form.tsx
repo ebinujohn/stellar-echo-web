@@ -21,6 +21,7 @@ import { toast } from 'sonner';
 import { useRagConfigsDropdown, useRagConfig } from '@/lib/hooks/use-rag-configs';
 import { useVoiceConfigsDropdown, useVoiceConfig } from '@/lib/hooks/use-voice-configs';
 import { useAgentPhoneConfigs } from '@/lib/hooks/use-phone-configs';
+import { useLlmModelsDropdown } from '@/lib/hooks/use-llm-configs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface SettingsFormProps {
@@ -44,6 +45,9 @@ export function SettingsForm({ agentId, currentConfig, ragEnabled: initialRagEna
   // Fetch phone configs mapped to this agent
   const { data: agentPhoneConfigs } = useAgentPhoneConfigs(agentId);
 
+  // Fetch available LLM models for dropdown
+  const { data: llmModels } = useLlmModelsDropdown();
+
   // RAG Config Selection
   const [selectedRagConfigId, setSelectedRagConfigId] = useState(initialRagConfigId || '');
   const [ragEnabledState, setRagEnabledState] = useState(initialRagEnabled ?? false);
@@ -57,12 +61,13 @@ export function SettingsForm({ agentId, currentConfig, ragEnabled: initialRagEna
   // Fetch selected Voice config details for preview
   const { data: selectedVoiceConfig } = useVoiceConfig(selectedVoiceConfigId || '');
 
-  // LLM Settings
-  const [llmEnabled, setLlmEnabled] = useState(currentConfig.llm?.enabled ?? true);
-  const [llmModel, setLlmModel] = useState(currentConfig.llm?.model || 'gpt-4o-mini');
-  const [llmTemperature, setLlmTemperature] = useState(currentConfig.llm?.temperature ?? 0.8);
-  const [llmMaxTokens, setLlmMaxTokens] = useState(currentConfig.llm?.max_tokens ?? 150);
-  const [llmServiceTier, setLlmServiceTier] = useState(currentConfig.llm?.service_tier || 'auto');
+  // LLM Settings (stored in workflow.llm per AGENT_JSON_SCHEMA.md)
+  const workflowLlm = currentConfig.workflow?.llm;
+  const [llmEnabled, setLlmEnabled] = useState(workflowLlm?.enabled ?? true);
+  const [llmModel, setLlmModel] = useState(workflowLlm?.model_name || 'gpt-4o-mini');
+  const [llmTemperature, setLlmTemperature] = useState(workflowLlm?.temperature ?? 1.0);
+  const [llmMaxTokens, setLlmMaxTokens] = useState(workflowLlm?.max_tokens ?? 150);
+  const [llmServiceTier, setLlmServiceTier] = useState(workflowLlm?.service_tier || 'auto');
 
   // TTS Settings (only enabled flag - voice config is selected from shared configs)
   const [ttsEnabled, setTtsEnabled] = useState(currentConfig.tts?.enabled ?? true);
@@ -87,16 +92,22 @@ export function SettingsForm({ agentId, currentConfig, ragEnabled: initialRagEna
         enabled: ttsEnabled,
       };
 
+      // Build LLM config for workflow.llm section
+      const llmConfig = {
+        enabled: llmEnabled,
+        model_name: llmModel, // References llm_models.model_name
+        temperature: parseFloat(String(llmTemperature)),
+        max_tokens: parseInt(String(llmMaxTokens)),
+        service_tier: llmServiceTier,
+      };
+
       // Merge the form data with the existing config
+      // LLM config goes in workflow.llm per AGENT_JSON_SCHEMA.md
       const updatedConfig = {
         ...currentConfig,
-        llm: {
-          ...currentConfig.llm,
-          enabled: llmEnabled,
-          model: llmModel,
-          temperature: parseFloat(String(llmTemperature)),
-          max_tokens: parseInt(String(llmMaxTokens)),
-          service_tier: llmServiceTier,
+        workflow: {
+          ...currentConfig.workflow,
+          llm: llmConfig,
         },
         tts: ttsConfig,
         // STT settings preserved from existing config (not editable here)
@@ -159,13 +170,19 @@ export function SettingsForm({ agentId, currentConfig, ragEnabled: initialRagEna
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="llm-model">Model</Label>
-              <Input
-                id="llm-model"
-                value={llmModel}
-                onChange={(e) => setLlmModel(e.target.value)}
-                placeholder="gpt-4o-mini"
-              />
-              <p className="text-xs text-muted-foreground">OpenAI model name</p>
+              <Select value={llmModel} onValueChange={setLlmModel}>
+                <SelectTrigger id="llm-model">
+                  <SelectValue placeholder="Select a model" />
+                </SelectTrigger>
+                <SelectContent>
+                  {llmModels?.map((model) => (
+                    <SelectItem key={model.modelName} value={model.modelName}>
+                      {model.displayName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Select an LLM model</p>
             </div>
 
             <div className="space-y-2">

@@ -29,7 +29,20 @@ export interface WorkflowNodeData {
     on_entry?: string[];
     on_exit?: string[];
   };
-  rag?: any;
+  rag?: {
+    enabled?: boolean;
+    search_mode?: string;
+    top_k?: number;
+    rrf_k?: number;
+    vector_weight?: number;
+    fts_weight?: number;
+  };
+  llm_override?: {
+    model_name?: string;
+    temperature?: number;
+    max_tokens?: number;
+    service_tier?: 'auto' | 'default' | 'flex';
+  };
 }
 
 /**
@@ -65,6 +78,7 @@ export function workflowToNodes(config: WorkflowConfig): {
         transitions: (node as any).transitions,
         actions: (node as any).actions,
         rag: (node as any).rag,
+        llm_override: (node as any).llm_override,
       },
     };
 
@@ -142,6 +156,7 @@ export function nodesToWorkflow(
         ...(transitions.length > 0 && { transitions }),
         ...(data.actions && { actions: data.actions }),
         ...(data.rag && { rag: data.rag }),
+        ...(data.llm_override && { llm_override: data.llm_override }),
       };
     } else if (data.type === 'retrieve_variable') {
       configNode = {
@@ -182,6 +197,10 @@ export function nodesToWorkflow(
     }),
     ...(existingConfig?.workflow.recording && {
       recording: existingConfig.workflow.recording,
+    }),
+    // Preserve LLM config (lives in workflow.llm per AGENT_JSON_SCHEMA.md)
+    ...(existingConfig && (existingConfig.workflow as any)?.llm && {
+      llm: (existingConfig.workflow as any).llm,
     }),
     nodes: configNodes,
   };

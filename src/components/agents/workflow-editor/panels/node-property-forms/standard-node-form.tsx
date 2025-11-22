@@ -22,8 +22,11 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import { Plus, Trash2, Save, ChevronDown, ChevronRight, Database } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, Database, Cpu } from 'lucide-react';
 import type { WorkflowNodeData } from '../../utils/json-converter';
+import { useLlmModelsDropdown } from '@/lib/hooks/use-llm-configs';
+import { useTransitionConditions, useActionTypes } from '@/lib/hooks/use-workflow-config-types';
+import { AutocompleteInput } from '@/components/ui/autocomplete-input';
 
 interface TargetNodeOption {
   id: string;
@@ -68,6 +71,40 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
   const [ragFtsWeight, setRagFtsWeight] = useState(nodeData.rag?.fts_weight ?? 0.4);
   const [ragCollapsibleOpen, setRagCollapsibleOpen] = useState(false);
 
+  // LLM Override Settings
+  const [llmOverrideEnabled, setLlmOverrideEnabled] = useState(
+    nodeData.llm_override !== undefined && nodeData.llm_override !== null
+  );
+  const [llmModelName, setLlmModelName] = useState(nodeData.llm_override?.model_name || '');
+  const [llmTemperature, setLlmTemperature] = useState(nodeData.llm_override?.temperature ?? 1.0);
+  const [llmMaxTokens, setLlmMaxTokens] = useState(nodeData.llm_override?.max_tokens ?? 150);
+  const [llmServiceTier, setLlmServiceTier] = useState(nodeData.llm_override?.service_tier || 'auto');
+  const [llmCollapsibleOpen, setLlmCollapsibleOpen] = useState(false);
+
+  // Fetch available LLM models
+  const { data: llmModels = [] } = useLlmModelsDropdown();
+
+  // Fetch workflow config types for autocomplete
+  const { data: transitionConditions = [], isLoading: conditionsLoading } = useTransitionConditions();
+  const { data: actionTypes = [], isLoading: actionsLoading } = useActionTypes();
+
+  // Transform config types to autocomplete suggestions format
+  const conditionSuggestions = transitionConditions.map((c) => ({
+    value: c.value,
+    displayName: c.displayName,
+    description: c.description,
+    examples: c.examples,
+    isPatternBased: c.isPatternBased,
+  }));
+
+  const actionSuggestions = actionTypes.map((a) => ({
+    value: a.value,
+    displayName: a.displayName,
+    description: a.description,
+    examples: a.examples,
+    isPatternBased: a.isPatternBased,
+  }));
+
   // Apply changes immediately
   // Note: onUpdate is intentionally excluded from deps to prevent infinite loops
   useEffect(() => {
@@ -103,6 +140,18 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
       updates.rag = undefined;
     }
 
+    // Add LLM configuration if override is enabled
+    if (llmOverrideEnabled) {
+      updates.llm_override = {
+        model_name: llmModelName || undefined,
+        temperature: llmTemperature,
+        max_tokens: llmMaxTokens,
+        service_tier: llmServiceTier as 'auto' | 'default' | 'flex',
+      };
+    } else {
+      updates.llm_override = undefined;
+    }
+
     onUpdate(updates);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -121,6 +170,11 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
     ragRrfK,
     ragVectorWeight,
     ragFtsWeight,
+    llmOverrideEnabled,
+    llmModelName,
+    llmTemperature,
+    llmMaxTokens,
+    llmServiceTier,
   ]);
 
   const addTransition = () => {
@@ -333,13 +387,15 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
 
                   <div>
                     <Label className="text-xs">Condition</Label>
-                    <Input
+                    <AutocompleteInput
+                      suggestions={conditionSuggestions}
                       value={transition.condition}
-                      onChange={(e) =>
-                        updateTransition(index, { condition: e.target.value })
+                      onChange={(value) =>
+                        updateTransition(index, { condition: value })
                       }
                       placeholder="always, timeout:10, contains:keyword"
-                      className="mt-1.5 h-8 text-sm font-mono"
+                      className="mt-1.5 h-8 text-sm"
+                      isLoading={conditionsLoading}
                     />
                   </div>
 
@@ -384,11 +440,13 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
               <div className="space-y-2">
                 {onEntryActions.map((action, index) => (
                   <div key={index} className="flex items-center gap-2">
-                    <Input
+                    <AutocompleteInput
+                      suggestions={actionSuggestions}
                       value={action}
-                      onChange={(e) => updateOnEntryAction(index, e.target.value)}
-                      placeholder="Action name or webhook URL"
+                      onChange={(value) => updateOnEntryAction(index, value)}
+                      placeholder="log:message, webhook:url, hangup"
                       className="h-8 text-sm flex-1"
+                      isLoading={actionsLoading}
                     />
                     <Button
                       variant="ghost"
@@ -426,11 +484,13 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
               <div className="space-y-2">
                 {onExitActions.map((action, index) => (
                   <div key={index} className="flex items-center gap-2">
-                    <Input
+                    <AutocompleteInput
+                      suggestions={actionSuggestions}
                       value={action}
-                      onChange={(e) => updateOnExitAction(index, e.target.value)}
-                      placeholder="Action name or webhook URL"
+                      onChange={(value) => updateOnExitAction(index, value)}
+                      placeholder="log:message, webhook:url, hangup"
                       className="h-8 text-sm flex-1"
+                      isLoading={actionsLoading}
                     />
                     <Button
                       variant="ghost"
@@ -580,6 +640,118 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
                         </p>
                       </div>
                     )}
+                  </div>
+                </>
+              )}
+            </CollapsibleContent>
+          </Collapsible>
+        </div>
+
+        <Separator />
+
+        {/* LLM Override Configuration */}
+        <div className="space-y-4">
+          <Collapsible open={llmCollapsibleOpen} onOpenChange={setLlmCollapsibleOpen}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="p-0 h-auto">
+                    {llmCollapsibleOpen ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                  </Button>
+                </CollapsibleTrigger>
+                <Label className="cursor-pointer" onClick={() => setLlmCollapsibleOpen(!llmCollapsibleOpen)}>
+                  <Cpu className="h-4 w-4 inline mr-2" />
+                  LLM Overrides
+                </Label>
+              </div>
+              <Switch
+                checked={llmOverrideEnabled}
+                onCheckedChange={setLlmOverrideEnabled}
+              />
+            </div>
+
+            <CollapsibleContent className="space-y-4 mt-4">
+              {llmOverrideEnabled && (
+                <>
+                  <div className="p-3 border rounded-lg bg-muted/50 space-y-4">
+                    <p className="text-xs text-muted-foreground">
+                      Override global LLM settings for this node only. Useful for different complexity levels.
+                    </p>
+
+                    <div className="space-y-3">
+                      <div>
+                        <Label className="text-xs">Model</Label>
+                        <Select
+                          value={llmModelName || '__global_default__'}
+                          onValueChange={(value) => setLlmModelName(value === '__global_default__' ? '' : value)}
+                        >
+                          <SelectTrigger className="h-8 mt-1.5">
+                            <SelectValue placeholder="Use global default" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__global_default__">Use global default</SelectItem>
+                            {llmModels.map((model) => (
+                              <SelectItem key={model.modelName} value={model.modelName}>
+                                {model.displayName}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Leave empty to use agent's default model
+                        </p>
+                      </div>
+
+                      <div>
+                        <Label className="text-xs">Temperature ({llmTemperature.toFixed(2)})</Label>
+                        <Input
+                          type="range"
+                          min="0"
+                          max="2"
+                          step="0.1"
+                          value={llmTemperature}
+                          onChange={(e) => setLlmTemperature(parseFloat(e.target.value))}
+                          className="h-8 mt-1.5"
+                        />
+                        <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                          <span>Deterministic (0.0)</span>
+                          <span>Creative (2.0)</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label className="text-xs">Max Tokens</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          max="10000"
+                          value={llmMaxTokens}
+                          onChange={(e) => setLlmMaxTokens(parseInt(e.target.value) || 150)}
+                          className="h-8 mt-1.5"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Maximum response length (1-10000)
+                        </p>
+                      </div>
+
+                      <div>
+                        <Label className="text-xs">Service Tier</Label>
+                        <Select value={llmServiceTier} onValueChange={(value) => setLlmServiceTier(value as 'auto' | 'default' | 'flex')}>
+                          <SelectTrigger className="h-8 mt-1.5">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="auto">Auto (OpenAI manages)</SelectItem>
+                            <SelectItem value="default">Default (Standard tier)</SelectItem>
+                            <SelectItem value="flex">Flex (Cost optimization)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
                   </div>
                 </>
               )}
