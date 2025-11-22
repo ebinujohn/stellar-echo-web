@@ -130,6 +130,14 @@ export function useCreatePhoneConfig() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['phone-configs'] });
+      // Also invalidate all agent-related queries since mapping may have changed
+      // This includes agent details (for phoneMappingCount) and agent phone-configs
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
+          query.queryKey[0] === 'agents' &&
+          (query.queryKey.length === 2 || query.queryKey[2] === 'phone-configs'),
+      });
     },
   });
 }
@@ -153,6 +161,14 @@ export function useUpdatePhoneConfig() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['phone-configs'] });
       queryClient.invalidateQueries({ queryKey: ['phone-configs', variables.id] });
+      // Also invalidate all agent-related queries since mapping may have changed
+      // This includes agent details (for phoneMappingCount) and agent phone-configs
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
+          query.queryKey[0] === 'agents' &&
+          (query.queryKey.length === 2 || query.queryKey[2] === 'phone-configs'),
+      });
     },
   });
 }
@@ -173,6 +189,14 @@ export function useDeletePhoneConfig() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['phone-configs'] });
+      // Also invalidate all agent-related queries since mapping may have been removed
+      // This includes agent details (for phoneMappingCount) and agent phone-configs
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
+          query.queryKey[0] === 'agents' &&
+          (query.queryKey.length === 2 || query.queryKey[2] === 'phone-configs'),
+      });
     },
   });
 }

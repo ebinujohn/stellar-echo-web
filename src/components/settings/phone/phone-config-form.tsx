@@ -166,12 +166,12 @@ export function PhoneConfigForm() {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="agent">Mapped Agent</Label>
-            <Select value={agentId} onValueChange={setAgentId}>
+            <Select value={agentId || '__none__'} onValueChange={(val) => setAgentId(val === '__none__' ? '' : val)}>
               <SelectTrigger id="agent">
                 <SelectValue placeholder={agentsLoading ? 'Loading agents...' : 'Select an agent (optional)'} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">
+                <SelectItem value="__none__">
                   <span className="text-muted-foreground">No agent (unmapped)</span>
                 </SelectItem>
                 {agents?.map((agent) => (

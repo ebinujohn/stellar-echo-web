@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, Save, Loader2, Phone, User } from 'lucide-react';
@@ -45,37 +45,41 @@ export function PhoneConfigDetailClient({ phoneConfigId }: PhoneConfigDetailClie
   const updateConfig = useUpdatePhoneConfig();
   const { data: agents, isLoading: agentsLoading } = useAgents();
 
-  // Form state
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [agentId, setAgentId] = useState<string>('');
+  // Form state - use null to indicate "use config value"
+  const [phoneNumberOverride, setPhoneNumberOverride] = useState<string | null>(null);
+  const [nameOverride, setNameOverride] = useState<string | null>(null);
+  const [descriptionOverride, setDescriptionOverride] = useState<string | null>(null);
+  const [agentIdOverride, setAgentIdOverride] = useState<string | null>(null);
 
   const [isSaving, setIsSaving] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
 
-  // Initialize form when config loads
-  useEffect(() => {
-    if (config) {
-      setPhoneNumber(config.phoneNumber);
-      setName(config.name || '');
-      setDescription(config.description || '');
-      setAgentId(config.mapping?.agentId || '');
-    }
-  }, [config]);
+  // Computed values - use override if set, otherwise use config
+  const phoneNumber = phoneNumberOverride ?? config?.phoneNumber ?? '';
+  const name = nameOverride ?? config?.name ?? '';
+  const description = descriptionOverride ?? config?.description ?? '';
+  const agentId = agentIdOverride ?? config?.mapping?.agentId ?? '';
 
-  // Track changes
-  useEffect(() => {
-    if (!config) return;
+  // Setters that mark the field as overridden
+  const setPhoneNumber = (value: string) => setPhoneNumberOverride(value);
+  const setName = (value: string) => setNameOverride(value);
+  const setDescription = (value: string) => setDescriptionOverride(value);
+  const setAgentId = (value: string) => setAgentIdOverride(value);
 
-    const changed =
-      phoneNumber !== config.phoneNumber ||
-      name !== (config.name || '') ||
-      description !== (config.description || '') ||
-      agentId !== (config.mapping?.agentId || '');
+  // Check if any field has been changed from config
+  const hasChanges =
+    config !== undefined &&
+    (phoneNumberOverride !== null ||
+      nameOverride !== null ||
+      descriptionOverride !== null ||
+      agentIdOverride !== null);
 
-    setHasChanges(changed);
-  }, [phoneNumber, name, description, agentId, config]);
+  // Reset overrides after successful save
+  const resetOverrides = () => {
+    setPhoneNumberOverride(null);
+    setNameOverride(null);
+    setDescriptionOverride(null);
+    setAgentIdOverride(null);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -104,7 +108,7 @@ export function PhoneConfigDetailClient({ phoneConfigId }: PhoneConfigDetailClie
       });
 
       toast.success('Phone number updated');
-      setHasChanges(false);
+      resetOverrides();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to update phone number');
     } finally {
@@ -276,12 +280,12 @@ export function PhoneConfigDetailClient({ phoneConfigId }: PhoneConfigDetailClie
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="agent">Mapped Agent</Label>
-            <Select value={agentId} onValueChange={setAgentId}>
+            <Select value={agentId || '__none__'} onValueChange={(val) => setAgentId(val === '__none__' ? '' : val)}>
               <SelectTrigger id="agent">
                 <SelectValue placeholder={agentsLoading ? 'Loading agents...' : 'Select an agent (optional)'} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">
+                <SelectItem value="__none__">
                   <span className="text-muted-foreground">No agent (unmapped)</span>
                 </SelectItem>
                 {agents?.map((agent) => (

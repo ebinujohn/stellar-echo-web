@@ -46,7 +46,7 @@ export const phoneConfigs = pgTable(
  * Each phone_config can be mapped to one agent
  */
 export const phoneConfigMappings = pgTable(
-  'phone_config_mappings',
+  'phone_mappings',
   {
     phoneConfigId: uuid('phone_config_id')
       .primaryKey()

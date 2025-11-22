@@ -22,7 +22,8 @@ import {
   FileCode,
 } from 'lucide-react';
 import { useAgent, useCreateVersion } from '@/lib/hooks/use-agents';
-import { formatDateTime } from '@/lib/utils/formatters';
+import { useAgentPhoneConfigs } from '@/lib/hooks/use-phone-configs';
+import { formatDateTime, formatPhoneNumber } from '@/lib/utils/formatters';
 import { DeleteAgentDialog } from './dialogs/delete-agent-dialog';
 import { WorkflowEditorLayout } from './workflow-editor/workflow-editor-layout';
 import { SettingsForm } from './settings-form';
@@ -35,6 +36,7 @@ interface AgentDetailClientProps {
 export function AgentDetailClient({ agentId }: AgentDetailClientProps) {
   const router = useRouter();
   const { data: agent, isLoading, error } = useAgent(agentId);
+  const { data: phoneConfigs } = useAgentPhoneConfigs(agentId);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const createVersion = useCreateVersion();
@@ -190,6 +192,45 @@ export function AgentDetailClient({ agentId }: AgentDetailClientProps) {
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-4">
+          {/* Phone Numbers Section */}
+          {phoneConfigs && phoneConfigs.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Phone className="h-5 w-5" />
+                  Mapped Phone Numbers
+                </CardTitle>
+                <CardDescription>
+                  Incoming calls to these numbers will be routed to this agent
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-2">
+                  {phoneConfigs.map((phone) => (
+                    <Link
+                      key={phone.id}
+                      href={`/settings/phone/${phone.id}`}
+                      className="inline-flex"
+                    >
+                      <Badge
+                        variant="secondary"
+                        className="text-sm py-1.5 px-3 hover:bg-secondary/80 cursor-pointer"
+                      >
+                        <Phone className="h-3.5 w-3.5 mr-2" />
+                        {formatPhoneNumber(phone.phoneNumber)}
+                        {phone.name && (
+                          <span className="ml-2 text-muted-foreground">
+                            ({phone.name})
+                          </span>
+                        )}
+                      </Badge>
+                    </Link>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <div className="grid gap-4 md:grid-cols-2">
             <Card>
               <CardHeader>
