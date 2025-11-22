@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { verifyToken } from '@/lib/auth/jwt';
+import { verifyToken, refreshAccessToken } from '@/lib/auth/jwt';
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -11,19 +11,29 @@ export async function middleware(request: NextRequest) {
   }
 
   // Protected routes - require authentication
-  const token = request.cookies.get('access_token')?.value;
+  const accessToken = request.cookies.get('access_token')?.value;
+  const refreshToken = request.cookies.get('refresh_token')?.value;
 
-  if (!token) {
-    // Redirect to login if not authenticated
+  // No tokens at all - redirect to login
+  if (!accessToken && !refreshToken) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  const payload = await verifyToken(token);
+  let payload = accessToken ? await verifyToken(accessToken) : null;
+  let newAccessToken: string | null = null;
 
+  // Access token invalid/expired - try to refresh
+  if (!payload && refreshToken) {
+    newAccessToken = await refreshAccessToken(refreshToken);
+    if (newAccessToken) {
+      payload = await verifyToken(newAccessToken);
+    }
+  }
+
+  // Both tokens invalid - clear cookies and redirect to login
   if (!payload) {
-    // Invalid token - clear cookies and redirect to login
     const response = NextResponse.redirect(new URL('/login', request.url));
     response.cookies.delete('access_token');
     response.cookies.delete('refresh_token');
@@ -37,11 +47,24 @@ export async function middleware(request: NextRequest) {
   requestHeaders.set('x-user-role', payload.role);
   requestHeaders.set('x-user-email', payload.email);
 
-  return NextResponse.next({
+  const response = NextResponse.next({
     request: {
       headers: requestHeaders,
     },
   });
+
+  // Set the new access token cookie if we refreshed
+  if (newAccessToken) {
+    response.cookies.set('access_token', newAccessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 15, // 15 minutes
+      path: '/',
+    });
+  }
+
+  return response;
 }
 
 export const config = {

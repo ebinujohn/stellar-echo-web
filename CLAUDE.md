@@ -257,7 +257,8 @@ Shared Voice/TTS configurations are stored in database tables (`voice_configs`, 
 ### Session & Cookie Management
 
 - Access token expires in 15 minutes (short-lived for security)
-- Refresh token lasts 7 days (for seamless re-authentication)
+- Refresh token lasts 1 day (for seamless re-authentication)
+- Middleware automatically refreshes expired access tokens using valid refresh tokens
 - Cookies are HTTP-only, secure in production, sameSite=lax
 - Middleware validates on every request except `/login` and static assets
 

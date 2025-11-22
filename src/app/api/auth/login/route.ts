@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
         role: user.role as 'admin' | 'viewer',
         tenantId: user.tenantId,
       },
-      '7d'
+      '1d'
     );
 
     // Create response
