@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Database, Settings2 } from 'lucide-react';
+import { Database, Volume2 } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -14,6 +14,12 @@ const settingsCategories = [
     description: 'Manage knowledge base and retrieval settings for your agents',
     href: '/settings/rag',
     icon: Database,
+  },
+  {
+    title: 'Voice Configurations',
+    description: 'Manage voice and text-to-speech settings for your agents',
+    href: '/settings/voice',
+    icon: Volume2,
   },
 ];
 

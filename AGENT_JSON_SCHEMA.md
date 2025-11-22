@@ -58,9 +58,7 @@ All agents **must** use node-based workflows. Traditional single-prompt mode has
   "llm": { ... },
   "tts": { ... },
   "stt": { ... },
-  "rag": { ... },
-  "auto_hangup": { ... },
-  "logging": { ... }
+  "auto_hangup": { ... }
 }
 ```
 
@@ -73,8 +71,9 @@ All agents **must** use node-based workflows. Traditional single-prompt mode has
 | `llm` | object | ❌ No | LLM configuration (defaults to environment settings) |
 | `tts` | object | ❌ No | Text-to-Speech configuration |
 | `stt` | object | ❌ No | Speech-to-Text configuration |
-| `rag` | object | ❌ No | RAG (knowledge base) configuration |
 | `auto_hangup` | object | ❌ No | Auto-hangup configuration |
+
+> **Note:** RAG configuration is managed in the database via `rag_configs` and `rag_config_versions` tables, NOT in the agent JSON. See [RAG Configuration](#rag-configuration) section for details.
 
 ---
 
@@ -131,7 +130,6 @@ Complete workflow configuration with nodes, transitions, and settings.
 {
   "workflow": {
     "initial_node": "string",
-    "global_prompt": "string",
     "history_window": 0,
     "max_transitions": 50,
     "interruption_settings": { ... },
@@ -147,11 +145,30 @@ Complete workflow configuration with nodes, transitions, and settings.
 |-------|------|----------|---------|-------------|
 | `initial_node` | string | ✅ Yes | - | ID of starting node |
 | `nodes` | array | ✅ Yes | - | Array of node configurations |
-| `global_prompt` | string | ❌ No | `""` | Prepended to all node prompts |
 | `history_window` | integer | ❌ No | `0` | Message preservation (0 = all, N = last N messages) |
 | `max_transitions` | integer | ❌ No | `50` | Maximum node transitions (prevents infinite loops) |
 | `interruption_settings` | object | ❌ No | See below | Global interruption handling configuration |
 | `recording` | object | ❌ No | See below | Call recording configuration |
+
+### Global Prompt (Database Column)
+
+> **Note:** The `global_prompt` is stored in the **database column** (`agent_config_versions.global_prompt`), NOT in the JSON configuration. This allows for:
+> - Easier editing of large, multiline prompts
+> - Direct database queries on prompt content
+> - Separation of behavioral configuration (JSON) from prompt content (text)
+
+**When seeding from JSON files:** Include `global_prompt` in the workflow section. The seed script extracts it and stores it in the database column separately.
+
+**At runtime:** The system automatically prepends `global_prompt` to every node's `system_prompt`:
+```
+Final prompt = global_prompt + "\n\n" + node.system_prompt
+```
+
+**Use `global_prompt` for:**
+- Agent identity and name
+- Universal safety guardrails
+- Compliance requirements
+- Common formatting instructions
 
 ### Interruption Settings
 
@@ -1216,39 +1233,30 @@ Controls resource allocation and priority with OpenAI's models:
 
 ---
 
-## TTS Configuration
+## Voice/TTS Configuration (Database-Backed)
 
-Configure Text-to-Speech (ElevenLabs).
+Voice/TTS configuration is now stored in the database, separate from agent JSON files. This allows:
+- **Shared voice configs** across multiple agents
+- **Independent versioning** of voice settings
+- **Easy management** without modifying agent configs
 
-### Schema
+### Database Schema
 
-```json
-{
-  "tts": {
-    "enabled": true,
-    "voice_id": "string",
-    "model": "eleven_turbo_v2_5",
-    "stability": 0.5,
-    "similarity_boost": 0.75,
-    "style": 0.0,
-    "use_speaker_boost": true,
-    "enable_ssml_parsing": false,
-    "pronunciation_dictionaries_enabled": true,
-    "pronunciation_dictionary_ids": ["dict_id_1", "dict_id_2"]
-  }
-}
-```
+Voice configurations are stored in two tables:
+- `voice_configs` - Base entity (tenant-scoped, named configurations)
+- `voice_config_versions` - Versioned parameters with rollback support
 
-### Fields
+Agent configs reference voice configs via `voice_config_id` column in `agent_config_versions`.
+
+### Voice Config Version Fields
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `enabled` | boolean | ❌ No | `true` | Enable/disable TTS |
-| `voice_id` | string | ⚠️ Conditional | `""` | ElevenLabs voice ID (required if enabled) |
+| `voice_id` | string | ✅ Yes | - | ElevenLabs voice ID |
 | `model` | string | ❌ No | `"eleven_turbo_v2_5"` | TTS model |
-| `stability` | float | ❌ No | `0.5` | Voice stability (0.0-1.0) |
-| `similarity_boost` | float | ❌ No | `0.75` | Similarity boost (0.0-1.0) |
-| `style` | float | ❌ No | `0.0` | Style exaggeration (0.0-1.0) |
+| `stability` | decimal | ❌ No | `0.5` | Voice stability (0.0-1.0) |
+| `similarity_boost` | decimal | ❌ No | `0.75` | Similarity boost (0.0-1.0) |
+| `style` | decimal | ❌ No | `0.0` | Style exaggeration (0.0-1.0) |
 | `use_speaker_boost` | boolean | ❌ No | `true` | Enable speaker boost |
 | `enable_ssml_parsing` | boolean | ❌ No | `false` | Parse SSML tags |
 | `pronunciation_dictionaries_enabled` | boolean | ❌ No | `true` | Use pronunciation dictionaries |
@@ -1269,39 +1277,22 @@ When `enable_ssml_parsing: true`, you can use SSML tags in prompts:
 1. Create dictionary in [ElevenLabs Dashboard](https://elevenlabs.io)
 2. Add pronunciation rules (alias or IPA)
 3. Copy Dictionary ID
-4. Add to configuration:
+4. Add to voice config version in database
 
-```json
-{
-  "tts": {
-    "pronunciation_dictionaries_enabled": true,
-    "pronunciation_dictionary_ids": [
-      "dict_medical_terms_abc123"
-    ]
-  }
-}
-```
+### Configuration Management
 
-### Example
+Voice configs are loaded via ConfigManager:
+- Redis caching for sub-5ms loads
+- Manual cache invalidation via `ConfigManager.invalidate_voice_config_cache()`
 
-```json
-{
-  "tts": {
-    "enabled": true,
-    "voice_id": "JBFqnCBsd6RMkjVDRZzb",
-    "model": "eleven_turbo_v2_5",
-    "stability": 0.5,
-    "similarity_boost": 0.75,
-    "style": 0.2,
-    "use_speaker_boost": true,
-    "enable_ssml_parsing": true,
-    "pronunciation_dictionaries_enabled": true,
-    "pronunciation_dictionary_ids": [
-      "dict_abc123xyz789"
-    ]
-  }
-}
-```
+### Default Voice Config
+
+When seeding the database, a default voice configuration is created per tenant:
+- **Name**: `default`
+- **Voice ID**: `JBFqnCBsd6RMkjVDRZzb` (George)
+- **Model**: `eleven_turbo_v2_5`
+
+**Note**: The `tts` section in agent JSON files is no longer used. Voice configuration must be set via the database.
 
 ---
 
@@ -1348,69 +1339,94 @@ Configure Speech-to-Text (Deepgram Flux v2).
 
 ## RAG Configuration
 
-Configure Retrieval-Augmented Generation (knowledge base).
+Retrieval-Augmented Generation (RAG) provides knowledge base integration for agents.
 
-### Schema
+### Database-Based Configuration
 
-```json
-{
-  "rag": {
-    "enabled": false,
-    "search_mode": "hybrid",
-    "top_k": 5,
-    "relevance_filter": true,
-    "faiss_index_path": "data/faiss/index.faiss",
-    "faiss_mapping_path": "data/faiss/mapping.pkl",
-    "sqlite_db_path": "data/metadata/healthcare_rag.db",
-    "rrf_k": 60,
-    "vector_weight": 0.6,
-    "fts_weight": 0.4,
-    "hnsw_ef_search": 64,
-    "bedrock_model": "amazon.titan-embed-text-v2:0",
-    "bedrock_dimensions": 1024
-  }
-}
+> **Important:** RAG configuration is stored in the **database**, NOT in the agent JSON file. This allows:
+> - Shared RAG configs across multiple agents
+> - Independent versioning of RAG settings
+> - Easier RAG config management and updates
+> - Node-level overrides remain in the agent JSON
+
+### Database Tables
+
+RAG configuration uses two database tables:
+
+**`rag_configs`** - Base RAG configuration entity (tenant-scoped)
+```sql
+- id (UUID)
+- tenant_id (FK → tenants)
+- name (unique per tenant)
+- description
+- is_active
+- created_at, updated_at
 ```
 
-### Fields
+**`rag_config_versions`** - Versioned RAG configurations
+```sql
+- rag_config_id (FK → rag_configs)
+- version (unique per rag_config)
+- search_mode, top_k, relevance_filter
+- rrf_k, vector_weight, fts_weight, hnsw_ef_search
+- bedrock_model, bedrock_dimensions
+- faiss_index_path, faiss_mapping_path, sqlite_db_path
+- is_active, created_by, notes
+```
 
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| `enabled` | boolean | ❌ No | `false` | Enable/disable RAG |
-| `search_mode` | string | ❌ No | `"hybrid"` | Search mode: `"vector"`, `"fts"`, `"hybrid"` |
-| `top_k` | integer | ❌ No | `5` | Number of chunks to retrieve |
-| `relevance_filter` | boolean | ❌ No | `true` | Only query for questions/info requests |
-| `faiss_index_path` | string | ❌ No | `"data/faiss/index.faiss"` | FAISS index file |
-| `faiss_mapping_path` | string | ❌ No | `"data/faiss/mapping.pkl"` | FAISS metadata file |
-| `sqlite_db_path` | string | ❌ No | `"data/metadata/healthcare_rag.db"` | SQLite FTS5 database |
-| `rrf_k` | integer | ❌ No | `60` | RRF fusion constant |
-| `vector_weight` | float | ❌ No | `0.6` | Vector search weight (hybrid mode) |
-| `fts_weight` | float | ❌ No | `0.4` | FTS weight (hybrid mode) |
-| `hnsw_ef_search` | integer | ❌ No | `64` | FAISS HNSW search parameter |
-| `bedrock_model` | string | ❌ No | `"amazon.titan-embed-text-v2:0"` | Bedrock embedding model |
-| `bedrock_dimensions` | integer | ❌ No | `1024` | Embedding dimensions |
+### Agent-RAG Linking
 
-### Node-Level Override Support
+The `agent_config_versions` table has two columns for RAG:
 
-The following RAG parameters can be overridden at the node level:
+| Column | Type | Description |
+|--------|------|-------------|
+| `rag_enabled` | boolean | Enable/disable RAG for this agent version |
+| `rag_config_id` | UUID (FK) | Reference to `rag_configs` table (nullable) |
 
-| Parameter | Global Default | Node Override | Description |
-|-----------|---------------|---------------|-------------|
-| `enabled` | `false` | ✅ Yes | Enable/disable RAG per node |
-| `search_mode` | `"hybrid"` | ✅ Yes | Search strategy: vector, fts, hybrid |
-| `top_k` | `5` | ✅ Yes | Number of chunks retrieved |
-| `rrf_k` | `60` | ✅ Yes | RRF fusion constant (hybrid mode) |
-| `vector_weight` | `0.6` | ✅ Yes | Semantic search weight (hybrid mode) |
-| `fts_weight` | `0.4` | ✅ Yes | Keyword search weight (hybrid mode) |
-| `relevance_filter` | `true` | ❌ No | Global only - query intent detection |
-| `faiss_index_path` | varies | ❌ No | Global only - FAISS index location |
-| `faiss_mapping_path` | varies | ❌ No | Global only - FAISS mapping location |
-| `sqlite_db_path` | varies | ❌ No | Global only - SQLite FTS5 database |
-| `hnsw_ef_search` | `64` | ❌ No | Global only - FAISS search parameter |
-| `bedrock_model` | varies | ❌ No | Global only - Embedding model |
-| `bedrock_dimensions` | `1024` | ❌ No | Global only - Embedding dimensions |
+**How it works:**
+1. Create a RAG config in `rag_configs` table
+2. Create a version in `rag_config_versions` with settings
+3. Link agent to RAG config via `agent_config_versions.rag_config_id`
+4. Enable RAG with `agent_config_versions.rag_enabled = true`
 
-**✅ = Supports node-level override** | **❌ = Global configuration only**
+### RAG Config Parameters
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `search_mode` | string | `"hybrid"` | Search mode: `"vector"`, `"fts"`, `"hybrid"` |
+| `top_k` | integer | `5` | Number of chunks to retrieve |
+| `relevance_filter` | boolean | `true` | Only query for questions/info requests |
+| `rrf_k` | integer | `60` | RRF fusion constant |
+| `vector_weight` | decimal | `0.6` | Vector search weight (hybrid mode) |
+| `fts_weight` | decimal | `0.4` | FTS weight (hybrid mode) |
+| `hnsw_ef_search` | integer | `64` | FAISS HNSW search parameter |
+| `bedrock_model` | string | `"amazon.titan-embed-text-v2:0"` | Bedrock embedding model |
+| `bedrock_dimensions` | integer | `1024` | Embedding dimensions |
+| `faiss_index_path` | string | `"data/faiss/index.faiss"` | FAISS index file |
+| `faiss_mapping_path` | string | `"data/faiss/mapping.pkl"` | FAISS metadata file |
+| `sqlite_db_path` | string | `"data/metadata/healthcare_rag.db"` | SQLite FTS5 database |
+
+### Node-Level RAG Overrides (Agent JSON)
+
+While global RAG configuration is in the database, **node-level overrides** remain in the agent JSON:
+
+| Parameter | Database Default | Node Override | Description |
+|-----------|-----------------|---------------|-------------|
+| `enabled` | from database | ✅ Yes | Enable/disable RAG per node |
+| `search_mode` | from database | ✅ Yes | Search strategy: vector, fts, hybrid |
+| `top_k` | from database | ✅ Yes | Number of chunks retrieved |
+| `rrf_k` | from database | ✅ Yes | RRF fusion constant (hybrid mode) |
+| `vector_weight` | from database | ✅ Yes | Semantic search weight (hybrid mode) |
+| `fts_weight` | from database | ✅ Yes | Keyword search weight (hybrid mode) |
+| `relevance_filter` | from database | ❌ No | Database only - query intent detection |
+| `faiss_index_path` | from database | ❌ No | Database only - FAISS index location |
+| `faiss_mapping_path` | from database | ❌ No | Database only - FAISS mapping location |
+| `sqlite_db_path` | from database | ❌ No | Database only - SQLite FTS5 database |
+| `hnsw_ef_search` | from database | ❌ No | Database only - FAISS search parameter |
+| `bedrock_model` | from database | ❌ No | Database only - Embedding model |
+| `bedrock_dimensions` | from database | ❌ No | Database only - Embedding dimensions |
+
+**✅ = Supports node-level override** | **❌ = Database configuration only**
 
 ### Search Parameters Explained
 
@@ -1517,26 +1533,28 @@ Use for: Medical education, complex topics, nuanced questions
 
 ### Per-Node RAG Override
 
-Nodes can override global RAG settings. When a node specifies RAG config, specified fields **completely override** the global config for those fields:
+Nodes can override database RAG settings. When a node specifies RAG config, specified fields **completely override** the database config for those fields:
 
 ```json
 {
-  "rag": {
-    "enabled": false,
-    "search_mode": "hybrid",
-    "top_k": 5,
-    "rrf_k": 60,
-    "vector_weight": 0.6,
-    "fts_weight": 0.4
-  },
   "workflow": {
     "nodes": [
       {
-        "id": "faq_node",
+        "id": "greeting",
+        "name": "Greeting",
+        "system_prompt": "Welcome the user.",
         "rag": {
-          "enabled": true,          // ← Enables RAG for this node only
+          "enabled": false       // ← Disable RAG for greeting
+        }
+      },
+      {
+        "id": "faq_node",
+        "name": "FAQ Node",
+        "system_prompt": "Answer questions using knowledge base.",
+        "rag": {
+          "enabled": true,          // ← Enables RAG for this node
           "search_mode": "vector",  // ← Uses vector search (not hybrid)
-          "top_k": 10,              // ← Returns 10 chunks (not 5)
+          "top_k": 10,              // ← Returns 10 chunks
           "rrf_k": 80,              // ← Custom RRF constant
           "vector_weight": 0.8,     // ← 80% vector weight
           "fts_weight": 0.2         // ← 20% FTS weight
@@ -1548,8 +1566,8 @@ Nodes can override global RAG settings. When a node specifies RAG config, specif
 ```
 
 **Override Behavior:**
-- Node-level settings take precedence over global
-- Only specified fields override (unspecified fields use global defaults)
+- Node-level settings take precedence over database configuration
+- Only specified fields override (unspecified fields use database defaults)
 - If node-level `enabled: false`, RAG disabled for that node only
 - Each node can have different RAG behavior
 - Hybrid search weights update dynamically when transitioning between nodes
@@ -1558,7 +1576,7 @@ Nodes can override global RAG settings. When a node specifies RAG config, specif
 
 Node-level RAG overrides support: `enabled`, `search_mode`, `top_k`, `rrf_k`, `vector_weight`, `fts_weight`
 
-Other RAG fields (file paths, bedrock settings, `relevance_filter`) **cannot** be overridden per-node and always use global configuration.
+Other RAG fields (file paths, bedrock settings, `relevance_filter`) **cannot** be overridden per-node and always use database configuration.
 
 **Weight Validation:**
 - `vector_weight` + `fts_weight` should sum to 1.0 for balanced hybrid search
@@ -1570,7 +1588,7 @@ Other RAG fields (file paths, bedrock settings, `relevance_filter`) **cannot** b
 
 ### Complete Multi-Node RAG Example
 
-This example shows a technical support agent with different RAG configurations per node:
+This example shows a technical support agent with different RAG configurations per node. RAG is enabled in the database, and each node overrides search parameters:
 
 ```json
 {
@@ -1669,20 +1687,16 @@ This example shows a technical support agent with different RAG configurations p
       }
     ]
   },
-  "rag": {
-    "enabled": true,
-    "search_mode": "hybrid",
-    "top_k": 5,
-    "relevance_filter": true,
-    "rrf_k": 60,
-    "vector_weight": 0.6,
-    "fts_weight": 0.4,
-    "faiss_index_path": "data/faiss/index.faiss",
-    "faiss_mapping_path": "data/faiss/mapping.pkl",
-    "sqlite_db_path": "data/metadata/docs.db"
+  "llm": {
+    "model": "gpt-4.1"
+  },
+  "tts": {
+    "voice_id": "your_voice_id"
   }
 }
 ```
+
+> **Note:** Global RAG configuration (file paths, bedrock settings, relevance_filter) is stored in the database via `rag_configs` and `rag_config_versions` tables. The agent references this via `agent_config_versions.rag_config_id`.
 
 **Node-by-Node RAG Behavior:**
 
@@ -1695,28 +1709,14 @@ This example shows a technical support agent with different RAG configurations p
 | `error_troubleshooting` | ✅ Yes | hybrid | 7 | 40:60 | Balanced with keyword bias |
 
 **How It Works:**
-1. User enters `greeting` node - No RAG queries
-2. Transitions to `triage` - RAG uses balanced 60:40 weights
-3. Based on topic, routes to specialized node
-4. Each specialized node automatically reconfigures RAG weights
-5. `api_lookup` uses 30:70 for exact term matching
-6. `education` uses 80:20 for conceptual understanding
-7. Weights update dynamically on each transition
-
-### Simple Example
-
-```json
-{
-  "rag": {
-    "enabled": true,
-    "search_mode": "hybrid",
-    "top_k": 5,
-    "relevance_filter": true,
-    "vector_weight": 0.6,
-    "fts_weight": 0.4
-  }
-}
-```
+1. Agent has `rag_enabled=true` and `rag_config_id` set in database
+2. User enters `greeting` node - Node override disables RAG
+3. Transitions to `triage` - RAG uses balanced 60:40 weights
+4. Based on topic, routes to specialized node
+5. Each specialized node automatically reconfigures RAG weights
+6. `api_lookup` uses 30:70 for exact term matching
+7. `education` uses 80:20 for conceptual understanding
+8. Weights update dynamically on each transition
 
 ---
 
@@ -2060,23 +2060,11 @@ Simplest valid configuration:
     "pronunciation_dictionary_ids": [
       "dict_medical_terms_abc123"
     ]
-  },
-  "rag": {
-    "enabled": true,
-    "search_mode": "hybrid",
-    "top_k": 5,
-    "relevance_filter": true,
-    "rrf_k": 60,
-    "vector_weight": 0.6,
-    "fts_weight": 0.4,
-    "faiss_index_path": "data/faiss/medical_index.faiss",
-    "faiss_mapping_path": "data/faiss/medical_mapping.pkl",
-    "sqlite_db_path": "data/metadata/medical_rag.db",
-    "bedrock_model": "amazon.titan-embed-text-v2:0",
-    "bedrock_dimensions": 1024
   }
 }
 ```
+
+> **Note:** This agent requires `rag_enabled=true` and `rag_config_id` set in the database pointing to a RAG config with appropriate paths for medical knowledge base.
 
 **RAG Configuration Notes:**
 - **Greeting node**: RAG disabled - no knowledge needed for welcome message
@@ -2085,7 +2073,7 @@ Simplest valid configuration:
   - Higher `vector_weight: 0.75` for conceptual medical questions
   - Higher `rrf_k: 70` for balanced fusion of diverse medical sources
 - **Closing node**: RAG disabled - standard farewell message
-- **Global defaults**: Balanced 60/40 weights as fallback
+- **Database config**: Contains file paths, bedrock settings, and global relevance_filter
 
 This configuration optimizes for medical education where users ask conceptual questions like:
 - "What are the benefits of GLP-1 medications?"
@@ -2175,4 +2163,4 @@ uv run uvicorn app.main:app --reload
 
 ---
 
-**Last Updated**: 2025-11-19
+**Last Updated**: 2025-11-21

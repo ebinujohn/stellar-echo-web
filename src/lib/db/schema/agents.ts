@@ -1,6 +1,7 @@
 import { pgTable, uuid, varchar, text, timestamp, jsonb, integer, boolean, index } from 'drizzle-orm/pg-core';
 import { tenants } from './tenants';
 import { ragConfigs } from './rag-configs';
+import { voiceConfigs } from './voice-configs';
 import { relations } from 'drizzle-orm';
 
 export const agents = pgTable('agents', {
@@ -24,6 +25,8 @@ export const agentConfigVersions = pgTable('agent_config_versions', {
   // RAG Configuration Reference
   ragEnabled: boolean('rag_enabled').default(false).notNull(),
   ragConfigId: uuid('rag_config_id').references(() => ragConfigs.id),
+  // Voice Configuration Reference
+  voiceConfigId: uuid('voice_config_id').references(() => voiceConfigs.id),
   // Version Metadata
   isActive: boolean('is_active').default(false).notNull(),
   createdBy: varchar('created_by', { length: 255 }),
@@ -33,6 +36,7 @@ export const agentConfigVersions = pgTable('agent_config_versions', {
   agentIdx: index('agent_config_versions_agent_idx').on(table.agentId),
   activeIdx: index('agent_config_versions_active_idx').on(table.isActive),
   ragConfigIdx: index('agent_config_versions_rag_config_idx').on(table.ragConfigId),
+  voiceConfigIdx: index('agent_config_versions_voice_config_idx').on(table.voiceConfigId),
 }));
 
 export const phoneMappings = pgTable('phone_mappings', {
@@ -64,6 +68,10 @@ export const agentConfigVersionsRelations = relations(agentConfigVersions, ({ on
   ragConfig: one(ragConfigs, {
     fields: [agentConfigVersions.ragConfigId],
     references: [ragConfigs.id],
+  }),
+  voiceConfig: one(voiceConfigs, {
+    fields: [agentConfigVersions.voiceConfigId],
+    references: [voiceConfigs.id],
   }),
 }));
 

@@ -84,7 +84,7 @@ pnpm test:e2e:ui      # Run Playwright with UI
 
 ### Database Layer (Drizzle ORM)
 
-- **Schema location**: `src/lib/db/schema/` with separate files for `tenants.ts`, `users.ts`, `agents.ts`, `calls.ts`, `rag-configs.ts`
+- **Schema location**: `src/lib/db/schema/` with separate files for `tenants.ts`, `users.ts`, `agents.ts`, `calls.ts`, `rag-configs.ts`, `voice-configs.ts`
 - **Connection**: `src/lib/db/index.ts` manages PostgreSQL connection pooling (max 10 connections, 20s idle timeout)
 - **Query functions**: `src/lib/db/queries/` contains reusable query logic with tenant isolation built-in
 - **JSONB fields**: `call_metrics_summary.metrics_data` (per-turn metrics) and `call_transcripts.transcript_data` (conversation data) require special parsing
@@ -115,6 +115,7 @@ pnpm test:e2e:ui      # Run Playwright with UI
   - Workflow editor: `src/components/agents/workflow-editor/` - visual node editor with per-node RAG overrides
   - Call detail page: `src/components/calls/call-detail-client.tsx` - displays call info with download recording button (when available)
   - RAG config management: `src/components/settings/rag/` - CRUD UI for shared RAG configurations
+  - Voice config management: `src/components/settings/voice/` - CRUD UI for shared Voice/TTS configurations
 - **Layout components**: Reusable layout pieces in `src/components/layout/` (sidebar, navbar, user-menu, theme-toggle)
 - **UI primitives**: shadcn/ui components in `src/components/ui/`
 - **Providers**: React context providers in `src/components/providers/`
@@ -204,8 +205,9 @@ Agent configurations are stored as versioned JSONB documents in `agent_config_ve
 **Settings Management:**
 - **Overview Tab**: Displays all global settings in read-only cards (LLM, TTS, STT, RAG, Auto-Hangup)
 - **Settings Tab**: Full form for editing global settings with save button at top (creates new version)
-  - RAG configuration: Can use shared RAG config (dropdown) or inline settings
-  - Infrastructure settings (file paths, advanced) preserved from existing config
+  - RAG configuration: Select from shared RAG configs created in Settings → RAG Configurations
+  - Voice configuration: Select from shared Voice configs created in Settings → Voice Configurations
+  - No inline configuration editing - all RAG/Voice changes must be made in respective Settings pages
 - **Workflow Tab**: Visual editor for workflow nodes and transitions
   - Per-node RAG overrides: Standard nodes can override global RAG settings (enabled, search_mode, top_k, weights)
   - Collapsible RAG section in node properties panel
@@ -228,9 +230,29 @@ Shared RAG configurations are stored in database tables (`rag_configs`, `rag_con
 - Activate specific versions
 
 **Agent Integration:**
-- Toggle between shared RAG config (dropdown) or inline settings in agent Settings tab
-- When using shared config, shows preview of active version settings
+- Select from dropdown of available shared RAG configs in agent Settings tab
+- Shows preview of active version settings when config is selected
 - `ragEnabled` and `ragConfigId` stored on agent config version
+
+### Voice Configuration Management
+
+Shared Voice/TTS configurations are stored in database tables (`voice_configs`, `voice_config_versions`) and can be reused across multiple agents:
+
+**Database Structure:**
+- `voice_configs` - Base entity (id, tenant_id, name, description, is_active)
+- `voice_config_versions` - Versioned settings (voice_id, model, stability, similarity_boost, style, use_speaker_boost, enable_ssml_parsing, pronunciation_dictionaries_enabled, pronunciation_dictionary_ids)
+- `agent_config_versions.voice_config_id` - References shared Voice config
+
+**Settings Page (`/settings/voice`):**
+- List all Voice configurations with active version preview
+- Create new configs with ElevenLabs TTS parameters
+- Edit configs with version history
+- Activate specific versions
+
+**Agent Integration:**
+- Select from dropdown of available shared Voice configs in agent Settings tab
+- Shows preview of active version settings when config is selected
+- `voiceConfigId` stored on agent config version
 
 ### Session & Cookie Management
 

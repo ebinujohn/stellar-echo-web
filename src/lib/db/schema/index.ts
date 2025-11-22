@@ -2,5 +2,6 @@
 export * from './tenants';
 export * from './users';
 export * from './rag-configs'; // Must be before agents (agents references ragConfigs)
+export * from './voice-configs'; // Must be before agents (agents references voiceConfigs)
 export * from './agents';
 export * from './calls';

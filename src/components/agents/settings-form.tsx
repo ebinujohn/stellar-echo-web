@@ -16,9 +16,10 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Save, ExternalLink, Database, AlertTriangle } from 'lucide-react';
+import { Loader2, Save, ExternalLink, Database, Volume2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRagConfigsDropdown, useRagConfig } from '@/lib/hooks/use-rag-configs';
+import { useVoiceConfigsDropdown, useVoiceConfig } from '@/lib/hooks/use-voice-configs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface SettingsFormProps {
@@ -26,22 +27,31 @@ interface SettingsFormProps {
   currentConfig: any;
   ragEnabled?: boolean;
   ragConfigId?: string | null;
-  onSave: (config: any, ragEnabled?: boolean, ragConfigId?: string | null) => Promise<void>;
+  voiceConfigId?: string | null;
+  onSave: (config: any, ragEnabled?: boolean, ragConfigId?: string | null, voiceConfigId?: string | null) => Promise<void>;
 }
 
-export function SettingsForm({ agentId, currentConfig, ragEnabled: initialRagEnabled, ragConfigId: initialRagConfigId, onSave }: SettingsFormProps) {
+export function SettingsForm({ agentId, currentConfig, ragEnabled: initialRagEnabled, ragConfigId: initialRagConfigId, voiceConfigId: initialVoiceConfigId, onSave }: SettingsFormProps) {
   const [isSaving, setIsSaving] = useState(false);
 
   // Fetch available RAG configs
   const { data: ragConfigs } = useRagConfigsDropdown();
 
-  // RAG Config Selection (external shared config)
-  const [useSharedRagConfig, setUseSharedRagConfig] = useState(!!initialRagConfigId);
+  // Fetch available Voice configs
+  const { data: voiceConfigs } = useVoiceConfigsDropdown();
+
+  // RAG Config Selection
   const [selectedRagConfigId, setSelectedRagConfigId] = useState(initialRagConfigId || '');
   const [ragEnabledState, setRagEnabledState] = useState(initialRagEnabled ?? false);
 
+  // Voice Config Selection
+  const [selectedVoiceConfigId, setSelectedVoiceConfigId] = useState(initialVoiceConfigId || '');
+
   // Fetch selected RAG config details for preview
   const { data: selectedRagConfig } = useRagConfig(selectedRagConfigId || '');
+
+  // Fetch selected Voice config details for preview
+  const { data: selectedVoiceConfig } = useVoiceConfig(selectedVoiceConfigId || '');
 
   // LLM Settings
   const [llmEnabled, setLlmEnabled] = useState(currentConfig.llm?.enabled ?? true);
@@ -50,15 +60,8 @@ export function SettingsForm({ agentId, currentConfig, ragEnabled: initialRagEna
   const [llmMaxTokens, setLlmMaxTokens] = useState(currentConfig.llm?.max_tokens ?? 150);
   const [llmServiceTier, setLlmServiceTier] = useState(currentConfig.llm?.service_tier || 'auto');
 
-  // TTS Settings
+  // TTS Settings (only enabled flag - voice config is selected from shared configs)
   const [ttsEnabled, setTtsEnabled] = useState(currentConfig.tts?.enabled ?? true);
-  const [ttsModel, setTtsModel] = useState(currentConfig.tts?.model || 'eleven_turbo_v2_5');
-  const [ttsVoiceId, setTtsVoiceId] = useState(currentConfig.tts?.voice_id || '');
-  const [ttsStability, setTtsStability] = useState(currentConfig.tts?.stability ?? 0.5);
-  const [ttsSimilarityBoost, setTtsSimilarityBoost] = useState(currentConfig.tts?.similarity_boost ?? 0.75);
-  const [ttsStyle, setTtsStyle] = useState(currentConfig.tts?.style ?? 0.0);
-  const [ttsSpeakerBoost, setTtsSpeakerBoost] = useState(currentConfig.tts?.use_speaker_boost ?? true);
-  const [ttsSsmlParsing, setTtsSsmlParsing] = useState(currentConfig.tts?.enable_ssml_parsing ?? false);
 
   // STT Settings
   const [sttModel, setSttModel] = useState(currentConfig.stt?.model || 'flux-general-en');
@@ -66,15 +69,6 @@ export function SettingsForm({ agentId, currentConfig, ragEnabled: initialRagEna
   const [sttEagerEotThreshold, setSttEagerEotThreshold] = useState(currentConfig.stt?.eager_eot_threshold ?? null);
   const [sttEotThreshold, setSttEotThreshold] = useState(currentConfig.stt?.eot_threshold ?? null);
   const [sttEotTimeoutMs, setSttEotTimeoutMs] = useState(currentConfig.stt?.eot_timeout_ms ?? null);
-
-  // RAG Settings
-  const [ragEnabled, setRagEnabled] = useState(currentConfig.rag?.enabled ?? false);
-  const [ragSearchMode, setRagSearchMode] = useState(currentConfig.rag?.search_mode || 'hybrid');
-  const [ragTopK, setRagTopK] = useState(currentConfig.rag?.top_k ?? 5);
-  const [ragRelevanceFilter, setRagRelevanceFilter] = useState(currentConfig.rag?.relevance_filter ?? true);
-  const [ragRrfK, setRagRrfK] = useState(currentConfig.rag?.rrf_k ?? 60);
-  const [ragVectorWeight, setRagVectorWeight] = useState(currentConfig.rag?.vector_weight ?? 0.6);
-  const [ragFtsWeight, setRagFtsWeight] = useState(currentConfig.rag?.fts_weight ?? 0.4);
 
   // Other Settings
   const [autoHangupEnabled, setAutoHangupEnabled] = useState(currentConfig.auto_hangup?.enabled ?? true);
@@ -84,30 +78,17 @@ export function SettingsForm({ agentId, currentConfig, ragEnabled: initialRagEna
     setIsSaving(true);
 
     try {
-      // Build RAG config based on selection mode
-      let ragConfig = currentConfig.rag;
-      let finalRagEnabled = ragEnabledState;
-      let finalRagConfigId: string | null = null;
+      // RAG config - only use shared config reference
+      const finalRagConfigId = selectedRagConfigId || null;
+      const finalRagEnabled = ragEnabledState && !!selectedRagConfigId;
 
-      if (useSharedRagConfig && selectedRagConfigId) {
-        // Using shared RAG config from database
-        finalRagConfigId = selectedRagConfigId;
-        // Clear inline RAG settings when using shared config
-        ragConfig = undefined;
-      } else {
-        // Using inline RAG settings
-        ragConfig = {
-          ...currentConfig.rag,
-          enabled: ragEnabled,
-          search_mode: ragSearchMode,
-          top_k: parseInt(String(ragTopK)),
-          relevance_filter: ragRelevanceFilter,
-          rrf_k: parseInt(String(ragRrfK)),
-          vector_weight: parseFloat(String(ragVectorWeight)),
-          fts_weight: parseFloat(String(ragFtsWeight)),
-        };
-        finalRagEnabled = ragEnabled;
-      }
+      // Voice config - only use shared config reference
+      const finalVoiceConfigId = selectedVoiceConfigId || null;
+
+      // TTS config - minimal settings, voice details come from shared config
+      const ttsConfig = {
+        enabled: ttsEnabled,
+      };
 
       // Merge the form data with the existing config
       const updatedConfig = {
@@ -120,17 +101,7 @@ export function SettingsForm({ agentId, currentConfig, ragEnabled: initialRagEna
           max_tokens: parseInt(String(llmMaxTokens)),
           service_tier: llmServiceTier,
         },
-        tts: {
-          ...currentConfig.tts,
-          enabled: ttsEnabled,
-          model: ttsModel,
-          voice_id: ttsVoiceId || undefined,
-          stability: parseFloat(String(ttsStability)),
-          similarity_boost: parseFloat(String(ttsSimilarityBoost)),
-          style: parseFloat(String(ttsStyle)),
-          use_speaker_boost: ttsSpeakerBoost,
-          enable_ssml_parsing: ttsSsmlParsing,
-        },
+        tts: ttsConfig,
         stt: {
           ...currentConfig.stt,
           model: sttModel,
@@ -139,13 +110,13 @@ export function SettingsForm({ agentId, currentConfig, ragEnabled: initialRagEna
           eot_threshold: sttEotThreshold,
           eot_timeout_ms: sttEotTimeoutMs,
         },
-        rag: ragConfig,
+        rag: undefined, // RAG settings come from shared config
         auto_hangup: {
           enabled: autoHangupEnabled,
         },
       };
 
-      await onSave(updatedConfig, finalRagEnabled, finalRagConfigId);
+      await onSave(updatedConfig, finalRagEnabled, finalRagConfigId, finalVoiceConfigId);
       toast.success('Settings saved successfully');
     } catch (error: any) {
       toast.error(error.message || 'Failed to save settings');
@@ -251,15 +222,23 @@ export function SettingsForm({ agentId, currentConfig, ragEnabled: initialRagEna
         </CardContent>
       </Card>
 
-      {/* TTS Settings */}
+      {/* TTS/Voice Settings */}
       <Card>
         <CardHeader>
-          <CardTitle>TTS Configuration</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Volume2 className="h-5 w-5" />
+            Voice/TTS Configuration
+          </CardTitle>
           <CardDescription>
-            Configure text-to-speech settings for voice output
+            Select a voice configuration for this agent. Manage configurations in{' '}
+            <Link href="/settings/voice" className="underline">
+              Settings
+            </Link>
+            .
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* TTS Enable Toggle */}
           <div className="flex items-center justify-between rounded-lg border p-4">
             <div className="space-y-0.5">
               <Label className="text-base">Enable TTS</Label>
@@ -270,91 +249,90 @@ export function SettingsForm({ agentId, currentConfig, ragEnabled: initialRagEna
             <Switch checked={ttsEnabled} onCheckedChange={setTtsEnabled} />
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="tts-model">Model</Label>
-              <Input
-                id="tts-model"
-                value={ttsModel}
-                onChange={(e) => setTtsModel(e.target.value)}
-                placeholder="eleven_turbo_v2_5"
-              />
-              <p className="text-xs text-muted-foreground">ElevenLabs model name</p>
-            </div>
+          {ttsEnabled && (
+            <>
+              <Separator />
 
-            <div className="space-y-2">
-              <Label htmlFor="tts-voice-id">Voice ID</Label>
-              <Input
-                id="tts-voice-id"
-                value={ttsVoiceId}
-                onChange={(e) => setTtsVoiceId(e.target.value)}
-                placeholder="Optional voice ID"
-              />
-              <p className="text-xs text-muted-foreground">ElevenLabs voice identifier</p>
-            </div>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="voice-config-select">Voice Configuration</Label>
+                  <Select
+                    value={selectedVoiceConfigId}
+                    onValueChange={setSelectedVoiceConfigId}
+                  >
+                    <SelectTrigger id="voice-config-select">
+                      <SelectValue placeholder="Select a voice configuration" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {voiceConfigs?.map((config) => (
+                        <SelectItem key={config.id} value={config.id}>
+                          <div className="flex flex-col">
+                            <span>{config.name}</span>
+                            {config.description && (
+                              <span className="text-xs text-muted-foreground">
+                                {config.description}
+                              </span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="flex items-center gap-2">
+                    <Link href="/settings/voice" target="_blank">
+                      <Button type="button" variant="link" size="sm" className="h-auto p-0">
+                        Manage Voice Configurations
+                        <ExternalLink className="ml-1 h-3 w-3" />
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="tts-stability">Stability</Label>
-              <Input
-                id="tts-stability"
-                type="number"
-                step="0.05"
-                min="0"
-                max="1"
-                value={ttsStability}
-                onChange={(e) => setTtsStability(parseFloat(e.target.value))}
-              />
-              <p className="text-xs text-muted-foreground">0.0 - 1.0 (higher is more stable)</p>
-            </div>
+                {/* Show selected config preview */}
+                {selectedVoiceConfig?.activeVersion && (
+                  <div className="rounded-lg border bg-muted/50 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">{selectedVoiceConfig.name}</span>
+                      <Badge variant="secondary">v{selectedVoiceConfig.activeVersion.version}</Badge>
+                    </div>
+                    <div className="grid gap-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Model:</span>
+                        <span>{selectedVoiceConfig.activeVersion.model}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Stability:</span>
+                        <span>{(parseFloat(selectedVoiceConfig.activeVersion.stability) * 100).toFixed(0)}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Similarity:</span>
+                        <span>{(parseFloat(selectedVoiceConfig.activeVersion.similarityBoost) * 100).toFixed(0)}%</span>
+                      </div>
+                      {selectedVoiceConfig.activeVersion.enableSsmlParsing && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">SSML:</span>
+                          <Badge variant="outline" className="text-xs">Enabled</Badge>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
-            <div className="space-y-2">
-              <Label htmlFor="tts-similarity">Similarity Boost</Label>
-              <Input
-                id="tts-similarity"
-                type="number"
-                step="0.05"
-                min="0"
-                max="1"
-                value={ttsSimilarityBoost}
-                onChange={(e) => setTtsSimilarityBoost(parseFloat(e.target.value))}
-              />
-              <p className="text-xs text-muted-foreground">0.0 - 1.0 (higher matches voice more)</p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="tts-style">Style</Label>
-              <Input
-                id="tts-style"
-                type="number"
-                step="0.05"
-                min="0"
-                max="1"
-                value={ttsStyle}
-                onChange={(e) => setTtsStyle(parseFloat(e.target.value))}
-              />
-              <p className="text-xs text-muted-foreground">0.0 - 1.0 (exaggeration level)</p>
-            </div>
-          </div>
-
-          <Separator />
-
-          <div className="space-y-4">
-            <div className="flex items-center justify-between rounded-lg border p-3">
-              <div className="space-y-0.5">
-                <Label>Speaker Boost</Label>
-                <p className="text-xs text-muted-foreground">Enhance voice clarity</p>
+                {!voiceConfigs?.length && (
+                  <Alert>
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                      No Voice configurations available.{' '}
+                      <Link href="/settings/voice/new" className="underline">
+                        Create one
+                      </Link>{' '}
+                      to get started.
+                    </AlertDescription>
+                  </Alert>
+                )}
               </div>
-              <Switch checked={ttsSpeakerBoost} onCheckedChange={setTtsSpeakerBoost} />
-            </div>
-
-            <div className="flex items-center justify-between rounded-lg border p-3">
-              <div className="space-y-0.5">
-                <Label>SSML Parsing</Label>
-                <p className="text-xs text-muted-foreground">Enable SSML markup support</p>
-              </div>
-              <Switch checked={ttsSsmlParsing} onCheckedChange={setTtsSsmlParsing} />
-            </div>
-          </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -452,7 +430,11 @@ export function SettingsForm({ agentId, currentConfig, ragEnabled: initialRagEna
             RAG Configuration
           </CardTitle>
           <CardDescription>
-            Configure retrieval-augmented generation (knowledge base) settings
+            Select a RAG configuration for this agent. Manage configurations in{' '}
+            <Link href="/settings/rag" className="underline">
+              Settings
+            </Link>
+            .
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -471,216 +453,81 @@ export function SettingsForm({ agentId, currentConfig, ragEnabled: initialRagEna
             <>
               <Separator />
 
-              {/* Configuration Source Selection */}
               <div className="space-y-4">
-                <div className="flex items-center justify-between rounded-lg border p-4">
-                  <div className="space-y-0.5">
-                    <Label className="text-base">Use Shared RAG Configuration</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Select a pre-configured RAG setup from Settings
-                    </p>
+                <div className="space-y-2">
+                  <Label htmlFor="rag-config-select">RAG Configuration</Label>
+                  <Select
+                    value={selectedRagConfigId}
+                    onValueChange={setSelectedRagConfigId}
+                  >
+                    <SelectTrigger id="rag-config-select">
+                      <SelectValue placeholder="Select a RAG configuration" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ragConfigs?.map((config) => (
+                        <SelectItem key={config.id} value={config.id}>
+                          <div className="flex flex-col">
+                            <span>{config.name}</span>
+                            {config.description && (
+                              <span className="text-xs text-muted-foreground">
+                                {config.description}
+                              </span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="flex items-center gap-2">
+                    <Link href="/settings/rag" target="_blank">
+                      <Button type="button" variant="link" size="sm" className="h-auto p-0">
+                        Manage RAG Configurations
+                        <ExternalLink className="ml-1 h-3 w-3" />
+                      </Button>
+                    </Link>
                   </div>
-                  <Switch checked={useSharedRagConfig} onCheckedChange={setUseSharedRagConfig} />
                 </div>
 
-                {useSharedRagConfig ? (
-                  /* Shared RAG Config Selection */
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="rag-config-select">RAG Configuration</Label>
-                      <Select
-                        value={selectedRagConfigId}
-                        onValueChange={setSelectedRagConfigId}
-                      >
-                        <SelectTrigger id="rag-config-select">
-                          <SelectValue placeholder="Select a RAG configuration" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {ragConfigs?.map((config) => (
-                            <SelectItem key={config.id} value={config.id}>
-                              <div className="flex flex-col">
-                                <span>{config.name}</span>
-                                {config.description && (
-                                  <span className="text-xs text-muted-foreground">
-                                    {config.description}
-                                  </span>
-                                )}
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <div className="flex items-center gap-2">
-                        <Link href="/settings/rag" target="_blank">
-                          <Button type="button" variant="link" size="sm" className="h-auto p-0">
-                            Manage RAG Configurations
-                            <ExternalLink className="ml-1 h-3 w-3" />
-                          </Button>
-                        </Link>
-                      </div>
+                {/* Show selected config preview */}
+                {selectedRagConfig?.activeVersion && (
+                  <div className="rounded-lg border bg-muted/50 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">{selectedRagConfig.name}</span>
+                      <Badge variant="secondary">v{selectedRagConfig.activeVersion.version}</Badge>
                     </div>
-
-                    {/* Show selected config preview */}
-                    {selectedRagConfig?.activeVersion && (
-                      <div className="rounded-lg border bg-muted/50 p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium">{selectedRagConfig.name}</span>
-                          <Badge variant="secondary">v{selectedRagConfig.activeVersion.version}</Badge>
-                        </div>
-                        <div className="grid gap-2 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Search Mode:</span>
-                            <span className="capitalize">{selectedRagConfig.activeVersion.searchMode}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Top K:</span>
-                            <span>{selectedRagConfig.activeVersion.topK}</span>
-                          </div>
-                          {selectedRagConfig.activeVersion.searchMode === 'hybrid' && (
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Weights:</span>
-                              <span>
-                                {parseFloat(selectedRagConfig.activeVersion.vectorWeight) * 100}% Vector /{' '}
-                                {parseFloat(selectedRagConfig.activeVersion.ftsWeight) * 100}% FTS
-                              </span>
-                            </div>
-                          )}
-                        </div>
+                    <div className="grid gap-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Search Mode:</span>
+                        <span className="capitalize">{selectedRagConfig.activeVersion.searchMode}</span>
                       </div>
-                    )}
-
-                    {!ragConfigs?.length && (
-                      <Alert>
-                        <AlertTriangle className="h-4 w-4" />
-                        <AlertDescription>
-                          No RAG configurations available.{' '}
-                          <Link href="/settings/rag/new" className="underline">
-                            Create one
-                          </Link>{' '}
-                          to get started.
-                        </AlertDescription>
-                      </Alert>
-                    )}
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Top K:</span>
+                        <span>{selectedRagConfig.activeVersion.topK}</span>
+                      </div>
+                      {selectedRagConfig.activeVersion.searchMode === 'hybrid' && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Weights:</span>
+                          <span>
+                            {parseFloat(selectedRagConfig.activeVersion.vectorWeight) * 100}% Vector /{' '}
+                            {parseFloat(selectedRagConfig.activeVersion.ftsWeight) * 100}% FTS
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                ) : (
-                  /* Inline RAG Settings */
-                  <>
-                    <div className="flex items-center justify-between rounded-lg border p-4">
-                      <div className="space-y-0.5">
-                        <Label className="text-base">Enable Inline RAG</Label>
-                        <p className="text-sm text-muted-foreground">
-                          Use custom RAG settings for this agent only
-                        </p>
-                      </div>
-                      <Switch checked={ragEnabled} onCheckedChange={setRagEnabled} />
-                    </div>
+                )}
 
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="rag-search-mode">Search Mode</Label>
-                        <Select value={ragSearchMode} onValueChange={setRagSearchMode}>
-                          <SelectTrigger id="rag-search-mode">
-                            <SelectValue placeholder="Select search mode" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="vector">Vector (Semantic)</SelectItem>
-                            <SelectItem value="fts">FTS (Keyword)</SelectItem>
-                            <SelectItem value="hybrid">Hybrid (Vector + FTS)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">
-                          Vector for concepts, FTS for exact terms, Hybrid for both
-                        </p>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="rag-top-k">Top K Results</Label>
-                        <Input
-                          id="rag-top-k"
-                          type="number"
-                          min="1"
-                          max="50"
-                          value={ragTopK}
-                          onChange={(e) => setRagTopK(parseInt(e.target.value))}
-                        />
-                        <p className="text-xs text-muted-foreground">Number of chunks to retrieve (1-50)</p>
-                      </div>
-                    </div>
-
-                    <Separator />
-
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between rounded-lg border p-3">
-                        <div className="space-y-0.5">
-                          <Label>Relevance Filter</Label>
-                          <p className="text-xs text-muted-foreground">
-                            Only query for questions/info requests
-                          </p>
-                        </div>
-                        <Switch checked={ragRelevanceFilter} onCheckedChange={setRagRelevanceFilter} />
-                      </div>
-                    </div>
-
-                    <Separator />
-                    <div className="text-sm font-medium">Hybrid Search Parameters</div>
-                    <p className="text-xs text-muted-foreground">
-                      These settings only apply when search mode is set to Hybrid
-                    </p>
-
-                    <div className="grid gap-4 md:grid-cols-3">
-                      <div className="space-y-2">
-                        <Label htmlFor="rag-rrf-k">RRF K</Label>
-                        <Input
-                          id="rag-rrf-k"
-                          type="number"
-                          min="1"
-                          max="200"
-                          value={ragRrfK}
-                          onChange={(e) => setRagRrfK(parseInt(e.target.value))}
-                        />
-                        <p className="text-xs text-muted-foreground">Reciprocal rank fusion constant</p>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="rag-vector-weight">Vector Weight</Label>
-                        <Input
-                          id="rag-vector-weight"
-                          type="number"
-                          step="0.05"
-                          min="0"
-                          max="1"
-                          value={ragVectorWeight}
-                          onChange={(e) => setRagVectorWeight(parseFloat(e.target.value))}
-                        />
-                        <p className="text-xs text-muted-foreground">Semantic search weight (0.0-1.0)</p>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="rag-fts-weight">FTS Weight</Label>
-                        <Input
-                          id="rag-fts-weight"
-                          type="number"
-                          step="0.05"
-                          min="0"
-                          max="1"
-                          value={ragFtsWeight}
-                          onChange={(e) => setRagFtsWeight(parseFloat(e.target.value))}
-                        />
-                        <p className="text-xs text-muted-foreground">Keyword search weight (0.0-1.0)</p>
-                      </div>
-                    </div>
-
-                    {/* Weight validation warning */}
-                    {ragSearchMode === 'hybrid' && Math.abs((ragVectorWeight + ragFtsWeight) - 1.0) > 0.01 && (
-                      <Alert variant="destructive">
-                        <AlertTriangle className="h-4 w-4" />
-                        <AlertDescription>
-                          Vector weight and FTS weight should sum to 1.0 for balanced results.
-                          Current sum: {(ragVectorWeight + ragFtsWeight).toFixed(2)}
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                  </>
+                {!ragConfigs?.length && (
+                  <Alert>
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                      No RAG configurations available.{' '}
+                      <Link href="/settings/rag/new" className="underline">
+                        Create one
+                      </Link>{' '}
+                      to get started.
+                    </AlertDescription>
+                  </Alert>
                 )}
               </div>
             </>
