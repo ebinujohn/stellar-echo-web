@@ -16,10 +16,11 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Save, ExternalLink, Database, Volume2, AlertTriangle } from 'lucide-react';
+import { Loader2, Save, ExternalLink, Database, Volume2, Phone, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRagConfigsDropdown, useRagConfig } from '@/lib/hooks/use-rag-configs';
 import { useVoiceConfigsDropdown, useVoiceConfig } from '@/lib/hooks/use-voice-configs';
+import { useAgentPhoneConfigs } from '@/lib/hooks/use-phone-configs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface SettingsFormProps {
@@ -39,6 +40,9 @@ export function SettingsForm({ agentId, currentConfig, ragEnabled: initialRagEna
 
   // Fetch available Voice configs
   const { data: voiceConfigs } = useVoiceConfigsDropdown();
+
+  // Fetch phone configs mapped to this agent
+  const { data: agentPhoneConfigs } = useAgentPhoneConfigs(agentId);
 
   // RAG Config Selection
   const [selectedRagConfigId, setSelectedRagConfigId] = useState(initialRagConfigId || '');
@@ -453,6 +457,61 @@ export function SettingsForm({ agentId, currentConfig, ragEnabled: initialRagEna
             </div>
             <Switch checked={autoHangupEnabled} onCheckedChange={setAutoHangupEnabled} />
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Phone Numbers (Read-only) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Phone className="h-5 w-5" />
+            Phone Numbers
+          </CardTitle>
+          <CardDescription>
+            Phone numbers mapped to this agent for call routing. Manage mappings in{' '}
+            <Link href="/settings/phone" className="underline">
+              Settings
+            </Link>
+            .
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {agentPhoneConfigs && agentPhoneConfigs.length > 0 ? (
+            <div className="space-y-2">
+              {agentPhoneConfigs.map((phoneConfig) => (
+                <div
+                  key={phoneConfig.id}
+                  className="flex items-center justify-between rounded-lg border p-3"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded bg-primary/10">
+                      <Phone className="h-4 w-4 text-primary" />
+                    </div>
+                    <div>
+                      <span className="font-mono text-sm">{phoneConfig.phoneNumber}</span>
+                      {phoneConfig.name && (
+                        <p className="text-xs text-muted-foreground">{phoneConfig.name}</p>
+                      )}
+                    </div>
+                  </div>
+                  <Badge variant="secondary">Mapped</Badge>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed p-4 text-center">
+              <Phone className="mx-auto h-8 w-8 text-muted-foreground/50" />
+              <p className="mt-2 text-sm text-muted-foreground">
+                No phone numbers mapped to this agent
+              </p>
+              <Link href="/settings/phone" className="mt-2 inline-block">
+                <Button type="button" variant="outline" size="sm">
+                  Manage Phone Numbers
+                  <ExternalLink className="ml-1 h-3 w-3" />
+                </Button>
+              </Link>
+            </div>
+          )}
         </CardContent>
       </Card>
     </form>

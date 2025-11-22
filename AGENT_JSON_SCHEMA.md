@@ -13,7 +13,6 @@ This document provides a comprehensive specification of the JSON schema used for
 3. [Agent Section](#agent-section)
 4. [Workflow Section](#workflow-section)
    - [Interruption Settings](#interruption-settings)
-   - [Recording Configuration](#recording-configuration)
    - [Per-Node Interruption Control](#per-node-interruption-control)
    - [History Window Details](#history-window-details)
    - [Max Transitions Limit](#max-transitions-limit)
@@ -28,11 +27,11 @@ This document provides a comprehensive specification of the JSON schema used for
    - [Environment Variable Fallbacks](#environment-variable-fallbacks)
    - [Service Tier](#service-tier)
    - [Temperature and Randomness](#temperature-and-randomness)
-10. [TTS Configuration](#tts-configuration)
-11. [STT Configuration](#stt-configuration)
+10. [Voice/TTS Configuration (Database-Backed)](#voicetts-configuration-database-backed)
+11. [STT Configuration (Environment-Based)](#stt-configuration-environment-based)
 12. [RAG Configuration](#rag-configuration)
     - [Per-Node RAG Override](#per-node-rag-override)
-13. [Auto-Hangup Configuration](#auto-hangup-configuration)
+13. [Phone Number Pool (Database-Backed)](#phone-number-pool-database-backed)
 14. [Logging Configuration](#logging-configuration)
 15. [Complete Examples](#complete-examples)
 16. [Validation Rules](#validation-rules)
@@ -55,10 +54,7 @@ All agents **must** use node-based workflows. Traditional single-prompt mode has
 {
   "agent": { ... },
   "workflow": { ... },
-  "llm": { ... },
-  "tts": { ... },
-  "stt": { ... },
-  "auto_hangup": { ... }
+  "llm": { ... }
 }
 ```
 
@@ -69,11 +65,19 @@ All agents **must** use node-based workflows. Traditional single-prompt mode has
 | `agent` | object | ✅ Yes | Agent metadata (ID, name, description) |
 | `workflow` | object | ✅ Yes | Workflow configuration with nodes and transitions |
 | `llm` | object | ❌ No | LLM configuration (defaults to environment settings) |
-| `tts` | object | ❌ No | Text-to-Speech configuration |
-| `stt` | object | ❌ No | Speech-to-Text configuration |
-| `auto_hangup` | object | ❌ No | Auto-hangup configuration |
 
-> **Note:** RAG configuration is managed in the database via `rag_configs` and `rag_config_versions` tables, NOT in the agent JSON. See [RAG Configuration](#rag-configuration) section for details.
+> **Note:** The following configurations are managed outside the agent JSON:
+>
+> **Database-backed:**
+> - **RAG**: `rag_configs` and `rag_config_versions` tables
+> - **Voice/TTS**: `voice_configs` and `voice_config_versions` tables
+> - **Phone Numbers**: `phone_configs` table (phone number pool) + `phone_mappings` table
+>
+> **Environment variables (.env):**
+> - **STT**: `DEEPGRAM_MODEL`, `AUDIO_SAMPLE_RATE`, EOT thresholds
+> - **Recording Settings**: `RECORDING_TRACK`, `RECORDING_CHANNELS` (when recording enabled per-agent)
+>
+> See respective sections for details.
 
 ---
 
@@ -133,7 +137,6 @@ Complete workflow configuration with nodes, transitions, and settings.
     "history_window": 0,
     "max_transitions": 50,
     "interruption_settings": { ... },
-    "recording": { ... },
     "nodes": [ ... ]
   }
 }
@@ -148,7 +151,8 @@ Complete workflow configuration with nodes, transitions, and settings.
 | `history_window` | integer | ❌ No | `0` | Message preservation (0 = all, N = last N messages) |
 | `max_transitions` | integer | ❌ No | `50` | Maximum node transitions (prevents infinite loops) |
 | `interruption_settings` | object | ❌ No | See below | Global interruption handling configuration |
-| `recording` | object | ❌ No | See below | Call recording configuration |
+
+> **Note:** Recording configuration has been moved to database-backed phone configs. See [Phone/Call Configuration](#phonecall-configuration-database-backed).
 
 ### Global Prompt (Database Column)
 
@@ -187,26 +191,6 @@ Final prompt = global_prompt + "\n\n" + node.system_prompt
 | `enabled` | boolean | ❌ No | `true` | Enable/disable interruption handling globally |
 | `delay_ms` | integer | ❌ No | `300` | Milliseconds before interruption triggers |
 | `resume_prompt` | string | ❌ No | `"Go ahead"` | What bot says when resuming after interruption |
-
-### Recording Configuration
-
-```json
-{
-  "recording": {
-    "enabled": false,
-    "track": "both",
-    "channels": "dual"
-  }
-}
-```
-
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| `enabled` | boolean | ❌ No | `false` | Enable/disable call recording |
-| `track` | string | ❌ No | `"both"` | Track to record: `"inbound"`, `"outbound"`, `"both"` |
-| `channels` | string | ❌ No | `"dual"` | Channel mode: `"mono"` (mixed), `"dual"` (separate) |
-
-**Note**: Requires Twilio external S3 storage configuration. See `docs/RECORDING_CONFIG.md` for setup.
 
 ### Per-Node Interruption Control
 
@@ -1296,44 +1280,40 @@ When seeding the database, a default voice configuration is created per tenant:
 
 ---
 
-## STT Configuration
+## STT Configuration (Environment-Based)
 
-Configure Speech-to-Text (Deepgram Flux v2).
+Speech-to-Text (Deepgram Flux v2) is configured exclusively via environment variables. This is a system-wide setting that cannot be customized per-agent.
 
-### Schema
+### Environment Variables
 
-```json
-{
-  "stt": {
-    "model": "flux-general-en",
-    "sample_rate": 8000,
-    "eager_eot_threshold": null,
-    "eot_threshold": null,
-    "eot_timeout_ms": null
-  }
-}
+```bash
+# .env file
+DEEPGRAM_API_KEY=your_api_key_here
+
+# Deepgram model (default: flux-general-en)
+DEEPGRAM_MODEL=flux-general-en
+
+# Audio sample rate in Hz (default: 8000 for Twilio)
+AUDIO_SAMPLE_RATE=8000
+
+# Optional: Advanced Flux v2 end-of-turn parameters
+# Leave unset to use Deepgram defaults
+DEEPGRAM_EAGER_EOT_THRESHOLD=0.8
+DEEPGRAM_EOT_THRESHOLD=0.9
+DEEPGRAM_EOT_TIMEOUT_MS=1000
 ```
 
 ### Fields
 
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| `model` | string | ❌ No | `"flux-general-en"` | Deepgram model |
-| `sample_rate` | integer | ❌ No | `8000` | Audio sample rate (Hz) |
-| `eager_eot_threshold` | float/null | ❌ No | `null` | Eager end-of-turn threshold |
-| `eot_threshold` | float/null | ❌ No | `null` | End-of-turn threshold |
-| `eot_timeout_ms` | integer/null | ❌ No | `null` | End-of-turn timeout (ms) |
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `DEEPGRAM_MODEL` | string | `"flux-general-en"` | Deepgram model |
+| `AUDIO_SAMPLE_RATE` | integer | `8000` | Audio sample rate (Hz) |
+| `DEEPGRAM_EAGER_EOT_THRESHOLD` | float | `null` | Eager end-of-turn threshold |
+| `DEEPGRAM_EOT_THRESHOLD` | float | `null` | End-of-turn threshold |
+| `DEEPGRAM_EOT_TIMEOUT_MS` | integer | `null` | End-of-turn timeout (ms) |
 
-### Example
-
-```json
-{
-  "stt": {
-    "model": "flux-general-en",
-    "sample_rate": 8000
-  }
-}
-```
+**Note**: The `stt` section in agent JSON files is no longer supported. STT configuration must be set via environment variables.
 
 ---
 
@@ -1689,14 +1669,11 @@ This example shows a technical support agent with different RAG configurations p
   },
   "llm": {
     "model": "gpt-4.1"
-  },
-  "tts": {
-    "voice_id": "your_voice_id"
   }
 }
 ```
 
-> **Note:** Global RAG configuration (file paths, bedrock settings, relevance_filter) is stored in the database via `rag_configs` and `rag_config_versions` tables. The agent references this via `agent_config_versions.rag_config_id`.
+> **Note:** Global RAG configuration (file paths, bedrock settings, relevance_filter) is stored in the database via `rag_configs` and `rag_config_versions` tables. The agent references this via `agent_config_versions.rag_config_id`. Voice/TTS and phone configs are also database-backed via `voice_config_id` and `phone_config_id`.
 
 **Node-by-Node RAG Behavior:**
 
@@ -1720,48 +1697,88 @@ This example shows a technical support agent with different RAG configurations p
 
 ---
 
-## Auto-Hangup Configuration
+## Phone Number Pool (Database-Backed)
 
-Controls whether call automatically ends or waits for manual termination:
+Phone numbers are managed in the database as a pool that can be assigned to agents. This allows:
+- **Phone number pools** per tenant
+- **Dynamic assignment** - same phone can be reassigned to different agents
+- **Centralized management** without modifying agent configs
 
-### Schema
+### Database Schema
 
+Phone number management uses two tables:
+- `phone_configs` - Phone number pool (tenant-scoped, contains actual phone numbers)
+- `phone_mappings` - Links phone numbers to agents
+
+**`phone_configs` Fields:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | UUID | Auto | Primary key |
+| `tenant_id` | UUID | ✅ Yes | Tenant that owns this phone number |
+| `phone_number` | string | ✅ Yes | Phone number in E.164 format (e.g., `+17708304765`) |
+| `name` | string | ❌ No | Optional label for this phone number |
+| `description` | string | ❌ No | Optional description |
+| `is_active` | boolean | ❌ No | Whether this phone number is active (default: true) |
+
+**`phone_mappings` Fields:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `phone_config_id` | UUID | ✅ Yes | Primary key, FK to `phone_configs` |
+| `agent_id` | UUID | ✅ Yes | Agent this phone is mapped to |
+| `tenant_id` | UUID | ✅ Yes | Tenant for validation |
+
+### How Phone Mapping Works
+
+1. Phone numbers are added to `phone_configs` table (the pool)
+2. `phone_mappings` links a phone number to an agent
+3. When a call comes in, system looks up phone number → agent mapping
+4. Phone can be reassigned to different agent by updating `phone_mappings`
+
+### Recording Configuration
+
+Recording is now split between agent JSON and environment variables:
+
+**Per-Agent Setting (workflow JSON):**
 ```json
 {
-  "auto_hangup": {
-    "enabled": true
+  "workflow": {
+    "recording": {
+      "enabled": true
+    }
   }
 }
 ```
 
-### Fields
+Only `enabled` is configurable per-agent. This determines whether recording starts for calls to this agent.
 
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| `enabled` | boolean | ❌ No | `true` | Auto-terminate call on `end_call` node |
+**System-Wide Settings (.env file):**
+```bash
+# Recording track: "inbound", "outbound", or "both"
+RECORDING_TRACK=both
 
-### Behavior
-
-| Value | Behavior |
-|-------|----------|
-| `true` (default) | Call ends automatically when `end_call` node reached |
-| `false` | Application notifies but doesn't hang up (Twilio controls) |
-
-**When to Disable:**
-- Testing (prevents auto-termination)
-- Custom hangup logic
-- Twilio-managed termination
-- Call transfers
-
-### Example
-
-```json
-{
-  "auto_hangup": {
-    "enabled": false
-  }
-}
+# Recording channels: "mono" (mixed) or "dual" (separate)
+RECORDING_CHANNELS=dual
 ```
+
+Track and channels are system-wide because they affect Twilio's recording infrastructure configuration.
+
+**Note**: Requires Twilio external S3 storage configuration. See `docs/RECORDING_CONFIG.md` for setup.
+
+### Configuration Management
+
+Phone configs are loaded via ConfigManager:
+- Redis caching for sub-5ms loads
+- `get_agent_for_phone(phone_number)` looks up agent via PhoneConfig → PhoneMapping
+
+### Seeding Phone Numbers
+
+When running `seed_database.py`, phone numbers from `phone_mapping.json` are:
+1. Added to `phone_configs` table (phone number pool)
+2. Linked to agents via `phone_mappings` table
+
+**Note**: The `auto_hangup` feature has been removed as it was not implemented.
 
 ---
 
@@ -1831,12 +1848,11 @@ Simplest valid configuration:
   },
   "llm": {
     "model": "gpt-4.1"
-  },
-  "tts": {
-    "voice_id": "your_voice_id"
   }
 }
 ```
+
+> **Note:** Voice/TTS and phone configurations are set via the database. See [Voice/TTS Configuration](#voicetts-configuration-database-backed) and [Phone/Call Configuration](#phonecall-configuration-database-backed).
 
 ### Multi-Stage Workflow with Variable Extraction
 
@@ -1957,15 +1973,11 @@ Simplest valid configuration:
     "model": "gpt-4.1",
     "temperature": 0.7,
     "max_tokens": 100
-  },
-  "tts": {
-    "voice_id": "your_voice_id",
-    "model": "eleven_turbo_v2_5",
-    "stability": 0.5,
-    "similarity_boost": 0.75
   }
 }
 ```
+
+> **Note:** Voice/TTS and phone configurations are set via the database.
 
 ### Medical Assistant with RAG
 
@@ -2053,18 +2065,14 @@ Simplest valid configuration:
     "model": "gpt-4.1",
     "temperature": 0.8,
     "max_tokens": 200
-  },
-  "tts": {
-    "voice_id": "your_voice_id",
-    "pronunciation_dictionaries_enabled": true,
-    "pronunciation_dictionary_ids": [
-      "dict_medical_terms_abc123"
-    ]
   }
 }
 ```
 
-> **Note:** This agent requires `rag_enabled=true` and `rag_config_id` set in the database pointing to a RAG config with appropriate paths for medical knowledge base.
+> **Note:** This agent requires database configuration:
+> - `rag_enabled=true` and `rag_config_id` set in the database pointing to a RAG config with appropriate paths for medical knowledge base
+> - `voice_config_id` with pronunciation dictionaries enabled for medical terms
+> - `phone_config_id` for recording/auto-hangup settings
 
 **RAG Configuration Notes:**
 - **Greeting node**: RAG disabled - no knowledge needed for welcome message
@@ -2163,4 +2171,4 @@ uv run uvicorn app.main:app --reload
 
 ---
 
-**Last Updated**: 2025-11-21
+**Last Updated**: 2025-11-21 (Phone number pool restructure, STT moved to .env)

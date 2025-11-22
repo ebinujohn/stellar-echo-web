@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Database, Volume2 } from 'lucide-react';
+import { Database, Volume2, Phone } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -20,6 +20,12 @@ const settingsCategories = [
     description: 'Manage voice and text-to-speech settings for your agents',
     href: '/settings/voice',
     icon: Volume2,
+  },
+  {
+    title: 'Phone Numbers',
+    description: 'Manage phone number pool and agent mappings for call routing',
+    href: '/settings/phone',
+    icon: Phone,
   },
 ];
 

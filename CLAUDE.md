@@ -84,7 +84,7 @@ pnpm test:e2e:ui      # Run Playwright with UI
 
 ### Database Layer (Drizzle ORM)
 
-- **Schema location**: `src/lib/db/schema/` with separate files for `tenants.ts`, `users.ts`, `agents.ts`, `calls.ts`, `rag-configs.ts`, `voice-configs.ts`
+- **Schema location**: `src/lib/db/schema/` with separate files for `tenants.ts`, `users.ts`, `agents.ts`, `calls.ts`, `rag-configs.ts`, `voice-configs.ts`, `phone-configs.ts`
 - **Connection**: `src/lib/db/index.ts` manages PostgreSQL connection pooling (max 10 connections, 20s idle timeout)
 - **Query functions**: `src/lib/db/queries/` contains reusable query logic with tenant isolation built-in
 - **JSONB fields**: `call_metrics_summary.metrics_data` (per-turn metrics) and `call_transcripts.transcript_data` (conversation data) require special parsing
@@ -118,6 +118,7 @@ pnpm test:e2e:ui      # Run Playwright with UI
   - Call detail page: `src/components/calls/call-detail-client.tsx` - displays call info with download recording button (when available)
   - RAG config management: `src/components/settings/rag/` - CRUD UI for shared RAG configurations
   - Voice config management: `src/components/settings/voice/` - CRUD UI for shared Voice/TTS configurations
+  - Phone config management: `src/components/settings/phone/` - CRUD UI for phone number pool and agent mappings
 - **Layout components**: Reusable layout pieces in `src/components/layout/` (sidebar, navbar, user-menu, theme-toggle)
 - **UI primitives**: shadcn/ui components in `src/components/ui/`
 - **Providers**: React context providers in `src/components/providers/`
@@ -255,6 +256,25 @@ Shared Voice/TTS configurations are stored in database tables (`voice_configs`, 
 - Select from dropdown of available shared Voice configs in agent Settings tab
 - Shows preview of active version settings when config is selected
 - `voiceConfigId` stored on agent config version
+
+### Phone Configuration Management
+
+Phone numbers are managed as a pool in database tables (`phone_configs`, `phone_config_mappings`) and can be mapped to agents for call routing:
+
+**Database Structure:**
+- `phone_configs` - Phone number pool (id, tenant_id, phone_number, name, description, is_active)
+- `phone_config_mappings` - Links phone_config_id to agent_id for routing
+
+**Settings Page (`/settings/phone`):**
+- List all phone numbers with agent mapping badges
+- Add new phone numbers in E.164 format (e.g., +17708304765)
+- Edit phone details and agent mappings
+- Delete phone numbers from pool
+
+**Agent Integration:**
+- Agent Settings tab displays read-only list of mapped phone numbers
+- Phone mappings are managed from Settings → Phone Numbers page
+- Used for call routing: incoming calls to a phone number route to the mapped agent
 
 ### Session & Cookie Management
 
