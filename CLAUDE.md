@@ -311,6 +311,8 @@ Required environment variables in `.env.local`:
 - `NEXT_PUBLIC_API_URL` - API base URL
 - `NODE_ENV` - development/production
 - `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` - AWS S3 credentials for call recording downloads (optional)
+- `ADMIN_API_BASE_URL` - Orchestrator Admin API base URL for cache management (optional, e.g., `http://localhost:8000`)
+- `ADMIN_API_KEY` - Shared secret for HMAC-SHA256 request signing to Admin API (optional)
 
 Default test credentials: `admin@example.com` / `password123`
 

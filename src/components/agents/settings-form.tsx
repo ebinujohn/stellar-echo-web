@@ -16,7 +16,8 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Save, ExternalLink, Database, Volume2, Phone, AlertTriangle } from 'lucide-react';
+import { Loader2, Save, ExternalLink, Database, Volume2, Phone, AlertTriangle, MessageSquare } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { useRagConfigsDropdown, useRagConfig } from '@/lib/hooks/use-rag-configs';
 import { useVoiceConfigsDropdown, useVoiceConfig } from '@/lib/hooks/use-voice-configs';
@@ -72,6 +73,9 @@ export function SettingsForm({ agentId, currentConfig, ragEnabled: initialRagEna
   // TTS Settings (only enabled flag - voice config is selected from shared configs)
   const [ttsEnabled, setTtsEnabled] = useState(currentConfig.tts?.enabled ?? true);
 
+  // Workflow Settings
+  const [globalPrompt, setGlobalPrompt] = useState(currentConfig.workflow?.global_prompt || '');
+
   // Other Settings
   const [autoHangupEnabled, setAutoHangupEnabled] = useState(currentConfig.auto_hangup?.enabled ?? true);
 
@@ -107,6 +111,7 @@ export function SettingsForm({ agentId, currentConfig, ragEnabled: initialRagEna
         ...currentConfig,
         workflow: {
           ...currentConfig.workflow,
+          global_prompt: globalPrompt || undefined,
           llm: llmConfig,
         },
         tts: ttsConfig,
@@ -127,7 +132,7 @@ export function SettingsForm({ agentId, currentConfig, ragEnabled: initialRagEna
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col">
       {/* Toolbar */}
       <div className="border-b bg-card/50 backdrop-blur supports-[backdrop-filter]:bg-card/80 mb-6">
         <div className="flex items-center justify-end px-4 py-2">
@@ -147,7 +152,32 @@ export function SettingsForm({ agentId, currentConfig, ragEnabled: initialRagEna
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-6 pb-6">
+        {/* Global Prompt */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5" />
+              Global Prompt
+            </CardTitle>
+            <CardDescription>
+              System prompt applied to all nodes in the workflow. Node-specific prompts take precedence.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Textarea
+              id="global-prompt"
+              placeholder="Enter a global system prompt for the agent..."
+              value={globalPrompt}
+              onChange={(e) => setGlobalPrompt(e.target.value)}
+              className="min-h-[120px]"
+            />
+            <p className="text-xs text-muted-foreground mt-2">
+              This prompt is included in every LLM call. Individual node prompts are appended to this.
+            </p>
+          </CardContent>
+        </Card>
+
         {/* LLM Settings */}
         <Card>
         <CardHeader>

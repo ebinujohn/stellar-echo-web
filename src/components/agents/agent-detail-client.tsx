@@ -27,6 +27,7 @@ import { formatDateTime, formatPhoneNumber } from '@/lib/utils/formatters';
 import { DeleteAgentDialog } from './dialogs/delete-agent-dialog';
 import { WorkflowEditorLayout } from './workflow-editor/workflow-editor-layout';
 import { SettingsForm } from './settings-form';
+import { VersionsTab } from './versions-tab';
 import { toast } from 'sonner';
 
 interface AgentDetailClientProps {
@@ -503,23 +504,10 @@ export function AgentDetailClient({ agentId }: AgentDetailClientProps) {
 
         {/* Versions Tab */}
         <TabsContent value="versions" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Version History</CardTitle>
-              <CardDescription>
-                Manage and compare configuration versions
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="py-12 text-center text-muted-foreground">
-                <History className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p className="text-lg font-medium mb-2">Version Management</p>
-                <p className="text-sm">
-                  Version history and comparison features will be implemented soon.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          <VersionsTab
+            agentId={agentId}
+            activeVersionId={agent.activeVersion?.id}
+          />
         </TabsContent>
 
         {/* Settings Tab */}
