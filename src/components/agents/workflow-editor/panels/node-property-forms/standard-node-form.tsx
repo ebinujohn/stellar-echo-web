@@ -25,12 +25,18 @@ import {
 import { Plus, Trash2, Save, ChevronDown, ChevronRight, Database } from 'lucide-react';
 import type { WorkflowNodeData } from '../../utils/json-converter';
 
+interface TargetNodeOption {
+  id: string;
+  name: string;
+}
+
 interface StandardNodeFormProps {
   nodeData: WorkflowNodeData;
   onUpdate: (updates: Partial<WorkflowNodeData>) => void;
+  availableTargetNodes: TargetNodeOption[];
 }
 
-export function StandardNodeForm({ nodeData, onUpdate }: StandardNodeFormProps) {
+export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: StandardNodeFormProps) {
   const [name, setName] = useState(nodeData.name || '');
   const [mode, setMode] = useState<'static' | 'llm'>(
     nodeData.static_text ? 'static' : 'llm'
@@ -306,14 +312,23 @@ export function StandardNodeForm({ nodeData, onUpdate }: StandardNodeFormProps) 
 
                   <div>
                     <Label className="text-xs">Target Node</Label>
-                    <Input
+                    <Select
                       value={transition.target}
-                      onChange={(e) =>
-                        updateTransition(index, { target: e.target.value })
+                      onValueChange={(value) =>
+                        updateTransition(index, { target: value })
                       }
-                      placeholder="Node ID"
-                      className="mt-1.5 h-8 text-sm"
-                    />
+                    >
+                      <SelectTrigger className="mt-1.5 h-8 text-sm">
+                        <SelectValue placeholder="Select target node" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableTargetNodes.map((node) => (
+                          <SelectItem key={node.id} value={node.id}>
+                            {node.name} ({node.id})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div>

@@ -113,6 +113,8 @@ pnpm test:e2e:ui      # Run Playwright with UI
   - Agent settings form: `src/components/agents/settings-form.tsx` - comprehensive global settings UI (LLM, TTS, STT, RAG, auto-hangup)
   - Agent detail tabs: Overview (with settings preview), Workflow Editor, Versions, Settings
   - Workflow editor: `src/components/agents/workflow-editor/` - visual node editor with per-node RAG overrides
+    - Bidirectional sync between canvas edges and panel transitions (add/delete syncs both ways)
+    - Target node dropdown showing available nodes with name and ID
   - Call detail page: `src/components/calls/call-detail-client.tsx` - displays call info with download recording button (when available)
   - RAG config management: `src/components/settings/rag/` - CRUD UI for shared RAG configurations
   - Voice config management: `src/components/settings/voice/` - CRUD UI for shared Voice/TTS configurations

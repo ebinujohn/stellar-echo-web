@@ -12,6 +12,7 @@ import { EndCallNodeForm } from './node-property-forms/end-call-node-form';
 
 interface PropertiesPanelProps {
   selectedNode: Node<WorkflowNodeData> | null;
+  allNodes: Node<WorkflowNodeData>[];
   onClose: () => void;
   onUpdateNode: (nodeId: string, updates: Partial<WorkflowNodeData>) => void;
   onDeleteNode: (nodeId: string) => void;
@@ -19,6 +20,7 @@ interface PropertiesPanelProps {
 
 export function PropertiesPanel({
   selectedNode,
+  allNodes,
   onClose,
   onUpdateNode,
   onDeleteNode,
@@ -64,17 +66,26 @@ export function PropertiesPanel({
 
   const renderForm = () => {
     const nodeType = selectedNode.data.type;
+    // Get available target nodes (exclude current node)
+    const availableTargetNodes = allNodes
+      .filter((n) => n.id !== selectedNode.id)
+      .map((n) => ({ id: n.data.id, name: n.data.name }));
 
     switch (nodeType) {
       case 'standard':
         return (
-          <StandardNodeForm nodeData={selectedNode.data} onUpdate={handleUpdate} />
+          <StandardNodeForm
+            nodeData={selectedNode.data}
+            onUpdate={handleUpdate}
+            availableTargetNodes={availableTargetNodes}
+          />
         );
       case 'retrieve_variable':
         return (
           <RetrieveVariableNodeForm
             nodeData={selectedNode.data}
             onUpdate={handleUpdate}
+            availableTargetNodes={availableTargetNodes}
           />
         );
       case 'end_call':

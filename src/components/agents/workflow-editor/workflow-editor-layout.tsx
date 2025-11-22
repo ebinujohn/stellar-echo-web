@@ -91,6 +91,48 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
     }
   }, [initialConfig, setNodes, setEdges]);
 
+  // Sync edges to node.data.transitions whenever edges change
+  // This ensures node labels and properties panel stay in sync with canvas
+  useEffect(() => {
+    setNodes((nds) =>
+      nds.map((node) => {
+        // Build transitions from current edges for this node
+        const nodeEdges = edges.filter((e) => e.source === node.id);
+        const transitions = nodeEdges.map((e) => ({
+          target: e.target,
+          condition: e.data?.condition || e.label?.toString() || 'always',
+          priority: e.data?.priority || 0,
+        }));
+
+        // Compare with current transitions to avoid unnecessary updates
+        const currentTransitions = node.data.transitions || [];
+        const isSame =
+          transitions.length === currentTransitions.length &&
+          transitions.every((t, i) => {
+            const curr = currentTransitions[i];
+            return (
+              curr &&
+              t.target === curr.target &&
+              t.condition === curr.condition &&
+              t.priority === curr.priority
+            );
+          });
+
+        if (isSame) {
+          return node;
+        }
+
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            transitions,
+          },
+        };
+      })
+    );
+  }, [edges, setNodes]);
+
   // Handle node selection
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node<WorkflowNodeData>) => {
@@ -116,6 +158,7 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
   }, []);
 
   // Handle connection creation
+  // Note: The useEffect above will sync the new edge to node.data.transitions
   const onConnect = useCallback(
     (connection: Connection) => {
       if (!connection.source || !connection.target) return;
@@ -260,8 +303,42 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
         }
         return prev;
       });
+
+      // Sync transitions from panel to edges
+      if (updates.transitions !== undefined) {
+        const newTransitions = updates.transitions || [];
+
+        setEdges((eds) => {
+          // Remove existing edges from this node
+          const otherEdges = eds.filter((e) => e.source !== nodeId);
+
+          // Create new edges from the updated transitions
+          const newEdges: Edge[] = newTransitions.map((transition, idx) => ({
+            id: `${nodeId}-${transition.target}-${idx}`,
+            source: nodeId,
+            target: transition.target,
+            type: 'deletable',
+            label: transition.condition,
+            animated: (transition.priority ?? 0) > 5,
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              width: 20,
+              height: 20,
+            },
+            style: {
+              strokeWidth: 2,
+            },
+            data: {
+              condition: transition.condition,
+              priority: transition.priority || 0,
+            },
+          }));
+
+          return [...otherEdges, ...newEdges];
+        });
+      }
     },
-    [setNodes]
+    [setNodes, setEdges]
   );
 
   // Handle save
@@ -546,6 +623,7 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
           {rightPanelOpen && (
             <PropertiesPanel
               selectedNode={selectedNode}
+              allNodes={nodes}
               onClose={() => setRightPanelOpen(false)}
               onUpdateNode={handleUpdateNode}
               onDeleteNode={handleDeleteNode}

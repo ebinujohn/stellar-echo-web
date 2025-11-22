@@ -8,17 +8,31 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Plus, Trash2 } from 'lucide-react';
 import type { WorkflowNodeData } from '../../utils/json-converter';
+
+interface TargetNodeOption {
+  id: string;
+  name: string;
+}
 
 interface RetrieveVariableNodeFormProps {
   nodeData: WorkflowNodeData;
   onUpdate: (updates: Partial<WorkflowNodeData>) => void;
+  availableTargetNodes: TargetNodeOption[];
 }
 
 export function RetrieveVariableNodeForm({
   nodeData,
   onUpdate,
+  availableTargetNodes,
 }: RetrieveVariableNodeFormProps) {
   const [name, setName] = useState(nodeData.name || '');
   const [variables, setVariables] = useState(nodeData.variables || []);
@@ -240,14 +254,23 @@ export function RetrieveVariableNodeForm({
 
                   <div>
                     <Label className="text-xs">Target Node</Label>
-                    <Input
+                    <Select
                       value={transition.target}
-                      onChange={(e) =>
-                        updateTransition(index, { target: e.target.value })
+                      onValueChange={(value) =>
+                        updateTransition(index, { target: value })
                       }
-                      placeholder="Node ID"
-                      className="mt-1.5 h-8 text-sm"
-                    />
+                    >
+                      <SelectTrigger className="mt-1.5 h-8 text-sm">
+                        <SelectValue placeholder="Select target node" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableTargetNodes.map((node) => (
+                          <SelectItem key={node.id} value={node.id}>
+                            {node.name} ({node.id})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div>
