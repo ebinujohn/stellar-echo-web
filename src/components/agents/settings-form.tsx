@@ -63,13 +63,6 @@ export function SettingsForm({ agentId, currentConfig, ragEnabled: initialRagEna
   // TTS Settings (only enabled flag - voice config is selected from shared configs)
   const [ttsEnabled, setTtsEnabled] = useState(currentConfig.tts?.enabled ?? true);
 
-  // STT Settings
-  const [sttModel, setSttModel] = useState(currentConfig.stt?.model || 'flux-general-en');
-  const [sttSampleRate, setSttSampleRate] = useState(currentConfig.stt?.sample_rate ?? 8000);
-  const [sttEagerEotThreshold, setSttEagerEotThreshold] = useState(currentConfig.stt?.eager_eot_threshold ?? null);
-  const [sttEotThreshold, setSttEotThreshold] = useState(currentConfig.stt?.eot_threshold ?? null);
-  const [sttEotTimeoutMs, setSttEotTimeoutMs] = useState(currentConfig.stt?.eot_timeout_ms ?? null);
-
   // Other Settings
   const [autoHangupEnabled, setAutoHangupEnabled] = useState(currentConfig.auto_hangup?.enabled ?? true);
 
@@ -102,14 +95,7 @@ export function SettingsForm({ agentId, currentConfig, ragEnabled: initialRagEna
           service_tier: llmServiceTier,
         },
         tts: ttsConfig,
-        stt: {
-          ...currentConfig.stt,
-          model: sttModel,
-          sample_rate: parseInt(String(sttSampleRate)),
-          eager_eot_threshold: sttEagerEotThreshold,
-          eot_threshold: sttEotThreshold,
-          eot_timeout_ms: sttEotTimeoutMs,
-        },
+        // STT settings preserved from existing config (not editable here)
         rag: undefined, // RAG settings come from shared config
         auto_hangup: {
           enabled: autoHangupEnabled,
@@ -333,92 +319,6 @@ export function SettingsForm({ agentId, currentConfig, ragEnabled: initialRagEna
               </div>
             </>
           )}
-        </CardContent>
-      </Card>
-
-      {/* STT Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle>STT Configuration</CardTitle>
-          <CardDescription>
-            Configure speech-to-text settings for voice input
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="stt-model">Model</Label>
-              <Input
-                id="stt-model"
-                value={sttModel}
-                onChange={(e) => setSttModel(e.target.value)}
-                placeholder="flux-general-en"
-              />
-              <p className="text-xs text-muted-foreground">Speech recognition model</p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="stt-sample-rate">Sample Rate</Label>
-              <Select
-                value={String(sttSampleRate)}
-                onValueChange={(val) => setSttSampleRate(parseInt(val))}
-              >
-                <SelectTrigger id="stt-sample-rate">
-                  <SelectValue placeholder="Select sample rate" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="8000">8000 Hz</SelectItem>
-                  <SelectItem value="16000">16000 Hz</SelectItem>
-                  <SelectItem value="24000">24000 Hz</SelectItem>
-                  <SelectItem value="48000">48000 Hz</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">Audio sample rate</p>
-            </div>
-          </div>
-
-          <Separator />
-          <div className="text-sm text-muted-foreground">
-            <p className="font-medium mb-2">Advanced EOT (End of Turn) Settings</p>
-            <p className="text-xs">Leave empty to use default values</p>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label htmlFor="stt-eager-eot">Eager EOT Threshold</Label>
-              <Input
-                id="stt-eager-eot"
-                type="number"
-                step="0.1"
-                placeholder="Default"
-                value={sttEagerEotThreshold ?? ''}
-                onChange={(e) => setSttEagerEotThreshold(e.target.value ? parseFloat(e.target.value) : null)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="stt-eot">EOT Threshold</Label>
-              <Input
-                id="stt-eot"
-                type="number"
-                step="0.1"
-                placeholder="Default"
-                value={sttEotThreshold ?? ''}
-                onChange={(e) => setSttEotThreshold(e.target.value ? parseFloat(e.target.value) : null)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="stt-eot-timeout">EOT Timeout (ms)</Label>
-              <Input
-                id="stt-eot-timeout"
-                type="number"
-                placeholder="Default"
-                value={sttEotTimeoutMs ?? ''}
-                onChange={(e) => setSttEotTimeoutMs(e.target.value ? parseInt(e.target.value) : null)}
-              />
-            </div>
-          </div>
         </CardContent>
       </Card>
 
