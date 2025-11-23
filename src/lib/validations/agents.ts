@@ -252,25 +252,14 @@ const llmConfigSchema = z.object({
 });
 
 /**
- * Workflow configuration schema
- * Note: llm config is inside workflow section per AGENT_JSON_SCHEMA.md
- */
-const workflowSchema = z.object({
-  initial_node: z.string().min(1, 'Initial node is required'),
-  global_prompt: z.string().optional(),
-  history_window: z.number().int().min(0).optional().default(0),
-  max_transitions: z.number().int().min(1).max(1000).optional().default(50),
-  interruption_settings: interruptionSettingsSchema.optional(),
-  recording: recordingSchema.optional(),
-  llm: llmConfigSchema.optional(), // LLM config lives in workflow section
-  nodes: z.array(nodeSchema).min(1, 'At least one node is required'),
-});
-
-/**
- * TTS configuration schema
+ * TTS configuration schema (workflow.tts section)
+ * Per AGENT_JSON_SCHEMA.md:
+ * - Voice selection is via voice_config_id FK in database
+ * - TTS tuning params (stability, similarity_boost, etc.) are stored in workflow.tts
  */
 const ttsConfigSchema = z.object({
   enabled: z.boolean().optional().default(true),
+  voice_name: z.string().optional(), // Used during seeding, ignored at runtime
   voice_id: z.string().optional(),
   model: z.string().optional().default('eleven_turbo_v2_5'),
   stability: z.number().min(0).max(1).optional().default(0.5),
@@ -280,6 +269,22 @@ const ttsConfigSchema = z.object({
   enable_ssml_parsing: z.boolean().optional().default(false),
   pronunciation_dictionaries_enabled: z.boolean().optional().default(true),
   pronunciation_dictionary_ids: z.array(z.string()).optional(),
+});
+
+/**
+ * Workflow configuration schema
+ * Note: llm and tts configs are inside workflow section per AGENT_JSON_SCHEMA.md
+ */
+const workflowSchema = z.object({
+  initial_node: z.string().min(1, 'Initial node is required'),
+  global_prompt: z.string().optional(),
+  history_window: z.number().int().min(0).optional().default(0),
+  max_transitions: z.number().int().min(1).max(1000).optional().default(50),
+  interruption_settings: interruptionSettingsSchema.optional(),
+  recording: recordingSchema.optional(),
+  llm: llmConfigSchema.optional(), // LLM config lives in workflow section
+  tts: ttsConfigSchema.optional(), // TTS tuning config lives in workflow section (per AGENT_JSON_SCHEMA.md)
+  nodes: z.array(nodeSchema).min(1, 'At least one node is required'),
 });
 
 /**
@@ -301,20 +306,34 @@ const autoHangupSchema = z.object({
 });
 
 /**
+ * Base schema for workflow config (without refinements)
+ * Used for schema structure validation
+ */
+const workflowConfigSchemaBase = z.object({
+  agent: agentMetadataSchema,
+  workflow: workflowSchema,
+  // Note: tts, stt, rag at root level are ignored/deprecated
+  // llm is now in workflow.llm section, tts is now in workflow.tts section
+  auto_hangup: autoHangupSchema.optional(),
+  // Allow these deprecated fields to pass through (will be validated by refinements)
+  tts: z.any().optional(),
+  stt: z.any().optional(),
+  llm: z.any().optional(),
+  rag: z.any().optional(),
+});
+
+/**
  * Complete workflow configuration schema
  * This validates the entire config JSON that goes into agentConfigVersions.configJson
  *
- * Note: LLM config is in workflow.llm section (not root level)
- * TTS, STT, RAG are database-backed and not stored in agent JSON
- * Only auto_hangup remains at root level for backward compatibility
+ * Per AGENT_JSON_SCHEMA.md:
+ * - LLM config MUST be in workflow.llm section (not root level)
+ * - TTS tuning config MUST be in workflow.tts section (not root level)
+ * - STT config is environment-based only (not in agent JSON)
+ * - RAG config is database-backed (via rag_config_id FK)
+ * - Only auto_hangup remains at root level
  */
-export const workflowConfigSchema = z.object({
-  agent: agentMetadataSchema,
-  workflow: workflowSchema,
-  // Note: tts, stt, rag configs are database-backed (voice_configs, rag_configs tables)
-  // llm is now in workflow.llm section
-  auto_hangup: autoHangupSchema.optional(),
-}).refine(
+export const workflowConfigSchema = workflowConfigSchemaBase.refine(
   (data) => {
     // Validation: initial_node must exist in nodes
     const initialNode = data.workflow.initial_node;
@@ -365,6 +384,59 @@ export const workflowConfigSchema = z.object({
     message: 'Workflow must have at least one end_call node',
     path: ['workflow', 'nodes'],
   }
+).refine(
+  (data: Record<string, unknown>) => {
+    // Validation: tts at root level is deprecated - should be in workflow.tts
+    // Allow empty object or just {enabled: boolean} for backwards compatibility
+    if (data.tts && typeof data.tts === 'object') {
+      const ttsKeys = Object.keys(data.tts as object);
+      // Only reject if tts has more than just 'enabled' (full config at wrong level)
+      if (ttsKeys.length > 1 || (ttsKeys.length === 1 && ttsKeys[0] !== 'enabled')) {
+        return false;
+      }
+    }
+    return true;
+  },
+  {
+    message: 'TTS configuration must be inside workflow.tts section, not at root level. See AGENT_JSON_SCHEMA.md for correct structure.',
+    path: ['tts'],
+  }
+).refine(
+  (data: Record<string, unknown>) => {
+    // Validation: llm at root level is not allowed - must be in workflow.llm
+    if (data.llm && typeof data.llm === 'object' && Object.keys(data.llm as object).length > 0) {
+      return false;
+    }
+    return true;
+  },
+  {
+    message: 'LLM configuration must be inside workflow.llm section, not at root level. See AGENT_JSON_SCHEMA.md for correct structure.',
+    path: ['llm'],
+  }
+).refine(
+  (data: Record<string, unknown>) => {
+    // Validation: stt at root level is deprecated - STT is environment-based only
+    if (data.stt && typeof data.stt === 'object' && Object.keys(data.stt as object).length > 0) {
+      return false;
+    }
+    return true;
+  },
+  {
+    message: 'STT configuration is environment-based only (DEEPGRAM_MODEL, AUDIO_SAMPLE_RATE). Remove stt from agent config. See AGENT_JSON_SCHEMA.md.',
+    path: ['stt'],
+  }
+).refine(
+  (data: Record<string, unknown>) => {
+    // Validation: rag at root level is deprecated - RAG is database-backed
+    if (data.rag && typeof data.rag === 'object' && Object.keys(data.rag as object).length > 0) {
+      return false;
+    }
+    return true;
+  },
+  {
+    message: 'RAG configuration is database-backed via rag_config_id. Remove rag from agent config. See AGENT_JSON_SCHEMA.md.',
+    path: ['rag'],
+  }
 );
 
 export type WorkflowConfig = z.infer<typeof workflowConfigSchema>;
@@ -375,3 +447,141 @@ export type EndCallNode = z.infer<typeof endCallNodeSchema>;
 export type Transition = z.infer<typeof transitionSchema>;
 export type LlmOverride = z.infer<typeof llmOverrideSchema>;
 export type RagOverride = z.infer<typeof ragConfigSchema>;
+export type TtsConfig = z.infer<typeof ttsConfigSchema>;
+
+// ========================================
+// Validation Helpers
+// ========================================
+
+/**
+ * Validation result with structured errors and warnings
+ */
+export interface ConfigValidationResult {
+  valid: boolean;
+  errors: ConfigValidationIssue[];
+  warnings: ConfigValidationIssue[];
+}
+
+export interface ConfigValidationIssue {
+  path: string[];
+  message: string;
+  code: string;
+}
+
+/**
+ * Validates agent configuration and returns detailed errors and warnings
+ * This provides more helpful feedback than just Zod validation
+ */
+export function validateAgentConfig(config: unknown): ConfigValidationResult {
+  const errors: ConfigValidationIssue[] = [];
+  const warnings: ConfigValidationIssue[] = [];
+
+  // First, run Zod validation
+  const zodResult = workflowConfigSchema.safeParse(config);
+
+  if (!zodResult.success) {
+    for (const issue of zodResult.error.issues) {
+      errors.push({
+        path: issue.path.map(String),
+        message: issue.message,
+        code: issue.code,
+      });
+    }
+  }
+
+  // Additional semantic checks (warnings and errors not covered by Zod)
+  if (typeof config === 'object' && config !== null) {
+    const cfg = config as Record<string, unknown>;
+
+    // Check for misplaced tts (warning if only 'enabled', error if full config)
+    if (cfg.tts && typeof cfg.tts === 'object') {
+      const ttsKeys = Object.keys(cfg.tts as object);
+      if (ttsKeys.length === 1 && ttsKeys[0] === 'enabled') {
+        // Just enabled flag at root - warn but allow
+        warnings.push({
+          path: ['tts'],
+          message: 'Root-level tts.enabled is deprecated. Move TTS config to workflow.tts section.',
+          code: 'deprecated_field',
+        });
+      }
+    }
+
+    // Check if workflow.tts is missing when TTS should be configured
+    const workflow = cfg.workflow as Record<string, unknown> | undefined;
+    if (workflow && !workflow.tts && cfg.tts) {
+      warnings.push({
+        path: ['workflow', 'tts'],
+        message: 'TTS configuration should be in workflow.tts, not at root level.',
+        code: 'misplaced_config',
+      });
+    }
+
+    // Check for standard nodes missing prompt
+    if (workflow?.nodes && Array.isArray(workflow.nodes)) {
+      for (let i = 0; i < workflow.nodes.length; i++) {
+        const node = workflow.nodes[i] as Record<string, unknown>;
+        if (node.type === 'standard' || !node.type) {
+          const hasPrompt = !!node.system_prompt || !!node.static_text;
+          if (!hasPrompt) {
+            errors.push({
+              path: ['workflow', 'nodes', String(i)],
+              message: `Node '${node.id || `index ${i}`}' must have either system_prompt or static_text`,
+              code: 'missing_prompt',
+            });
+          }
+        }
+      }
+    }
+
+    // Check for intent transitions without intents definition
+    if (workflow?.nodes && Array.isArray(workflow.nodes)) {
+      for (let i = 0; i < workflow.nodes.length; i++) {
+        const node = workflow.nodes[i] as Record<string, unknown>;
+        const transitions = node.transitions as Array<{ condition: string }> | undefined;
+        if (transitions) {
+          const hasIntentTransition = transitions.some(t =>
+            typeof t.condition === 'string' && t.condition.startsWith('intent:')
+          );
+          if (hasIntentTransition && !node.intents) {
+            errors.push({
+              path: ['workflow', 'nodes', String(i), 'intents'],
+              message: `Node '${node.id || `index ${i}`}' has intent-based transitions but no intents defined`,
+              code: 'missing_intents',
+            });
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings,
+  };
+}
+
+/**
+ * Formats validation result into a human-readable error message
+ */
+export function formatValidationErrors(result: ConfigValidationResult): string {
+  const messages: string[] = [];
+
+  if (result.errors.length > 0) {
+    messages.push('Validation Errors:');
+    for (const error of result.errors) {
+      const path = error.path.length > 0 ? error.path.join('.') : 'root';
+      messages.push(`  - [${path}] ${error.message}`);
+    }
+  }
+
+  if (result.warnings.length > 0) {
+    messages.push('Warnings:');
+    for (const warning of result.warnings) {
+      const path = warning.path.length > 0 ? warning.path.join('.') : 'root';
+      messages.push(`  - [${path}] ${warning.message}`);
+    }
+  }
+
+  return messages.join('\n');
+}

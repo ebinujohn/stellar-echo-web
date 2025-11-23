@@ -120,9 +120,10 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
     getInitialValue(draftContext?.settingsDraft?.llmServiceTier, workflowLlm?.service_tier || 'auto')
   );
 
-  // TTS Settings
+  // TTS Settings (stored in workflow.tts per AGENT_JSON_SCHEMA.md)
+  // Note: Read from workflow.tts.enabled, with fallback to root tts.enabled for backwards compatibility
   const [ttsEnabled, setTtsEnabled] = useState(() =>
-    getInitialValue(draftContext?.settingsDraft?.ttsEnabled, currentConfig.tts?.enabled ?? true)
+    getInitialValue(draftContext?.settingsDraft?.ttsEnabled, currentConfig.workflow?.tts?.enabled ?? currentConfig.tts?.enabled ?? true)
   );
 
   // TTS Tuning Parameters (stored in workflow.tts per AGENT_JSON_SCHEMA.md)
@@ -209,6 +210,8 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
 
   // Store initial state on mount
   useEffect(() => {
+    // Read ttsEnabled from workflow.tts.enabled with fallback to root tts.enabled for backwards compatibility
+    const initialTtsEnabled = currentConfig.workflow?.tts?.enabled ?? currentConfig.tts?.enabled ?? true;
     const initialSettings: SettingsDraft = {
       globalPrompt: initialGlobalPrompt || '',
       llmEnabled: workflowLlm?.enabled ?? true,
@@ -216,7 +219,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
       llmTemperature: workflowLlm?.temperature ?? 1.0,
       llmMaxTokens: workflowLlm?.max_tokens ?? 150,
       llmServiceTier: workflowLlm?.service_tier || 'auto',
-      ttsEnabled: currentConfig.tts?.enabled ?? true,
+      ttsEnabled: initialTtsEnabled,
       tts: {
         model: workflowTts?.model ?? defaultTts.model,
         stability: workflowTts?.stability ?? defaultTts.stability,
@@ -297,17 +300,20 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
 
       // Merge the form data with the existing config
       // LLM config goes in workflow.llm, TTS config goes in workflow.tts per AGENT_JSON_SCHEMA.md
+      // Note: Root-level tts is removed - all TTS config must be in workflow.tts
       const updatedConfig = {
         ...currentConfig,
         workflow: {
           ...currentConfig.workflow,
           global_prompt: globalPrompt || undefined,
           llm: llmConfig,
-          tts: ttsConfig, // TTS settings stored in workflow.tts
+          tts: ttsConfig, // TTS settings stored in workflow.tts (per AGENT_JSON_SCHEMA.md)
         },
-        tts: { enabled: ttsEnabled }, // Legacy tts field for backwards compatibility
-        // STT settings preserved from existing config (not editable here)
-        rag: undefined, // RAG settings come from shared config
+        // Remove deprecated root-level fields that should be in workflow section
+        tts: undefined,
+        stt: undefined,
+        llm: undefined,
+        rag: undefined, // RAG settings come from database via rag_config_id FK
         auto_hangup: {
           enabled: autoHangupEnabled,
         },

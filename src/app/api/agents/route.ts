@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/session';
 import { getAgentsList } from '@/lib/db/queries/calls';
 import { createAgent } from '@/lib/db/queries/agents';
-import { createAgentSchema, workflowConfigSchema } from '@/lib/validations/agents';
+import { createAgentSchema, validateAgentConfig } from '@/lib/validations/agents';
 import { z } from 'zod';
 
 export async function GET() {
@@ -42,20 +42,25 @@ export async function POST(request: NextRequest) {
     // Validate workflow config (if provided)
     const configJson = body.configJson || createDefaultWorkflowConfig(agentData.name);
 
-    try {
-      workflowConfigSchema.parse(configJson);
-    } catch (validationError) {
-      if (validationError instanceof z.ZodError) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: 'Invalid workflow configuration',
-            details: validationError.issues,
-          },
-          { status: 400 }
-        );
-      }
-      throw validationError;
+    // Validate workflow config with enhanced validation
+    // This provides structured errors and warnings
+    const validationResult = validateAgentConfig(configJson);
+
+    if (!validationResult.valid) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Invalid workflow configuration',
+          details: validationResult.errors,
+          warnings: validationResult.warnings,
+        },
+        { status: 400 }
+      );
+    }
+
+    // Log warnings if any (config is valid but has deprecated patterns)
+    if (validationResult.warnings.length > 0) {
+      console.warn('Agent config warnings:', validationResult.warnings);
     }
 
     // Create agent with initial config version
@@ -69,6 +74,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: newAgent,
+      warnings: validationResult.warnings.length > 0 ? validationResult.warnings : undefined,
     }, { status: 201 });
 
   } catch (error) {
@@ -100,8 +106,11 @@ export async function POST(request: NextRequest) {
 
 /**
  * Create a default workflow configuration for a new agent
- * Note: LLM config is in workflow.llm section per AGENT_JSON_SCHEMA.md
- * TTS, STT, RAG are database-backed and not stored in agent JSON
+ * Per AGENT_JSON_SCHEMA.md:
+ * - LLM config is in workflow.llm section
+ * - TTS config is in workflow.tts section (voice selection via voiceConfigId FK)
+ * - STT is environment-based only
+ * - RAG is database-backed via ragConfigId FK
  */
 function createDefaultWorkflowConfig(agentName: string) {
   return {
@@ -127,6 +136,19 @@ function createDefaultWorkflowConfig(agentName: string) {
         temperature: 0.8,
         max_tokens: 150,
         service_tier: 'auto',
+      },
+      tts: {
+        // TTS tuning params in workflow.tts per AGENT_JSON_SCHEMA.md
+        // Voice selection is via voiceConfigId FK in database
+        enabled: true,
+        model: 'eleven_turbo_v2_5',
+        stability: 0.5,
+        similarity_boost: 0.75,
+        style: 0.0,
+        use_speaker_boost: true,
+        enable_ssml_parsing: false,
+        pronunciation_dictionaries_enabled: true,
+        pronunciation_dictionary_ids: [],
       },
       nodes: [
         {
