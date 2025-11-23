@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Search, Filter, X } from 'lucide-react';
-import { useAgents } from '@/lib/hooks/use-calls';
+import { useAgents } from '@/lib/hooks/use-agents';
 import type { CallFilters } from '@/types';
 
 interface CallFiltersProps {

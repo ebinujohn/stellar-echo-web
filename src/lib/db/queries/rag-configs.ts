@@ -5,10 +5,10 @@ import {
   type RagConfig,
   type RagConfigVersion,
 } from '@/lib/db/schema/rag-configs';
-import { eq, and, desc, count } from 'drizzle-orm';
+import { eq, and, desc, count, inArray, sql } from 'drizzle-orm';
 
 /**
- * Get all RAG configs for a tenant
+ * Get all RAG configs for a tenant (optimized to avoid N+1 queries)
  */
 export async function getRagConfigs(tenantId: string) {
   const configs = await db.query.ragConfigs.findMany({
@@ -16,31 +16,40 @@ export async function getRagConfigs(tenantId: string) {
     orderBy: [desc(ragConfigs.createdAt)],
   });
 
-  // Get active version for each config
-  const configsWithVersions = await Promise.all(
-    configs.map(async (config) => {
-      const activeVersion = await db.query.ragConfigVersions.findFirst({
-        where: and(
-          eq(ragConfigVersions.ragConfigId, config.id),
-          eq(ragConfigVersions.isActive, true)
-        ),
-      });
+  if (configs.length === 0) {
+    return [];
+  }
 
-      const versionCount = await db
-        .select({ count: count() })
-        .from(ragConfigVersions)
-        .where(eq(ragConfigVersions.ragConfigId, config.id))
-        .then((result) => result[0]?.count || 0);
+  const configIds = configs.map((c) => c.id);
 
-      return {
-        ...config,
-        activeVersion: activeVersion || null,
-        versionCount: Number(versionCount),
-      };
+  // Batch fetch all active versions in one query
+  const activeVersions = await db.query.ragConfigVersions.findMany({
+    where: and(
+      inArray(ragConfigVersions.ragConfigId, configIds),
+      eq(ragConfigVersions.isActive, true)
+    ),
+  });
+
+  // Batch fetch version counts in one query
+  const versionCounts = await db
+    .select({
+      ragConfigId: ragConfigVersions.ragConfigId,
+      count: count(),
     })
-  );
+    .from(ragConfigVersions)
+    .where(inArray(ragConfigVersions.ragConfigId, configIds))
+    .groupBy(ragConfigVersions.ragConfigId);
 
-  return configsWithVersions;
+  // Create lookup maps
+  const activeVersionMap = new Map(activeVersions.map((v) => [v.ragConfigId, v]));
+  const versionCountMap = new Map(versionCounts.map((v) => [v.ragConfigId, Number(v.count)]));
+
+  // Combine data
+  return configs.map((config) => ({
+    ...config,
+    activeVersion: activeVersionMap.get(config.id) || null,
+    versionCount: versionCountMap.get(config.id) || 0,
+  }));
 }
 
 /**

@@ -102,7 +102,7 @@ export function CallListTable({ filters, page, pageSize, onPageChange }: CallLis
                 <TableHead>Agent</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Messages</TableHead>
-                <TableHead className="w-[50px]"></TableHead>
+                <TableHead className="w-[100px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -136,8 +136,9 @@ export function CallListTable({ filters, page, pageSize, onPageChange }: CallLis
                   </TableCell>
                   <TableCell>
                     <Link href={`/calls/${call.callId}`}>
-                      <Button variant="ghost" size="sm">
-                        <ExternalLink className="h-4 w-4" />
+                      <Button variant="outline" size="sm">
+                        View
+                        <ExternalLink className="h-3.5 w-3.5 ml-1.5" />
                       </Button>
                     </Link>
                   </TableCell>

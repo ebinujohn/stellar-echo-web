@@ -1,9 +1,9 @@
 import { db } from '@/lib/db';
 import { voiceConfigs, voiceConfigVersions } from '@/lib/db/schema/voice-configs';
-import { eq, and, desc, count } from 'drizzle-orm';
+import { eq, and, desc, count, inArray } from 'drizzle-orm';
 
 /**
- * Get all Voice configs for a tenant
+ * Get all Voice configs for a tenant (optimized to avoid N+1 queries)
  */
 export async function getVoiceConfigs(tenantId: string) {
   const configs = await db.query.voiceConfigs.findMany({
@@ -11,31 +11,40 @@ export async function getVoiceConfigs(tenantId: string) {
     orderBy: [desc(voiceConfigs.createdAt)],
   });
 
-  // Get active version for each config
-  const configsWithVersions = await Promise.all(
-    configs.map(async (config) => {
-      const activeVersion = await db.query.voiceConfigVersions.findFirst({
-        where: and(
-          eq(voiceConfigVersions.voiceConfigId, config.id),
-          eq(voiceConfigVersions.isActive, true)
-        ),
-      });
+  if (configs.length === 0) {
+    return [];
+  }
 
-      const versionCount = await db
-        .select({ count: count() })
-        .from(voiceConfigVersions)
-        .where(eq(voiceConfigVersions.voiceConfigId, config.id))
-        .then((result) => result[0]?.count || 0);
+  const configIds = configs.map((c) => c.id);
 
-      return {
-        ...config,
-        activeVersion: activeVersion || null,
-        versionCount: Number(versionCount),
-      };
+  // Batch fetch all active versions in one query
+  const activeVersions = await db.query.voiceConfigVersions.findMany({
+    where: and(
+      inArray(voiceConfigVersions.voiceConfigId, configIds),
+      eq(voiceConfigVersions.isActive, true)
+    ),
+  });
+
+  // Batch fetch version counts in one query
+  const versionCounts = await db
+    .select({
+      voiceConfigId: voiceConfigVersions.voiceConfigId,
+      count: count(),
     })
-  );
+    .from(voiceConfigVersions)
+    .where(inArray(voiceConfigVersions.voiceConfigId, configIds))
+    .groupBy(voiceConfigVersions.voiceConfigId);
 
-  return configsWithVersions;
+  // Create lookup maps
+  const activeVersionMap = new Map(activeVersions.map((v) => [v.voiceConfigId, v]));
+  const versionCountMap = new Map(versionCounts.map((v) => [v.voiceConfigId, Number(v.count)]));
+
+  // Combine data
+  return configs.map((config) => ({
+    ...config,
+    activeVersion: activeVersionMap.get(config.id) || null,
+    versionCount: versionCountMap.get(config.id) || 0,
+  }));
 }
 
 /**

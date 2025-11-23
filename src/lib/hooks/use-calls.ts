@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { CallFilters, PaginatedResponse, CallListItem, KPIMetrics, Agent } from '@/types';
+import type { CallFilters, PaginatedResponse, CallListItem, KPIMetrics } from '@/types';
 
 interface CallsQueryParams extends CallFilters {
   page?: number;
@@ -61,19 +61,3 @@ export function useCallsStats(filters?: { startDate?: Date; endDate?: Date }) {
   });
 }
 
-export function useAgents() {
-  return useQuery({
-    queryKey: ['agents'],
-    queryFn: async () => {
-      const response = await fetch('/api/agents');
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch agents');
-      }
-
-      const json = await response.json();
-      return json.data as Agent[];
-    },
-    staleTime: 300000, // 5 minutes
-  });
-}

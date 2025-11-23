@@ -2,433 +2,216 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## ⚠️ CRITICAL: Development Workflow
+## Critical: Development Workflow
 
-**ALWAYS follow this workflow - These instructions override any conflicting guidance:**
+**ALWAYS follow this workflow:**
 
-### 1. Check Documentation First
-
-- **Before implementing ANY feature**, check docs via context7 MCP
-- Use `mcp__context7__resolve-library-id` with "pipecat-ai" to get library ID
-- Then `mcp__context7__get-library-docs` with the library ID and topic
-
-### 2. Use TodoWrite for Task Planning
-
-- Multi-step tasks → Create todo list BEFORE coding
-- Track progress with status updates (pending → in_progress → completed)
-- Mark tasks completed IMMEDIATELY after finishing (don't batch)
-- One task in_progress at a time
-
-### 3. Clarify Requirements When Uncertain
-
-- Use `AskUserQuestion` tool when requirements are ambiguous
-- Present 2-4 clear options for user to choose from
-- Avoid making assumptions about user intent
-
-### 4. Never Auto-Commit
-
-- **DO NOT AUTO COMMIT CODE UNLESS EXPLICITLY ASKED TO**
+1. **Check Documentation First** - Before implementing features, check docs via context7 MCP
+2. **Use TodoWrite for Task Planning** - Multi-step tasks → Create todo list BEFORE coding
+3. **Clarify Requirements** - Use `AskUserQuestion` tool when requirements are ambiguous
+4. **Never Auto-Commit** - DO NOT AUTO COMMIT unless explicitly asked
 
 ## Project Overview
 
-**Stellar Echo** - A production-ready Next.js 16 web application for managing voice AI agent calls and analytics. Built with React 19, TypeScript, Tailwind CSS v4, and PostgreSQL with Drizzle ORM. The application provides real-time call analytics, per-turn latency metrics, AI-powered analysis, and comprehensive dashboard views.
+**Stellar Echo** - Next.js 16 web application for managing voice AI agent calls and analytics. Built with React 19, TypeScript, Tailwind CSS v4, PostgreSQL, and Drizzle ORM.
 
-## Common Development Commands
+## Quick Reference
 
-### Development Server
+### Development Commands
 
 ```bash
-pnpm dev              # Start development server (http://localhost:3000)
+pnpm dev              # Start dev server (http://localhost:3000)
 pnpm build            # Production build
-pnpm start            # Start production server
-```
-
-### Database Operations
-
-```bash
 pnpm db:test          # Test database connection
 pnpm db:seed          # Create test user (admin@example.com / password123)
-pnpm db:reset-password # Reset user password to password123
-pnpm db:push          # Push schema changes to database
-pnpm db:studio        # Open Drizzle Studio GUI
-pnpm db:generate      # Generate migration files
-pnpm db:migrate       # Run migrations
-```
-
-### Code Quality
-
-```bash
+pnpm db:push          # Push schema changes
+pnpm db:studio        # Open Drizzle Studio
 pnpm lint             # Run ESLint
-pnpm format           # Format code with Prettier
-pnpm type-check       # TypeScript type checking (tsc --noEmit)
-```
-
-### Testing
-
-```bash
-pnpm test             # Run Vitest unit tests
-pnpm test:ui          # Run Vitest with UI
+pnpm type-check       # TypeScript checking
+pnpm test             # Run Vitest tests
 pnpm test:e2e         # Run Playwright E2E tests
-pnpm test:e2e:ui      # Run Playwright with UI
 ```
+
+### Environment Variables
+
+Required in `.env.local`:
+- `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` - PostgreSQL
+- `JWT_SECRET` - JWT signing key
+- `NEXT_PUBLIC_API_URL` - API base URL
+- `NODE_ENV` - development/production
+- Optional: `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` - S3 for recordings
+- Optional: `ADMIN_API_BASE_URL`, `ADMIN_API_KEY` - Orchestrator cache management
 
 ## Architecture
 
 ### Authentication & Authorization
+- **JWT-based auth** with HTTP-only cookies (15min access, 7-day refresh tokens)
+- **Middleware** at `src/middleware.ts` validates tokens, injects headers (`x-user-id`, `x-tenant-id`, `x-user-role`)
+- **Session helpers** in `src/lib/auth/session.ts`: `requireAuth()`, `requireRole()`
+- **Multi-tenant isolation** enforced at database query level using `tenantId`
 
-- **JWT-based authentication** with HTTP-only cookies (15-minute access tokens, 7-day refresh tokens)
-- **Middleware protection** at `src/middleware.ts` - validates tokens and injects user headers (`x-user-id`, `x-tenant-id`, `x-user-role`, `x-user-email`)
-- **Session management** via `src/lib/auth/session.ts` with `requireAuth()` and `requireRole()` helpers
-- **Multi-tenant isolation** enforced at the database query level using `tenantId` from JWT payload
-- All API routes use `requireAuth()` to validate sessions before processing requests
+### Database (Drizzle ORM)
+- **Schema**: `src/lib/db/schema/` - tenants, users, agents, calls, rag-configs, voice-configs, phone-configs
+- **Queries**: `src/lib/db/queries/` - reusable query functions with tenant isolation
+- **JSONB fields**: `call_metrics_summary.metrics_data` (per-turn latency), `call_transcripts.transcript_data`
 
-### Database Layer (Drizzle ORM)
+### API Routes
+- **Structure**: `src/app/api/[resource]/route.ts`
+- **Error handling**: Use `handleApiError()` from `src/lib/api/error-handler.ts`
+- **Handlers**: Use `handleGet()`, `handleDropdownGet()` from `src/lib/api/handlers.ts`
+- **Validation**: Zod schemas in `src/lib/validations/`
 
-- **Schema location**: `src/lib/db/schema/` with separate files for `tenants.ts`, `users.ts`, `agents.ts`, `calls.ts`, `rag-configs.ts`, `voice-configs.ts`, `phone-configs.ts`
-- **Connection**: `src/lib/db/index.ts` manages PostgreSQL connection pooling (max 10 connections, 20s idle timeout)
-- **Query functions**: `src/lib/db/queries/` contains reusable query logic with tenant isolation built-in
-- **JSONB fields**: `call_metrics_summary.metrics_data` (per-turn metrics) and `call_transcripts.transcript_data` (conversation data) require special parsing
-- **Relations**: Defined in schema files using Drizzle's relations API for type-safe joins
-- **Environment**: Database credentials loaded from `.env.local` (see `.env.example`)
+### React Hooks (TanStack Query)
+- **Location**: `src/lib/hooks/`
+- **Constants**: `src/lib/hooks/constants/` - centralized stale times and query keys
+- **Factories**: `src/lib/hooks/factories/` - generic CRUD and version hook factories
 
-### Data Fetching (TanStack Query)
+### Components
+- **Feature components**: `src/components/[feature]/` (calls, dashboard, analytics, agents, settings)
+- **UI primitives**: `src/components/ui/` (shadcn/ui)
+- **Layout**: `src/components/layout/` (sidebar, navbar)
 
-- **Custom hooks** in `src/lib/hooks/` wrap API calls with automatic caching, loading states, and error handling
-- **Stale times**: 30s for calls list, 1min for stats, 5min for agents, 2min for detail pages
-- **Query keys**: Structured as `['resource', params]` for automatic cache invalidation
-- **Pattern**: Components use hooks like `useCalls()`, `useCallDetail()`, `useCallMetrics()` instead of direct fetch calls
+## Key Patterns
 
-### API Routes (Next.js App Router)
+### API Route Pattern (Simplified)
 
-- **Structure**: `src/app/api/[resource]/route.ts` with dynamic segments for IDs
-- **Auth enforcement**: All routes call `requireAuth()` or `requireRole()` before processing
-- **Validation**: Zod schemas in `src/lib/validations/` validate request payloads
-- **Error handling**: Consistent JSON error responses with appropriate HTTP status codes
-- **Tenant isolation**: Database queries automatically filter by `session.tenantId`
+```typescript
+import { handleApiError, successResponse } from '@/lib/api/error-handler';
+import { handleGet } from '@/lib/api/handlers';
 
-### Component Organization
+// GET - use handler for simple list queries
+export const GET = () => handleGet(getResourceList);
 
-- **Page components**: Client components with `"use client"` directive in `src/app/(dashboard)/`
-- **Feature components**: Domain-specific components in `src/components/[feature]/` (calls, dashboard, analytics, agents, settings)
-  - Agent settings form: `src/components/agents/settings-form.tsx` - comprehensive global settings UI (LLM, TTS, STT, RAG, auto-hangup)
-  - Agent detail tabs: Overview (with settings preview), Workflow Editor, Versions, Settings
-  - Workflow editor: `src/components/agents/workflow-editor/` - visual node editor with per-node RAG overrides
-    - Bidirectional sync between canvas edges and panel transitions (add/delete syncs both ways)
-    - Target node dropdown showing available nodes with name and ID
-  - Call detail page: `src/components/calls/call-detail-client.tsx` - displays call info with download recording button (when available)
-  - RAG config management: `src/components/settings/rag/` - CRUD UI for shared RAG configurations
-  - Voice config management: `src/components/settings/voice/` - CRUD UI for shared Voice/TTS configurations
-  - Phone config management: `src/components/settings/phone/` - CRUD UI for phone number pool and agent mappings
-- **Layout components**: Reusable layout pieces in `src/components/layout/` (sidebar, navbar, user-menu, theme-toggle)
-- **UI primitives**: shadcn/ui components in `src/components/ui/`
-- **Providers**: React context providers in `src/components/providers/`
-- **Toast notifications**: Positioned at top-center via Sonner (configured in `src/app/layout.tsx`)
-
-### Chart Infrastructure
-
-- **Configuration**: `src/lib/charts/config.ts` provides theme-aware colors using CSS custom properties
-- **Pattern**: All charts use centralized color palettes (`chartColors`, `sentimentColors`, `statusColors`)
-- **Recharts integration**: Common config objects for margins, grids, axes, tooltips, and legends
-- **Dark mode**: Charts automatically adapt to theme via `hsl(var(--chart-1))` color references
-
-### TypeScript Patterns
-
-- **Path alias**: `@/*` maps to `src/*` (configured in `tsconfig.json`)
-- **Strict mode**: TypeScript strict checking enabled
-- **Type exports**: Centralized types in `src/types/index.ts`
-- **Database types**: Auto-generated from Drizzle schema via `typeof` inference
-- **API types**: Define request/response shapes in type files, validate with Zod
-
-## Key Technical Details
+// POST - use error handler in catch block
+export async function POST(request: NextRequest) {
+  try {
+    const session = await requireAuth();
+    const data = schema.parse(await request.json());
+    const result = await createResource(data, session.tenantId);
+    return successResponse(result, 201);
+  } catch (error) {
+    return handleApiError(error, { resourceName: 'Resource', fieldName: 'name' });
+  }
+}
+```
 
 ### Multi-tenant Data Isolation
 
-ALL database queries MUST include tenant filtering. The pattern is:
+ALL database queries MUST include tenant filtering:
 
 ```typescript
 const session = await requireAuth();
-const data = await db.query.calls.findMany({
-  where: eq(calls.tenantId, session.tenantId),
-  // ... other conditions
+const data = await db.query.resource.findMany({
+  where: eq(resource.tenantId, session.tenantId),
 });
-```
-
-Never query across tenants. The middleware injects `tenantId` into headers, and `requireAuth()` extracts it from the JWT.
-
-### JSONB Field Parsing
-
-Two critical JSONB fields require special handling:
-
-1. **`call_metrics_summary.metrics_data`** - Array of per-turn latency metrics:
-
-```typescript
-interface TurnMetrics {
-  turnNumber: number;
-  timestamp: string;
-  pipelineTotalMs: number;
-  llmProcessingMs: number;
-  llmTtfbMs: number;
-  sttDelayMs: number;
-  transcriptLlmGapMs: number;
-  llmToTtsGapMs: number;
-  wasInterrupted: boolean;
-}
-```
-
-2. **`call_transcripts.transcript_data`** - Supports multiple formats (array or nested object with `entries`/`messages`/`turns`). Parse defensively with fallbacks.
-
-### Per-Turn Metrics Visualization
-
-The Metrics tab on call detail pages shows 9 latency components:
-
-- Primary: Pipeline Total, User→Bot Latency, LLM Processing, LLM TTFB
-- Processing: STT Delay
-- Gaps: Transcript→LLM Gap, LLM→TTS Gap
-- Optional: RAG Processing, Variable Extraction
-
-Display min/avg/max for each metric, and show interruptions with visual indicators.
-
-### Agent Configuration Management
-
-Agent configurations are stored as versioned JSONB documents in `agent_config_versions.config_json`:
-
-**Configuration Structure:**
-```typescript
-{
-  agent: { id, name, description, version },
-  workflow: { initial_node, nodes, transitions, ... },
-  llm: { enabled, model, temperature, max_tokens, service_tier },
-  tts: { enabled, model, voice_id, stability, similarity_boost, style, ... },
-  stt: { model, sample_rate, eager_eot_threshold, eot_threshold, ... },
-  rag: { enabled, search_mode, top_k, relevance_filter, rrf_k, vector_weight, fts_weight, ... },
-  auto_hangup: { enabled }
-}
-```
-
-**Settings Management:**
-- **Overview Tab**: Displays all global settings in read-only cards (LLM, TTS, STT, RAG, Auto-Hangup)
-- **Settings Tab**: Full form for editing global settings with save button at top (creates new version)
-  - RAG configuration: Select from shared RAG configs created in Settings → RAG Configurations
-  - Voice configuration: Select from shared Voice configs created in Settings → Voice Configurations
-  - No inline configuration editing - all RAG/Voice changes must be made in respective Settings pages
-- **Workflow Tab**: Visual editor for workflow nodes and transitions
-  - Per-node RAG overrides: Standard nodes can override global RAG settings (enabled, search_mode, top_k, weights)
-  - Collapsible RAG section in node properties panel
-- All changes create a new configuration version via `/api/agents/[id]/versions`
-- Active version (`is_active=true`) is used for agent runtime behavior
-
-### RAG Configuration Management
-
-Shared RAG configurations are stored in database tables (`rag_configs`, `rag_config_versions`) and can be reused across multiple agents:
-
-**Database Structure:**
-- `rag_configs` - Base entity (id, tenant_id, name, description, is_active)
-- `rag_config_versions` - Versioned settings (search_mode, top_k, relevance_filter, rrf_k, vector_weight, fts_weight, hnsw_ef_search, bedrock_model, bedrock_dimensions, faiss paths, sqlite_db_path)
-- `agent_config_versions.rag_config_id` - References shared RAG config
-
-**Settings Page (`/settings/rag`):**
-- List all RAG configurations with active version preview
-- Create new configs with all RAG parameters
-- Edit configs with version history
-- Activate specific versions
-
-**Agent Integration:**
-- Select from dropdown of available shared RAG configs in agent Settings tab
-- Shows preview of active version settings when config is selected
-- `ragEnabled` and `ragConfigId` stored on agent config version
-
-### Voice Configuration Management
-
-Shared Voice/TTS configurations are stored in database tables (`voice_configs`, `voice_config_versions`) and can be reused across multiple agents:
-
-**Database Structure:**
-- `voice_configs` - Base entity (id, tenant_id, name, description, is_active)
-- `voice_config_versions` - Versioned settings (voice_id, model, stability, similarity_boost, style, use_speaker_boost, enable_ssml_parsing, pronunciation_dictionaries_enabled, pronunciation_dictionary_ids)
-- `agent_config_versions.voice_config_id` - References shared Voice config
-
-**Settings Page (`/settings/voice`):**
-- List all Voice configurations with active version preview
-- Create new configs with ElevenLabs TTS parameters
-- Edit configs with version history
-- Activate specific versions
-
-**Agent Integration:**
-- Select from dropdown of available shared Voice configs in agent Settings tab
-- Shows preview of active version settings when config is selected
-- `voiceConfigId` stored on agent config version
-
-### Phone Configuration Management
-
-Phone numbers are managed as a pool in database tables (`phone_configs`, `phone_config_mappings`) and can be mapped to agents for call routing:
-
-**Database Structure:**
-- `phone_configs` - Phone number pool (id, tenant_id, phone_number, name, description, is_active)
-- `phone_config_mappings` - Links phone_config_id to agent_id for routing
-
-**Settings Page (`/settings/phone`):**
-- List all phone numbers with agent mapping badges
-- Add new phone numbers in E.164 format (e.g., +17708304765)
-- Edit phone details and agent mappings
-- Delete phone numbers from pool
-
-**Agent Integration:**
-- Agent Settings tab displays read-only list of mapped phone numbers
-- Phone mappings are managed from Settings → Phone Numbers page
-- Used for call routing: incoming calls to a phone number route to the mapped agent
-
-### Session & Cookie Management
-
-- Access token expires in 15 minutes (short-lived for security)
-- Refresh token lasts 1 day (for seamless re-authentication)
-- Middleware automatically refreshes expired access tokens using valid refresh tokens
-- Cookies are HTTP-only, secure in production, sameSite=lax
-- Middleware validates on every request except `/login` and static assets
-
-## Database Schema Reference
-
-### Core Tables
-
-- `tenants` - Organizations (multi-tenancy root)
-- `users` - User accounts with bcrypt-hashed passwords
-- `agents` - Agent definitions
-- `agent_config_versions` - Versioned agent configurations (stores workflow, LLM, TTS, STT, RAG, auto-hangup settings in `config_json` JSONB field)
-
-### Call Tables
-
-- `calls` - Call metadata (status, duration, phone numbers, timestamps, recording_url for S3 recordings)
-- `call_messages` - Conversation messages with role, content, turn_number, was_interrupted
-- `call_transitions` - Workflow state transitions with from/to nodes and reasons
-- `call_transcripts` - Full transcripts with transcript_text and transcript_data (JSONB)
-- `call_metrics_summary` - 34 columns of performance metrics including per-turn data in metrics_data (JSONB)
-- `call_analysis` - AI insights: sentiment, summary, keywords, topics, success analysis
-
-## Environment Setup
-
-Required environment variables in `.env.local`:
-
-- `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` - PostgreSQL connection
-- `JWT_SECRET` - Secret key for JWT signing (change in production!)
-- `NEXT_PUBLIC_API_URL` - API base URL
-- `NODE_ENV` - development/production
-- `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` - AWS S3 credentials for call recording downloads (optional)
-- `ADMIN_API_BASE_URL` - Orchestrator Admin API base URL for cache management (optional, e.g., `http://localhost:8000`)
-- `ADMIN_API_KEY` - Shared secret for HMAC-SHA256 request signing to Admin API (optional)
-
-Default test credentials: `admin@example.com` / `password123`
-
-## Development Workflow
-
-1. **Start development**: Ensure PostgreSQL is running, then `pnpm db:test` to verify connection
-2. **First-time setup**: Run `pnpm db:seed` to create test user
-3. **Schema changes**: Update `src/lib/db/schema/*.ts`, then `pnpm db:push` (or `db:generate` + `db:migrate` for migrations)
-4. **Type safety**: Always run `pnpm type-check` before committing
-5. **Code formatting**: Use `pnpm format` to auto-format with Prettier
-6. **Testing**: Write unit tests in `*.test.ts` files, run with `pnpm test`
-
-## Important Patterns
-
-### API Route Pattern
-
-```typescript
-export async function GET(request: Request) {
-  try {
-    const session = await requireAuth();
-    // Query with tenant isolation
-    const data = await db.query.tableName.findMany({
-      where: eq(tableName.tenantId, session.tenantId),
-    });
-    return Response.json({ data });
-  } catch (error) {
-    return Response.json({ error: "Message" }, { status: 500 });
-  }
-}
 ```
 
 ### TanStack Query Hook Pattern
 
 ```typescript
+import { STALE_TIMES, QUERY_KEYS } from '@/lib/hooks/constants';
+
 export function useResource(id: string) {
   return useQuery({
-    queryKey: ["resource", id],
-    queryFn: async () => {
-      const response = await fetch(`/api/resource/${id}`);
-      if (!response.ok) throw new Error("Failed to fetch");
-      return response.json();
-    },
-    staleTime: 30000, // 30 seconds
+    queryKey: QUERY_KEYS.resource.detail(id),
+    queryFn: () => apiFetch(`/api/resource/${id}`),
+    staleTime: STALE_TIMES.DETAIL,
+    enabled: !!id,
   });
 }
 ```
 
-### Client Component Pattern
+### Batch Query Pattern (Avoid N+1)
 
 ```typescript
-"use client";
-import { useResource } from '@/lib/hooks/use-resource';
+// BAD: N+1 queries
+const items = await Promise.all(
+  configs.map(async (config) => {
+    const version = await getActiveVersion(config.id); // N queries
+    return { ...config, version };
+  })
+);
 
-export function ResourceComponent({ id }: { id: string }) {
-  const { data, isLoading, error } = useResource(id);
-
-  if (isLoading) return <LoadingSkeleton />;
-  if (error) return <ErrorState error={error} />;
-  if (!data) return <EmptyState />;
-
-  return <div>{/* Render data */}</div>;
-}
+// GOOD: Batch queries
+const configIds = configs.map((c) => c.id);
+const versions = await db.query.versions.findMany({
+  where: inArray(versions.configId, configIds),
+});
+const versionMap = new Map(versions.map((v) => [v.configId, v]));
+return configs.map((c) => ({ ...c, version: versionMap.get(c.id) }));
 ```
 
-## Utility Functions
+## Utilities
+
+### API Error Handler (`src/lib/api/error-handler.ts`)
+- `handleApiError(error, options)` - Handles auth, Zod, unique constraint, not found errors
+- `successResponse(data, status)` - Creates standard success response
+
+### API Handlers (`src/lib/api/handlers.ts`)
+- `handleGet(queryFn)` - Generic GET handler for list endpoints
+- `handleGetById(id, queryFn, resourceName)` - GET handler for detail endpoints
+- `handleDropdownGet(queryFn)` - GET handler for dropdown endpoints
+
+### Query Constants (`src/lib/hooks/constants/`)
+- `STALE_TIMES` - Centralized stale time configuration
+- `QUERY_KEYS` - Type-safe query key factory
+
+### Hook Factories (`src/lib/hooks/factories/create-api-hooks.ts`)
+- `createCrudHooks()` - Creates standard CRUD hooks
+- `createVersionHooks()` - Creates version management hooks
+- `createDropdownHook()` - Creates dropdown hooks
+- `apiFetch()` / `apiMutate()` - Generic fetch wrappers
 
 ### Formatters (`src/lib/utils/formatters.ts`)
-
-- `formatDateTime(date)` - Human-readable timestamps
-- `formatDuration(seconds)` - Call duration (e.g., "2m 34s")
-- `formatLatency(ms)` - Smart units (ms/s with appropriate precision)
-- `formatPhoneNumber(e164)` - E.164 phone number formatting
-- `formatPercentage(value)` - Success rates with % symbol
-- `formatNumber(value)` - Numbers with comma separators
-- `getStatusVariant(status)` - Badge color mapping
-- `getStatusColor(status)` - Status color coding for charts
-
-Always use these formatters for consistency across the UI.
+- `formatDateTime()`, `formatDuration()`, `formatLatency()`, `formatPhoneNumber()`
+- `formatPercentage()`, `formatNumber()`, `getStatusVariant()`, `getStatusColor()`
 
 ### S3 Presigned URLs (`src/lib/s3/presigned-url.ts`)
+- `generatePresignedDownloadUrl()` - Secure temporary download URLs
+- `isValidS3Url()` - Validate S3 URL format
 
-- `generatePresignedDownloadUrl(s3Url, options)` - Generate secure temporary download URLs for S3 objects
-- `isValidS3Url(url)` - Validate S3 URL format
-- Supports multiple S3 URL formats: `s3://`, `https://bucket.s3.region.amazonaws.com/`, and `https://s3.region.amazonaws.com/bucket/`
-- Default expiration: 1 hour (configurable from 60s to 7 days)
-- Used by `/api/calls/[call_id]/recording/download` endpoint for secure call recording downloads
+## Database Schema Quick Reference
 
-## Common Issues & Solutions
+### Core Tables
+- `tenants` - Organizations (multi-tenancy root)
+- `users` - User accounts
+- `agents` + `agent_config_versions` - Versioned agent configurations
+
+### Call Tables
+- `calls` - Call metadata
+- `call_messages` - Conversation messages
+- `call_transitions` - Workflow state transitions
+- `call_transcripts` - Full transcripts (JSONB)
+- `call_metrics_summary` - 34 latency metrics columns
+- `call_analysis` - AI-powered insights
+
+### Config Tables (Versioned)
+- `rag_configs` + `rag_config_versions` - RAG settings
+- `voice_configs` + `voice_config_versions` - TTS settings
+- `phone_configs` + `phone_config_mappings` - Phone number pool
+
+## Latency Metrics
+
+The Metrics tab displays per-turn latency components:
+- **Primary**: User→Bot Latency, LLM Processing, LLM TTFB, TTS TTFB
+- **Processing**: STT Processing, Pipeline Total
+- **Optional**: RAG Processing, Variable Extraction
+
+All metrics show min/avg/max values with interruption indicators.
+
+## Common Issues
 
 ### "Unauthorized" errors
-
-- Check that `access_token` cookie is present and valid
-- Verify `JWT_SECRET` matches between token creation and validation
-- Ensure middleware is not blocking protected routes incorrectly
+- Check `access_token` cookie
+- Verify `JWT_SECRET` matches
+- Ensure middleware isn't blocking routes
 
 ### Database connection failures
-
-- Run `pnpm db:test` to diagnose
-- Verify PostgreSQL is running: `psql -U orchestrator -d orchestrator -h localhost`
-- Check `.env.local` has correct credentials
+- Run `pnpm db:test`
+- Verify PostgreSQL is running
+- Check `.env.local` credentials
 
 ### Type errors after schema changes
-
-- Rebuild: `rm -rf .next && pnpm build`
-- Regenerate types: `pnpm db:generate`
-- Run `pnpm type-check` to identify issues
-
-### Missing data in components
-
-- Check browser network tab for API errors
-- Verify TanStack Query cache with React DevTools Query tab
-- Ensure tenant filtering is correct in database queries
-
-### S3 recording download errors
-
-- Verify AWS credentials are set in `.env.local` (AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
-- Check that recording URL in database is valid S3 format
-- Ensure S3 bucket permissions allow GetObject with the configured IAM credentials
-- Presigned URLs expire after 1 hour by default
+- `rm -rf .next && pnpm build`
+- `pnpm db:generate`
+- `pnpm type-check`
