@@ -63,6 +63,10 @@ export async function getAgentDetail(agentId: string, tenantId: string) {
           id: activeVersion.id,
           version: activeVersion.version,
           configJson: activeVersion.configJson,
+          globalPrompt: activeVersion.globalPrompt,
+          ragEnabled: activeVersion.ragEnabled,
+          ragConfigId: activeVersion.ragConfigId,
+          voiceConfigId: activeVersion.voiceConfigId,
           createdBy: activeVersion.createdBy,
           createdAt: activeVersion.createdAt,
           notes: activeVersion.notes,
@@ -208,7 +212,11 @@ export async function createAgentVersion(
   configJson: any,
   userId: string,
   tenantId: string,
-  notes?: string
+  notes?: string,
+  globalPrompt?: string | null,
+  ragEnabled?: boolean,
+  ragConfigId?: string | null,
+  voiceConfigId?: string | null
 ) {
   // Get the highest version number for this agent
   const latestVersion = await db.query.agentConfigVersions.findFirst({
@@ -225,6 +233,10 @@ export async function createAgentVersion(
       tenantId,
       version: newVersionNumber,
       configJson,
+      globalPrompt: globalPrompt ?? null,
+      ragEnabled: ragEnabled ?? false,
+      ragConfigId: ragConfigId ?? null,
+      voiceConfigId: voiceConfigId ?? null,
       isActive: false, // New versions are not active by default
       createdBy: userId,
       notes: notes || null,

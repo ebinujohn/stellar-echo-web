@@ -75,6 +75,7 @@ export function PropertiesPanel({
       case 'standard':
         return (
           <StandardNodeForm
+            key={selectedNode.id}
             nodeData={selectedNode.data}
             onUpdate={handleUpdate}
             availableTargetNodes={availableTargetNodes}
@@ -83,13 +84,14 @@ export function PropertiesPanel({
       case 'retrieve_variable':
         return (
           <RetrieveVariableNodeForm
+            key={selectedNode.id}
             nodeData={selectedNode.data}
             onUpdate={handleUpdate}
             availableTargetNodes={availableTargetNodes}
           />
         );
       case 'end_call':
-        return <EndCallNodeForm nodeData={selectedNode.data} onUpdate={handleUpdate} />;
+        return <EndCallNodeForm key={selectedNode.id} nodeData={selectedNode.data} onUpdate={handleUpdate} />;
       default:
         return (
           <div className="p-4 text-sm text-muted-foreground">

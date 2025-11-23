@@ -76,7 +76,11 @@ export async function POST(
       data.configJson,
       session.email,
       session.tenantId,
-      data.notes
+      data.notes,
+      data.globalPrompt,
+      data.ragEnabled,
+      data.ragConfigId,
+      data.voiceConfigId
     );
 
     return NextResponse.json({

@@ -42,12 +42,43 @@ export function AgentDetailClient({ agentId }: AgentDetailClientProps) {
   const [activeTab, setActiveTab] = useState('overview');
   const createVersion = useCreateVersion();
 
-  const handleWorkflowSave = async (config: any) => {
+  // Handler for settings form - passes all settings explicitly
+  const handleSettingsSave = async (
+    config: any,
+    ragEnabled?: boolean,
+    ragConfigId?: string | null,
+    voiceConfigId?: string | null,
+    globalPrompt?: string | null
+  ) => {
     try {
       await createVersion.mutateAsync({
         agentId,
         configJson: config,
+        notes: 'Updated via settings',
+        globalPrompt,
+        ragEnabled,
+        ragConfigId,
+        voiceConfigId,
+      });
+      toast.success('New workflow version created');
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  // Handler for workflow editor - preserves existing settings (globalPrompt, rag, voice configs)
+  const handleWorkflowSave = async (config: any) => {
+    try {
+      // Preserve existing settings from active version
+      const activeVersion = agent?.activeVersion as any;
+      await createVersion.mutateAsync({
+        agentId,
+        configJson: config,
         notes: 'Updated via visual editor',
+        globalPrompt: activeVersion?.globalPrompt,
+        ragEnabled: activeVersion?.ragEnabled,
+        ragConfigId: activeVersion?.ragConfigId,
+        voiceConfigId: activeVersion?.voiceConfigId,
       });
       toast.success('New workflow version created');
     } catch (error) {
@@ -516,7 +547,11 @@ export function AgentDetailClient({ agentId }: AgentDetailClientProps) {
             <SettingsForm
               agentId={agentId}
               currentConfig={agent.activeVersion.configJson}
-              onSave={handleWorkflowSave}
+              globalPrompt={agent.activeVersion.globalPrompt}
+              ragEnabled={agent.activeVersion.ragEnabled}
+              ragConfigId={agent.activeVersion.ragConfigId}
+              voiceConfigId={agent.activeVersion.voiceConfigId}
+              onSave={handleSettingsSave}
             />
           ) : (
             <Card>

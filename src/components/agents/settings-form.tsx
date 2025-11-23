@@ -28,13 +28,14 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 interface SettingsFormProps {
   agentId: string;
   currentConfig: any;
+  globalPrompt?: string | null;
   ragEnabled?: boolean;
   ragConfigId?: string | null;
   voiceConfigId?: string | null;
-  onSave: (config: any, ragEnabled?: boolean, ragConfigId?: string | null, voiceConfigId?: string | null) => Promise<void>;
+  onSave: (config: any, ragEnabled?: boolean, ragConfigId?: string | null, voiceConfigId?: string | null, globalPrompt?: string | null) => Promise<void>;
 }
 
-export function SettingsForm({ agentId, currentConfig, ragEnabled: initialRagEnabled, ragConfigId: initialRagConfigId, voiceConfigId: initialVoiceConfigId, onSave }: SettingsFormProps) {
+export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlobalPrompt, ragEnabled: initialRagEnabled, ragConfigId: initialRagConfigId, voiceConfigId: initialVoiceConfigId, onSave }: SettingsFormProps) {
   const [isSaving, setIsSaving] = useState(false);
 
   // Fetch available RAG configs
@@ -74,7 +75,7 @@ export function SettingsForm({ agentId, currentConfig, ragEnabled: initialRagEna
   const [ttsEnabled, setTtsEnabled] = useState(currentConfig.tts?.enabled ?? true);
 
   // Workflow Settings
-  const [globalPrompt, setGlobalPrompt] = useState(currentConfig.workflow?.global_prompt || '');
+  const [globalPrompt, setGlobalPrompt] = useState(initialGlobalPrompt || '');
 
   // Other Settings
   const [autoHangupEnabled, setAutoHangupEnabled] = useState(currentConfig.auto_hangup?.enabled ?? true);
@@ -122,7 +123,7 @@ export function SettingsForm({ agentId, currentConfig, ragEnabled: initialRagEna
         },
       };
 
-      await onSave(updatedConfig, finalRagEnabled, finalRagConfigId, finalVoiceConfigId);
+      await onSave(updatedConfig, finalRagEnabled, finalRagConfigId, finalVoiceConfigId, globalPrompt || null);
       toast.success('Settings saved successfully');
     } catch (error: any) {
       toast.error(error.message || 'Failed to save settings');

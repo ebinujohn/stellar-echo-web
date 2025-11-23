@@ -33,6 +33,10 @@ export type UpdateAgentInput = z.infer<typeof updateAgentSchema>;
 export const createVersionSchema = z.object({
   configJson: z.record(z.string(), z.any()), // Full workflow config validation done separately
   notes: z.string().max(500, 'Notes must be less than 500 characters').optional(),
+  globalPrompt: z.string().nullable().optional(),
+  ragEnabled: z.boolean().optional(),
+  ragConfigId: z.string().uuid().nullable().optional(),
+  voiceConfigId: z.string().uuid().nullable().optional(),
 });
 
 export type CreateVersionInput = z.infer<typeof createVersionSchema>;

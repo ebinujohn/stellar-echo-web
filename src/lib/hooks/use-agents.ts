@@ -28,6 +28,10 @@ interface AgentDetail extends Omit<Agent, 'activeVersion'> {
     id: string;
     version: number;
     configJson: WorkflowConfig;
+    globalPrompt: string | null;
+    ragEnabled: boolean;
+    ragConfigId: string | null;
+    voiceConfigId: string | null;
     createdBy: string | null;
     createdAt: Date;
     notes: string | null;
