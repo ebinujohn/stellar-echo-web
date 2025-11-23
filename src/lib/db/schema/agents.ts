@@ -26,7 +26,8 @@ export const agentConfigVersions = pgTable('agent_config_versions', {
   // RAG Configuration Reference
   ragEnabled: boolean('rag_enabled').default(false).notNull(),
   ragConfigId: uuid('rag_config_id').references(() => ragConfigs.id),
-  // Voice Configuration Reference
+  // Voice Configuration Reference (FK to voice_configs catalog)
+  // TTS tuning params are in configJson.workflow.tts
   voiceConfigId: uuid('voice_config_id').references(() => voiceConfigs.id),
   // Version Metadata
   isActive: boolean('is_active').default(false).notNull(),

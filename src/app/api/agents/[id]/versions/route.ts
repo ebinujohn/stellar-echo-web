@@ -71,6 +71,8 @@ export async function POST(
     }
 
     // Create new version
+    // voiceConfigId is FK to voice_configs table (voice selection)
+    // TTS tuning params are in configJson.workflow.tts
     const newVersion = await createAgentVersion(
       agentId,
       data.configJson,

@@ -26,7 +26,7 @@ This document provides a comprehensive specification of the JSON schema used for
 9. [LLM Configuration (JSON-based)](#llm-configuration-json-based)
    - [Per-Node LLM Override](#per-node-llm-override)
    - [Available Models](#available-models-default-seed)
-10. [Voice/TTS Configuration (Database-Backed)](#voicetts-configuration-database-backed)
+10. [Voice/TTS Configuration (Database FK + JSON Tuning)](#voicetts-configuration-database-fk--json-tuning)
 11. [STT Configuration (Environment-Based)](#stt-configuration-environment-based)
 12. [RAG Configuration](#rag-configuration)
     - [Per-Node RAG Override](#per-node-rag-override)
@@ -63,12 +63,19 @@ All agents **must** use node-based workflows. Traditional single-prompt mode has
 | `agent` | object | ✅ Yes | Agent metadata (ID, name, description) |
 | `workflow` | object | ✅ Yes | Workflow configuration with nodes and transitions |
 
-> **Note:** The following configurations are managed outside the agent JSON:
+> **Note:** Configuration management summary:
+>
+> **Agent JSON (`workflow` section):**
+> - **LLM**: `workflow.llm` section with model_name, temperature, max_tokens (model_name resolved via `llm_models` table)
+> - **TTS Tuning**: `workflow.tts` section with stability, similarity_boost, etc. (voice selection via `voice_config_id` FK in database)
+>
+> **Database:**
+> - **Voice Selection**: `agent_config_versions.voice_config_id` FK links to `voice_configs` table
 >
 > **Database-backed:**
-> - **LLM**: Stored in agent JSON (`workflow.llm` section), `llm_models` table for model catalog
 > - **RAG**: `rag_configs` and `rag_config_versions` tables
-> - **Voice/TTS**: `voice_configs` and `voice_config_versions` tables
+> - **Voice Catalog**: `voice_configs` table (system-level, maps voice_name → voice_id)
+> - **LLM Model Catalog**: `llm_models` table (system-level, maps model_name → actual_model_id)
 > - **Phone Numbers**: `phone_configs` table (phone number pool) + `phone_mappings` table
 >
 > **Environment variables (.env):**
@@ -1319,27 +1326,62 @@ Temperature controls response randomness:
 
 ---
 
-## Voice/TTS Configuration (Database-Backed)
+## Voice/TTS Configuration (Database FK + JSON Tuning)
 
-Voice/TTS configuration is now stored in the database, separate from agent JSON files. This allows:
-- **Shared voice configs** across multiple agents
-- **Independent versioning** of voice settings
-- **Easy management** without modifying agent configs
+Voice/TTS configuration uses a split approach:
+- **Voice selection** is via `voice_config_id` FK in `agent_config_versions` table
+- **TTS tuning parameters** are stored in agent JSON (`workflow.tts` section)
 
-### Database Schema
+This allows:
+- **Referential integrity** - FK prevents referencing non-existent voices
+- **Flexible tuning** - Different agents can use same voice with different settings
+- **Centralized voice management** - Add new voices without changing agent configs
 
-Voice configurations are stored in two tables:
-- `voice_configs` - Base entity (tenant-scoped, named configurations)
-- `voice_config_versions` - Versioned parameters with rollback support
+### Architecture
 
-Agent configs reference voice configs via `voice_config_id` column in `agent_config_versions`.
+**Database (`agent_config_versions.voice_config_id` FK):**
+- Links agent to a voice from the `voice_configs` catalog
+- Set during database seeding or via admin tools
+- Provides referential integrity
 
-### Voice Config Version Fields
+**Agent JSON (`workflow.tts` section):**
+- TTS tuning parameters only (stability, similarity_boost, etc.)
+- `voice_name` field is used only during seeding (ignored at runtime)
+
+**System-Level Voice Catalog (`voice_configs` table):**
+- Maps friendly `voice_name` to actual ElevenLabs `voice_id`
+- Examples: `george` → `JBFqnCBsd6RMkjVDRZzb`, `rachel` → `21m00Tcm4TlvDq8ikWAM`
+- ConfigManager loads voice by ID (via FK)
+
+### Agent JSON Schema
+
+```json
+{
+  "workflow": {
+    "tts": {
+      "enabled": true,
+      "voice_name": "george",
+      "stability": 0.5,
+      "similarity_boost": 0.75,
+      "style": 0.0,
+      "use_speaker_boost": true,
+      "enable_ssml_parsing": false,
+      "pronunciation_dictionaries_enabled": true,
+      "pronunciation_dictionary_ids": []
+    },
+    "nodes": [...]
+  }
+}
+```
+
+> **Note**: The `voice_name` field in JSON is used only during database seeding to link the agent to the correct voice. At runtime, voice is loaded via `voice_config_id` FK in the database.
+
+### TTS Configuration Fields
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `voice_id` | string | ✅ Yes | - | ElevenLabs voice ID |
-| `model` | string | ❌ No | `"eleven_turbo_v2_5"` | TTS model |
+| `enabled` | boolean | ❌ No | `true` | Enable/disable TTS for this agent |
+| `voice_name` | string | ❌ Seed | - | Voice name for seeding (runtime uses DB FK) |
 | `stability` | decimal | ❌ No | `0.5` | Voice stability (0.0-1.0) |
 | `similarity_boost` | decimal | ❌ No | `0.75` | Similarity boost (0.0-1.0) |
 | `style` | decimal | ❌ No | `0.0` | Style exaggeration (0.0-1.0) |
@@ -1347,6 +1389,35 @@ Agent configs reference voice configs via `voice_config_id` column in `agent_con
 | `enable_ssml_parsing` | boolean | ❌ No | `false` | Parse SSML tags |
 | `pronunciation_dictionaries_enabled` | boolean | ❌ No | `true` | Use pronunciation dictionaries |
 | `pronunciation_dictionary_ids` | array | ❌ No | `[]` | Dictionary IDs from ElevenLabs |
+
+### Database Schema
+
+```sql
+-- System-level voice definitions (catalog)
+voice_configs:
+  - id (UUID): Primary key
+  - voice_name (unique): Friendly name (e.g., "george", "rachel")
+  - provider: TTS provider (e.g., "elevenlabs")
+  - voice_id: Actual provider voice ID (e.g., ElevenLabs voice ID)
+  - model: Default TTS model (e.g., "eleven_turbo_v2_5")
+  - description: Human-readable description
+
+-- Agent config versions link to voice via FK
+agent_config_versions:
+  - voice_config_id (FK): Reference to voice_configs.id
+```
+
+### Available Voices (Default Seed)
+
+| Voice Name | Provider | Voice ID | Description |
+|------------|----------|----------|-------------|
+| `george` | elevenlabs | JBFqnCBsd6RMkjVDRZzb | Warm resonance that instantly captivates listener |
+| `rachel` | elevenlabs | 21m00Tcm4TlvDq8ikWAM | Matter of fact, personable woman |
+| `jonathan` | elevenlabs | PIGsltMj3gFMR34aFDI3 | Jonathan Livingstone - A calm, trustworthy, confident voice |
+| `rajeev` | elevenlabs | bQlVotXwlI4K7o8gDQWq | Rajeev - CEO of Higgs Boson Inc |
+| `melissa` | elevenlabs | XJIwaspdTAhv8Z6ijr8x | Melissa - Senior Implementation Manager, Higgs Boson Inc |
+
+> **Note**: Administrators can add new voices to `voice_configs` table. They become immediately available for use in agent configurations.
 
 ### SSML Support
 
@@ -1363,22 +1434,54 @@ When `enable_ssml_parsing: true`, you can use SSML tags in prompts:
 1. Create dictionary in [ElevenLabs Dashboard](https://elevenlabs.io)
 2. Add pronunciation rules (alias or IPA)
 3. Copy Dictionary ID
-4. Add to voice config version in database
+4. Add to `pronunciation_dictionary_ids` array in agent JSON
 
 ### Configuration Management
 
 Voice configs are loaded via ConfigManager:
+- Agent's `voice_config_id` FK determines which voice to use
+- Voice config loaded by ID from `voice_configs` table
 - Redis caching for sub-5ms loads
-- Manual cache invalidation via `ConfigManager.invalidate_voice_config_cache()`
+- Manual cache invalidation via `ConfigManager.invalidate_voice_config_cache(voice_name)`
 
-### Default Voice Config
+### Changing Voice for an Agent
 
-When seeding the database, a default voice configuration is created per tenant:
-- **Name**: `default`
-- **Voice ID**: `JBFqnCBsd6RMkjVDRZzb` (George)
-- **Model**: `eleven_turbo_v2_5`
+To change an agent's voice:
+1. Look up the desired voice's ID from `voice_configs` table
+2. Update `agent_config_versions.voice_config_id` to the new voice ID
+3. Invalidate agent cache: `ConfigManager.invalidate_cache(tenant_id, agent_id)`
 
-**Note**: The `tts` section in agent JSON files is no longer used. Voice configuration must be set via the database.
+### Example Agent with TTS Configuration
+
+```json
+{
+  "agent": {
+    "id": "support_agent",
+    "name": "Customer Support Agent"
+  },
+  "workflow": {
+    "initial_node": "greeting",
+    "llm": {
+      "enabled": true,
+      "model_name": "gpt4.1",
+      "temperature": 1.0,
+      "max_tokens": 150
+    },
+    "tts": {
+      "enabled": true,
+      "voice_name": "george",
+      "stability": 0.5,
+      "similarity_boost": 0.75,
+      "style": 0.0,
+      "use_speaker_boost": true,
+      "enable_ssml_parsing": false,
+      "pronunciation_dictionaries_enabled": true,
+      "pronunciation_dictionary_ids": []
+    },
+    "nodes": [...]
+  }
+}
+```
 
 ---
 
@@ -2346,4 +2449,4 @@ ORDER BY category, display_order;
 
 ---
 
-**Last Updated**: 2025-11-22 (Removed semantic conditions - use intent-based transitions; Added intent-based transitions with LLM batch classification; Removed agents/ directory - all configs now database-backed via scripts/seed_data/; LLM config in workflow.llm section; llm_models table for model catalog)
+**Last Updated**: 2025-11-23 (Voice selection via voice_config_id FK in database; TTS tuning params remain in JSON; voice_name in JSON only for seeding)

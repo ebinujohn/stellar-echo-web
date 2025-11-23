@@ -29,6 +29,8 @@ export type UpdateAgentInput = z.infer<typeof updateAgentSchema>;
 
 /**
  * Schema for creating a new config version
+ * Note: voiceConfigId is a FK to voice_configs table (voice selection)
+ * TTS tuning params are stored in configJson.workflow.tts
  */
 export const createVersionSchema = z.object({
   configJson: z.record(z.string(), z.any()), // Full workflow config validation done separately

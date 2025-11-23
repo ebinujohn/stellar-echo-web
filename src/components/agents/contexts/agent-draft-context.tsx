@@ -12,6 +12,20 @@ import {
 import type { WorkflowConfig } from '@/lib/validations/agents';
 
 /**
+ * Draft state for TTS tuning parameters (configured per-agent)
+ */
+export interface TtsDraft {
+  model: string;
+  stability: number;
+  similarityBoost: number;
+  style: number;
+  useSpeakerBoost: boolean;
+  enableSsmlParsing: boolean;
+  pronunciationDictionariesEnabled: boolean;
+  pronunciationDictionaryIds: string;
+}
+
+/**
  * Draft state for the Settings form
  */
 export interface SettingsDraft {
@@ -22,6 +36,7 @@ export interface SettingsDraft {
   llmMaxTokens: number;
   llmServiceTier: string;
   ttsEnabled: boolean;
+  tts: TtsDraft; // TTS tuning parameters
   ragEnabled: boolean;
   ragConfigId: string | null;
   voiceConfigId: string | null;

@@ -206,6 +206,8 @@ export async function getAgentVersion(versionId: string, tenantId: string) {
 
 /**
  * Create a new config version for an agent
+ * Note: voiceConfigId is a FK to voice_configs table
+ * TTS tuning params are in configJson.workflow.tts
  */
 export async function createAgentVersion(
   agentId: string,

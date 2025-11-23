@@ -24,7 +24,9 @@ import { useVoiceConfigsDropdown, useVoiceConfig } from '@/lib/hooks/use-voice-c
 import { useAgentPhoneConfigs } from '@/lib/hooks/use-phone-configs';
 import { useLlmModelsDropdown } from '@/lib/hooks/use-llm-configs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useAgentDraft, SettingsDraft } from './contexts/agent-draft-context';
+import { Slider } from '@/components/ui/slider';
+import { ttsModels } from '@/lib/validations/voice-configs';
+import { useAgentDraft, SettingsDraft, TtsDraft } from './contexts/agent-draft-context';
 
 // Safe hook to get draft context (returns null if not in provider)
 function useOptionalAgentDraft() {
@@ -76,10 +78,23 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
     getInitialValue(draftContext?.settingsDraft?.ragEnabled, initialRagEnabled ?? false)
   );
 
-  // Voice Config Selection
+  // Voice Config Selection - initialize from workflow.tts.voice_name if no ID provided
+  const workflowTtsVoiceName = currentConfig.workflow?.tts?.voice_name;
   const [selectedVoiceConfigId, setSelectedVoiceConfigId] = useState(() =>
     getInitialValue(draftContext?.settingsDraft?.voiceConfigId ?? undefined, initialVoiceConfigId || '')
   );
+
+  // Look up voice config ID from voice_name when voice configs are loaded
+  useEffect(() => {
+    if (voiceConfigs && workflowTtsVoiceName && !selectedVoiceConfigId) {
+      const matchingVoice = voiceConfigs.find(
+        (v) => v.name.toLowerCase() === workflowTtsVoiceName.toLowerCase()
+      );
+      if (matchingVoice) {
+        setSelectedVoiceConfigId(matchingVoice.id);
+      }
+    }
+  }, [voiceConfigs, workflowTtsVoiceName, selectedVoiceConfigId]);
 
   // Fetch selected RAG config details for preview
   const { data: selectedRagConfig } = useRagConfig(selectedRagConfigId || '');
@@ -105,9 +120,47 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
     getInitialValue(draftContext?.settingsDraft?.llmServiceTier, workflowLlm?.service_tier || 'auto')
   );
 
-  // TTS Settings (only enabled flag - voice config is selected from shared configs)
+  // TTS Settings
   const [ttsEnabled, setTtsEnabled] = useState(() =>
     getInitialValue(draftContext?.settingsDraft?.ttsEnabled, currentConfig.tts?.enabled ?? true)
+  );
+
+  // TTS Tuning Parameters (stored in workflow.tts per AGENT_JSON_SCHEMA.md)
+  const workflowTts = currentConfig.workflow?.tts;
+  const defaultTts: TtsDraft = {
+    model: 'eleven_turbo_v2_5',
+    stability: 0.5,
+    similarityBoost: 0.75,
+    style: 0.0,
+    useSpeakerBoost: true,
+    enableSsmlParsing: false,
+    pronunciationDictionariesEnabled: true,
+    pronunciationDictionaryIds: '',
+  };
+
+  const [ttsModel, setTtsModel] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.tts?.model, workflowTts?.model ?? defaultTts.model)
+  );
+  const [ttsStability, setTtsStability] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.tts?.stability, workflowTts?.stability ?? defaultTts.stability)
+  );
+  const [ttsSimilarityBoost, setTtsSimilarityBoost] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.tts?.similarityBoost, workflowTts?.similarity_boost ?? defaultTts.similarityBoost)
+  );
+  const [ttsStyle, setTtsStyle] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.tts?.style, workflowTts?.style ?? defaultTts.style)
+  );
+  const [ttsUseSpeakerBoost, setTtsUseSpeakerBoost] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.tts?.useSpeakerBoost, workflowTts?.use_speaker_boost ?? defaultTts.useSpeakerBoost)
+  );
+  const [ttsEnableSsmlParsing, setTtsEnableSsmlParsing] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.tts?.enableSsmlParsing, workflowTts?.enable_ssml_parsing ?? defaultTts.enableSsmlParsing)
+  );
+  const [ttsPronunciationEnabled, setTtsPronunciationEnabled] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.tts?.pronunciationDictionariesEnabled, workflowTts?.pronunciation_dictionaries_enabled ?? defaultTts.pronunciationDictionariesEnabled)
+  );
+  const [ttsPronunciationDictionaryIds, setTtsPronunciationDictionaryIds] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.tts?.pronunciationDictionaryIds, workflowTts?.pronunciation_dictionary_ids?.join(', ') ?? defaultTts.pronunciationDictionaryIds)
   );
 
   // Workflow Settings
@@ -132,13 +185,25 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
     llmMaxTokens,
     llmServiceTier,
     ttsEnabled,
+    tts: {
+      model: ttsModel,
+      stability: ttsStability,
+      similarityBoost: ttsSimilarityBoost,
+      style: ttsStyle,
+      useSpeakerBoost: ttsUseSpeakerBoost,
+      enableSsmlParsing: ttsEnableSsmlParsing,
+      pronunciationDictionariesEnabled: ttsPronunciationEnabled,
+      pronunciationDictionaryIds: ttsPronunciationDictionaryIds,
+    },
     ragEnabled: ragEnabledState,
     ragConfigId: selectedRagConfigId || null,
     voiceConfigId: selectedVoiceConfigId || null,
     autoHangupEnabled,
   }), [
     globalPrompt, llmEnabled, llmModel, llmTemperature, llmMaxTokens,
-    llmServiceTier, ttsEnabled, ragEnabledState, selectedRagConfigId,
+    llmServiceTier, ttsEnabled, ttsModel, ttsStability, ttsSimilarityBoost,
+    ttsStyle, ttsUseSpeakerBoost, ttsEnableSsmlParsing, ttsPronunciationEnabled,
+    ttsPronunciationDictionaryIds, ragEnabledState, selectedRagConfigId,
     selectedVoiceConfigId, autoHangupEnabled
   ]);
 
@@ -152,6 +217,16 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
       llmMaxTokens: workflowLlm?.max_tokens ?? 150,
       llmServiceTier: workflowLlm?.service_tier || 'auto',
       ttsEnabled: currentConfig.tts?.enabled ?? true,
+      tts: {
+        model: workflowTts?.model ?? defaultTts.model,
+        stability: workflowTts?.stability ?? defaultTts.stability,
+        similarityBoost: workflowTts?.similarity_boost ?? defaultTts.similarityBoost,
+        style: workflowTts?.style ?? defaultTts.style,
+        useSpeakerBoost: workflowTts?.use_speaker_boost ?? defaultTts.useSpeakerBoost,
+        enableSsmlParsing: workflowTts?.enable_ssml_parsing ?? defaultTts.enableSsmlParsing,
+        pronunciationDictionariesEnabled: workflowTts?.pronunciation_dictionaries_enabled ?? defaultTts.pronunciationDictionariesEnabled,
+        pronunciationDictionaryIds: workflowTts?.pronunciation_dictionary_ids?.join(', ') ?? defaultTts.pronunciationDictionaryIds,
+      },
       ragEnabled: initialRagEnabled ?? false,
       ragConfigId: initialRagConfigId || null,
       voiceConfigId: initialVoiceConfigId || null,
@@ -194,9 +269,21 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
       // Voice config - only use shared config reference
       const finalVoiceConfigId = selectedVoiceConfigId || null;
 
-      // TTS config - minimal settings, voice details come from shared config
+      // TTS config - full settings stored in workflow.tts per AGENT_JSON_SCHEMA.md
       const ttsConfig = {
         enabled: ttsEnabled,
+        voice_name: selectedVoiceConfig?.name || undefined, // Reference to voice catalog
+        model: ttsModel,
+        stability: ttsStability,
+        similarity_boost: ttsSimilarityBoost,
+        style: ttsStyle,
+        use_speaker_boost: ttsUseSpeakerBoost,
+        enable_ssml_parsing: ttsEnableSsmlParsing,
+        pronunciation_dictionaries_enabled: ttsPronunciationEnabled,
+        pronunciation_dictionary_ids: ttsPronunciationDictionaryIds
+          .split(',')
+          .map((id: string) => id.trim())
+          .filter(Boolean),
       };
 
       // Build LLM config for workflow.llm section
@@ -209,15 +296,16 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
       };
 
       // Merge the form data with the existing config
-      // LLM config goes in workflow.llm per AGENT_JSON_SCHEMA.md
+      // LLM config goes in workflow.llm, TTS config goes in workflow.tts per AGENT_JSON_SCHEMA.md
       const updatedConfig = {
         ...currentConfig,
         workflow: {
           ...currentConfig.workflow,
           global_prompt: globalPrompt || undefined,
           llm: llmConfig,
+          tts: ttsConfig, // TTS settings stored in workflow.tts
         },
-        tts: ttsConfig,
+        tts: { enabled: ttsEnabled }, // Legacy tts field for backwards compatibility
         // STT settings preserved from existing config (not editable here)
         rag: undefined, // RAG settings come from shared config
         auto_hangup: {
@@ -378,11 +466,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
             Voice/TTS Configuration
           </CardTitle>
           <CardDescription>
-            Select a voice configuration for this agent. Manage configurations in{' '}
-            <Link href="/settings/voice" className="underline">
-              Settings
-            </Link>
-            .
+            Select a voice and configure TTS settings for this agent
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -401,15 +485,16 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
             <>
               <Separator />
 
+              {/* Voice Selection */}
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="voice-config-select">Voice Configuration</Label>
+                  <Label htmlFor="voice-config-select">Voice</Label>
                   <Select
                     value={selectedVoiceConfigId}
                     onValueChange={setSelectedVoiceConfigId}
                   >
                     <SelectTrigger id="voice-config-select">
-                      <SelectValue placeholder="Select a voice configuration" />
+                      <SelectValue placeholder="Select a voice" />
                     </SelectTrigger>
                     <SelectContent>
                       {voiceConfigs?.map((config) => (
@@ -429,54 +514,154 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
                   <div className="flex items-center gap-2">
                     <Link href="/settings/voice" target="_blank">
                       <Button type="button" variant="link" size="sm" className="h-auto p-0">
-                        Manage Voice Configurations
+                        Manage Voice Catalog
                         <ExternalLink className="ml-1 h-3 w-3" />
                       </Button>
                     </Link>
                   </div>
                 </div>
 
-                {/* Show selected config preview */}
-                {selectedVoiceConfig?.activeVersion && (
-                  <div className="rounded-lg border bg-muted/50 p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">{selectedVoiceConfig.name}</span>
-                      <Badge variant="secondary">v{selectedVoiceConfig.activeVersion.version}</Badge>
-                    </div>
-                    <div className="grid gap-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Model:</span>
-                        <span>{selectedVoiceConfig.activeVersion.model}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Stability:</span>
-                        <span>{(parseFloat(selectedVoiceConfig.activeVersion.stability) * 100).toFixed(0)}%</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Similarity:</span>
-                        <span>{(parseFloat(selectedVoiceConfig.activeVersion.similarityBoost) * 100).toFixed(0)}%</span>
-                      </div>
-                      {selectedVoiceConfig.activeVersion.enableSsmlParsing && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">SSML:</span>
-                          <Badge variant="outline" className="text-xs">Enabled</Badge>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
                 {!voiceConfigs?.length && (
                   <Alert>
                     <AlertTriangle className="h-4 w-4" />
                     <AlertDescription>
-                      No Voice configurations available.{' '}
+                      No voices available.{' '}
                       <Link href="/settings/voice/new" className="underline">
-                        Create one
+                        Add one
                       </Link>{' '}
                       to get started.
                     </AlertDescription>
                   </Alert>
+                )}
+
+                {/* TTS Model */}
+                <div className="space-y-2">
+                  <Label htmlFor="tts-model">TTS Model</Label>
+                  <Select value={ttsModel} onValueChange={setTtsModel}>
+                    <SelectTrigger id="tts-model">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ttsModels.map((m) => (
+                        <SelectItem key={m.value} value={m.value}>
+                          <div className="flex flex-col">
+                            <span>{m.label}</span>
+                            <span className="text-xs text-muted-foreground">{m.description}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Voice Quality Settings */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium">Voice Quality</h4>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Stability</Label>
+                    <span className="text-sm text-muted-foreground">{(ttsStability * 100).toFixed(0)}%</span>
+                  </div>
+                  <Slider
+                    value={[ttsStability]}
+                    onValueChange={([value]) => setTtsStability(value)}
+                    min={0}
+                    max={1}
+                    step={0.05}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Higher values produce more consistent speech, lower values add expressiveness
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Similarity Boost</Label>
+                    <span className="text-sm text-muted-foreground">{(ttsSimilarityBoost * 100).toFixed(0)}%</span>
+                  </div>
+                  <Slider
+                    value={[ttsSimilarityBoost]}
+                    onValueChange={([value]) => setTtsSimilarityBoost(value)}
+                    min={0}
+                    max={1}
+                    step={0.05}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Higher values make the voice sound more like the original
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Style</Label>
+                    <span className="text-sm text-muted-foreground">{(ttsStyle * 100).toFixed(0)}%</span>
+                  </div>
+                  <Slider
+                    value={[ttsStyle]}
+                    onValueChange={([value]) => setTtsStyle(value)}
+                    min={0}
+                    max={1}
+                    step={0.05}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Amplifies the style of the original speaker (higher can reduce stability)
+                  </p>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Voice Features */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium">Features</h4>
+
+                <div className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-0.5">
+                    <Label>Speaker Boost</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Enhance speaker clarity and audio quality
+                    </p>
+                  </div>
+                  <Switch checked={ttsUseSpeakerBoost} onCheckedChange={setTtsUseSpeakerBoost} />
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-0.5">
+                    <Label>SSML Parsing</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Parse SSML tags in text for advanced speech control
+                    </p>
+                  </div>
+                  <Switch checked={ttsEnableSsmlParsing} onCheckedChange={setTtsEnableSsmlParsing} />
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-0.5">
+                    <Label>Pronunciation Dictionaries</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Use custom pronunciation rules for specific terms
+                    </p>
+                  </div>
+                  <Switch checked={ttsPronunciationEnabled} onCheckedChange={setTtsPronunciationEnabled} />
+                </div>
+
+                {ttsPronunciationEnabled && (
+                  <div className="space-y-2">
+                    <Label htmlFor="pronunciation-ids">Dictionary IDs</Label>
+                    <Input
+                      id="pronunciation-ids"
+                      placeholder="dict_abc123, dict_xyz789"
+                      value={ttsPronunciationDictionaryIds}
+                      onChange={(e) => setTtsPronunciationDictionaryIds(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Comma-separated ElevenLabs dictionary IDs
+                    </p>
+                  </div>
                 )}
               </div>
             </>

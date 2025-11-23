@@ -57,7 +57,7 @@ interface AgentVersion {
   globalPrompt: string | null;
   ragEnabled: boolean;
   ragConfigId: string | null;
-  voiceConfigId: string | null;
+  // voiceConfigId stored in configJson.workflow.tts
   isActive: boolean;
   createdBy: string | null;
   createdAt: Date;
@@ -275,7 +275,7 @@ export function VersionsTab({ agentId, activeVersionId }: VersionsTabProps) {
                     globalPrompt: selectedVersion.globalPrompt || '(not set)',
                     ragEnabled: selectedVersion.ragEnabled,
                     ragConfigId: selectedVersion.ragConfigId || '(not set)',
-                    voiceConfigId: selectedVersion.voiceConfigId || '(not set)',
+                    // voiceConfigId is in configJson.workflow.tts
                   }}
                   expanded={expandedSections.has('version_settings')}
                   onToggle={() => toggleSection('version_settings')}

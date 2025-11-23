@@ -61,8 +61,8 @@ export function VoiceConfigList() {
             </Button>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Voice Configurations</h1>
-            <p className="text-muted-foreground">Manage voice and TTS settings</p>
+            <h1 className="text-2xl font-bold tracking-tight">Voice Catalog</h1>
+            <p className="text-muted-foreground">Manage available voices for agents</p>
           </div>
         </div>
         <Card className="border-destructive">
@@ -86,14 +86,14 @@ export function VoiceConfigList() {
             </Button>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Voice Configurations</h1>
-            <p className="text-muted-foreground">Manage voice and TTS settings</p>
+            <h1 className="text-2xl font-bold tracking-tight">Voice Catalog</h1>
+            <p className="text-muted-foreground">Manage available voices for agents</p>
           </div>
         </div>
         <Link href="/settings/voice/new">
           <Button>
             <Plus className="mr-2 h-4 w-4" />
-            New Configuration
+            Add Voice
           </Button>
         </Link>
       </div>
@@ -166,17 +166,10 @@ export function VoiceConfigList() {
               <CardContent>
                 <div className="flex flex-wrap gap-2">
                   {config.activeVersion && (
-                    <>
-                      <Badge variant="secondary">{config.activeVersion.model}</Badge>
-                      <Badge variant="outline">
-                        Stability: {parseFloat(config.activeVersion.stability) * 100}%
-                      </Badge>
-                      {config.activeVersion.enableSsmlParsing && (
-                        <Badge variant="outline">SSML</Badge>
-                      )}
-                    </>
+                    <Badge variant="secondary" className="font-mono text-xs">
+                      {config.activeVersion.voiceId.substring(0, 16)}...
+                    </Badge>
                   )}
-                  <Badge variant="outline">{config.versionCount} version(s)</Badge>
                 </div>
               </CardContent>
             </Card>
@@ -186,14 +179,14 @@ export function VoiceConfigList() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Volume2 className="h-12 w-12 text-muted-foreground/50" />
-            <h3 className="mt-4 text-lg font-medium">No Voice configurations</h3>
+            <h3 className="mt-4 text-lg font-medium">No voices in catalog</h3>
             <p className="mt-2 text-sm text-muted-foreground">
-              Create your first Voice configuration to enable text-to-speech for agents.
+              Add a voice to the catalog to enable text-to-speech for agents.
             </p>
             <Link href="/settings/voice/new" className="mt-4">
               <Button>
                 <Plus className="mr-2 h-4 w-4" />
-                Create Configuration
+                Add Voice
               </Button>
             </Link>
           </CardContent>
@@ -203,10 +196,10 @@ export function VoiceConfigList() {
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Voice Configuration</AlertDialogTitle>
+            <AlertDialogTitle>Delete Voice</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this Voice configuration? This action cannot be
-              undone. Agents using this configuration will need to be updated.
+              Are you sure you want to delete this voice? This action cannot be
+              undone. Agents using this voice will need to be updated.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

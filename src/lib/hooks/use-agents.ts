@@ -31,7 +31,7 @@ interface AgentDetail extends Omit<Agent, 'activeVersion'> {
     globalPrompt: string | null;
     ragEnabled: boolean;
     ragConfigId: string | null;
-    voiceConfigId: string | null;
+    // voiceConfigId stored in configJson.workflow.tts
     createdBy: string | null;
     createdAt: Date;
     notes: string | null;
@@ -49,7 +49,7 @@ interface AgentVersion {
   globalPrompt: string | null;
   ragEnabled: boolean;
   ragConfigId: string | null;
-  voiceConfigId: string | null;
+  // voiceConfigId stored in configJson.workflow.tts
   isActive: boolean;
   createdBy: string | null;
   createdAt: Date;

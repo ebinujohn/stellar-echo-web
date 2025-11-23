@@ -1,162 +1,96 @@
 import { db } from '@/lib/db';
-import { voiceConfigs, voiceConfigVersions } from '@/lib/db/schema/voice-configs';
-import { eq, and, desc, count, inArray } from 'drizzle-orm';
+import { voiceConfigs } from '@/lib/db/schema/voice-configs';
+import { eq, desc } from 'drizzle-orm';
 
 /**
- * Get all Voice configs for a tenant (optimized to avoid N+1 queries)
+ * Get all Voice configs (system-level, no tenant filtering)
+ * Voice configs are a shared catalog available to all tenants
  */
-export async function getVoiceConfigs(tenantId: string) {
+export async function getVoiceConfigs(_tenantId: string) {
+  // Note: tenantId parameter kept for API compatibility but not used
+  // Voice configs are system-level (shared across all tenants)
   const configs = await db.query.voiceConfigs.findMany({
-    where: and(eq(voiceConfigs.tenantId, tenantId), eq(voiceConfigs.isActive, true)),
+    where: eq(voiceConfigs.isActive, true),
     orderBy: [desc(voiceConfigs.createdAt)],
   });
 
-  if (configs.length === 0) {
-    return [];
-  }
-
-  const configIds = configs.map((c) => c.id);
-
-  // Batch fetch all active versions in one query
-  const activeVersions = await db.query.voiceConfigVersions.findMany({
-    where: and(
-      inArray(voiceConfigVersions.voiceConfigId, configIds),
-      eq(voiceConfigVersions.isActive, true)
-    ),
-  });
-
-  // Batch fetch version counts in one query
-  const versionCounts = await db
-    .select({
-      voiceConfigId: voiceConfigVersions.voiceConfigId,
-      count: count(),
-    })
-    .from(voiceConfigVersions)
-    .where(inArray(voiceConfigVersions.voiceConfigId, configIds))
-    .groupBy(voiceConfigVersions.voiceConfigId);
-
-  // Create lookup maps
-  const activeVersionMap = new Map(activeVersions.map((v) => [v.voiceConfigId, v]));
-  const versionCountMap = new Map(versionCounts.map((v) => [v.voiceConfigId, Number(v.count)]));
-
-  // Combine data
+  // Return with null activeVersion for backward compatibility with UI
   return configs.map((config) => ({
     ...config,
-    activeVersion: activeVersionMap.get(config.id) || null,
-    versionCount: versionCountMap.get(config.id) || 0,
+    activeVersion: null,
+    versionCount: 0,
   }));
 }
 
 /**
- * Get a single Voice config with its active version
+ * Get a single Voice config by ID
  */
-export async function getVoiceConfigDetail(voiceConfigId: string, tenantId: string) {
+export async function getVoiceConfigDetail(voiceConfigId: string, _tenantId: string) {
+  // Note: tenantId parameter kept for API compatibility but not used
   const config = await db.query.voiceConfigs.findFirst({
-    where: and(eq(voiceConfigs.id, voiceConfigId), eq(voiceConfigs.tenantId, tenantId)),
+    where: eq(voiceConfigs.id, voiceConfigId),
   });
 
   if (!config) {
     return null;
   }
 
-  // Get active version
-  const activeVersion = await db.query.voiceConfigVersions.findFirst({
-    where: and(
-      eq(voiceConfigVersions.voiceConfigId, voiceConfigId),
-      eq(voiceConfigVersions.isActive, true)
-    ),
-  });
-
-  // Get version count
-  const versionCount = await db
-    .select({ count: count() })
-    .from(voiceConfigVersions)
-    .where(eq(voiceConfigVersions.voiceConfigId, voiceConfigId))
-    .then((result) => result[0]?.count || 0);
-
   return {
     ...config,
-    activeVersion: activeVersion || null,
-    versionCount: Number(versionCount),
+    activeVersion: null,
+    versionCount: 0,
   };
 }
 
 /**
- * Create a new Voice config with initial version
+ * Create a new Voice config (simple catalog entry)
+ * Per AGENT_JSON_SCHEMA.md: voice configs are just identity (name, voiceId, description)
+ * TTS tuning parameters are configured at agent level in workflow.tts
  */
 export async function createVoiceConfig(
   data: {
     name: string;
     description?: string;
     voiceId: string;
-    model?: string;
-    stability?: string;
-    similarityBoost?: string;
-    style?: string;
-    useSpeakerBoost?: boolean;
-    enableSsmlParsing?: boolean;
-    pronunciationDictionariesEnabled?: boolean;
-    pronunciationDictionaryIds?: string[];
   },
-  tenantId: string,
-  userId: string
+  _tenantId: string,
+  _userId: string
 ) {
-  return await db.transaction(async (tx) => {
-    // Create the Voice config
-    const [newConfig] = await tx
-      .insert(voiceConfigs)
-      .values({
-        name: data.name,
-        description: data.description || null,
-        tenantId,
-      })
-      .returning();
+  // Note: tenantId and userId parameters kept for API compatibility but not used
+  const [newConfig] = await db
+    .insert(voiceConfigs)
+    .values({
+      name: data.name,
+      description: data.description || null,
+      voiceId: data.voiceId,
+      provider: 'elevenlabs', // Default provider
+      model: 'eleven_turbo_v2_5', // Default model
+    })
+    .returning();
 
-    // Create the initial version (version 1, active by default)
-    const [newVersion] = await tx
-      .insert(voiceConfigVersions)
-      .values({
-        voiceConfigId: newConfig.id,
-        tenantId,
-        version: 1,
-        voiceId: data.voiceId,
-        model: data.model || 'eleven_turbo_v2_5',
-        stability: data.stability || '0.5',
-        similarityBoost: data.similarityBoost || '0.75',
-        style: data.style || '0.0',
-        useSpeakerBoost: data.useSpeakerBoost ?? true,
-        enableSsmlParsing: data.enableSsmlParsing ?? false,
-        pronunciationDictionariesEnabled: data.pronunciationDictionariesEnabled ?? true,
-        pronunciationDictionaryIds: data.pronunciationDictionaryIds || [],
-        isActive: true,
-        createdBy: userId,
-        notes: 'Initial version',
-      })
-      .returning();
-
-    return {
-      ...newConfig,
-      activeVersion: newVersion,
-      versionCount: 1,
-    };
-  });
+  return {
+    ...newConfig,
+    activeVersion: null,
+    versionCount: 0,
+  };
 }
 
 /**
- * Update Voice config metadata (name, description)
+ * Update Voice config (name, description only)
  */
 export async function updateVoiceConfig(
   voiceConfigId: string,
   data: { name?: string; description?: string },
-  tenantId: string
+  _tenantId: string
 ) {
   const [updatedConfig] = await db
     .update(voiceConfigs)
     .set({
-      ...data,
+      ...(data.name && { name: data.name }),
+      ...(data.description !== undefined && { description: data.description }),
       updatedAt: new Date(),
     })
-    .where(and(eq(voiceConfigs.id, voiceConfigId), eq(voiceConfigs.tenantId, tenantId)))
+    .where(eq(voiceConfigs.id, voiceConfigId))
     .returning();
 
   return updatedConfig;
@@ -165,141 +99,25 @@ export async function updateVoiceConfig(
 /**
  * Soft delete a Voice config (set isActive = false)
  */
-export async function deleteVoiceConfig(voiceConfigId: string, tenantId: string) {
+export async function deleteVoiceConfig(voiceConfigId: string, _tenantId: string) {
   const [deletedConfig] = await db
     .update(voiceConfigs)
     .set({
       isActive: false,
       updatedAt: new Date(),
     })
-    .where(and(eq(voiceConfigs.id, voiceConfigId), eq(voiceConfigs.tenantId, tenantId)))
+    .where(eq(voiceConfigs.id, voiceConfigId))
     .returning();
 
   return deletedConfig;
 }
 
 /**
- * Get all versions for a Voice config
- */
-export async function getVoiceConfigVersions(voiceConfigId: string, tenantId: string) {
-  const versions = await db.query.voiceConfigVersions.findMany({
-    where: and(
-      eq(voiceConfigVersions.voiceConfigId, voiceConfigId),
-      eq(voiceConfigVersions.tenantId, tenantId)
-    ),
-    orderBy: [desc(voiceConfigVersions.version)],
-  });
-
-  return versions;
-}
-
-/**
- * Get a specific version
- */
-export async function getVoiceConfigVersion(versionId: string, tenantId: string) {
-  const version = await db.query.voiceConfigVersions.findFirst({
-    where: and(
-      eq(voiceConfigVersions.id, versionId),
-      eq(voiceConfigVersions.tenantId, tenantId)
-    ),
-  });
-
-  return version;
-}
-
-/**
- * Create a new version for a Voice config
- */
-export async function createVoiceConfigVersion(
-  voiceConfigId: string,
-  data: {
-    voiceId?: string;
-    model?: string;
-    stability?: string;
-    similarityBoost?: string;
-    style?: string;
-    useSpeakerBoost?: boolean;
-    enableSsmlParsing?: boolean;
-    pronunciationDictionariesEnabled?: boolean;
-    pronunciationDictionaryIds?: string[];
-    notes?: string;
-  },
-  tenantId: string,
-  userId: string
-) {
-  // Get the highest version number
-  const latestVersion = await db.query.voiceConfigVersions.findFirst({
-    where: eq(voiceConfigVersions.voiceConfigId, voiceConfigId),
-    orderBy: [desc(voiceConfigVersions.version)],
-  });
-
-  const newVersionNumber = (latestVersion?.version || 0) + 1;
-
-  const [newVersion] = await db
-    .insert(voiceConfigVersions)
-    .values({
-      voiceConfigId,
-      tenantId,
-      version: newVersionNumber,
-      voiceId: data.voiceId || latestVersion?.voiceId || '',
-      model: data.model || latestVersion?.model || 'eleven_turbo_v2_5',
-      stability: data.stability || latestVersion?.stability || '0.5',
-      similarityBoost: data.similarityBoost || latestVersion?.similarityBoost || '0.75',
-      style: data.style || latestVersion?.style || '0.0',
-      useSpeakerBoost: data.useSpeakerBoost ?? latestVersion?.useSpeakerBoost ?? true,
-      enableSsmlParsing: data.enableSsmlParsing ?? latestVersion?.enableSsmlParsing ?? false,
-      pronunciationDictionariesEnabled:
-        data.pronunciationDictionariesEnabled ??
-        latestVersion?.pronunciationDictionariesEnabled ??
-        true,
-      pronunciationDictionaryIds:
-        data.pronunciationDictionaryIds || latestVersion?.pronunciationDictionaryIds || [],
-      isActive: false,
-      createdBy: userId,
-      notes: data.notes || null,
-    })
-    .returning();
-
-  return newVersion;
-}
-
-/**
- * Activate a specific Voice config version
- */
-export async function activateVoiceConfigVersion(
-  versionId: string,
-  voiceConfigId: string,
-  tenantId: string
-) {
-  return await db.transaction(async (tx) => {
-    // Deactivate all versions for this config
-    await tx
-      .update(voiceConfigVersions)
-      .set({ isActive: false })
-      .where(eq(voiceConfigVersions.voiceConfigId, voiceConfigId));
-
-    // Activate the specified version
-    const [activatedVersion] = await tx
-      .update(voiceConfigVersions)
-      .set({ isActive: true })
-      .where(
-        and(
-          eq(voiceConfigVersions.id, versionId),
-          eq(voiceConfigVersions.tenantId, tenantId)
-        )
-      )
-      .returning();
-
-    return activatedVersion;
-  });
-}
-
-/**
  * Get Voice configs for dropdown (simplified list)
  */
-export async function getVoiceConfigsForDropdown(tenantId: string) {
+export async function getVoiceConfigsForDropdown(_tenantId: string) {
   const configs = await db.query.voiceConfigs.findMany({
-    where: and(eq(voiceConfigs.tenantId, tenantId), eq(voiceConfigs.isActive, true)),
+    where: eq(voiceConfigs.isActive, true),
     orderBy: [voiceConfigs.name],
   });
 
@@ -308,4 +126,43 @@ export async function getVoiceConfigsForDropdown(tenantId: string) {
     name: config.name,
     description: config.description,
   }));
+}
+
+// Legacy functions kept for backward compatibility (no-op implementations)
+
+/**
+ * Get versions - returns empty array (no versioning)
+ */
+export async function getVoiceConfigVersions(_voiceConfigId: string, _tenantId: string) {
+  return [];
+}
+
+/**
+ * Get version - returns null (no versioning)
+ */
+export async function getVoiceConfigVersion(_versionId: string, _tenantId: string) {
+  return null;
+}
+
+/**
+ * Create version - no-op (no versioning)
+ */
+export async function createVoiceConfigVersion(
+  _voiceConfigId: string,
+  _data: any,
+  _tenantId: string,
+  _userId: string
+) {
+  return null;
+}
+
+/**
+ * Activate version - no-op (no versioning)
+ */
+export async function activateVoiceConfigVersion(
+  _versionId: string,
+  _voiceConfigId: string,
+  _tenantId: string
+) {
+  return null;
 }

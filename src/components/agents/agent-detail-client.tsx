@@ -167,6 +167,8 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
   );
 
   // Handler for settings form - passes all settings explicitly
+  // voiceConfigId is FK to voice_configs table (voice selection)
+  // TTS tuning params are in configJson.workflow.tts
   const handleSettingsSave = async (
     config: any,
     ragEnabled?: boolean,
@@ -227,7 +229,8 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
     );
   };
 
-  // Handler for workflow editor - preserves existing settings (globalPrompt, rag, voice configs)
+  // Handler for workflow editor - preserves existing settings (globalPrompt, rag configs, voice config)
+  // voiceConfigId is FK to voice_configs table (voice selection)
   const handleWorkflowSave = async (config: any) => {
     try {
       // Preserve existing settings from active version
@@ -249,6 +252,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
   };
 
   // Combined save handler - saves ALL tabs with changes in a single version
+  // voiceConfigId is FK to voice_configs table (voice selection)
   const handleCombinedSave = async () => {
     if (!agent?.activeVersion) return;
 
@@ -822,7 +826,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
               globalPrompt={agent.activeVersion.globalPrompt}
               ragEnabled={agent.activeVersion.ragEnabled}
               ragConfigId={agent.activeVersion.ragConfigId}
-              voiceConfigId={agent.activeVersion.voiceConfigId}
+              voiceConfigId={null} // Voice selection stored in configJson.workflow.tts
               onSave={handleSettingsSave}
             />
           ) : (

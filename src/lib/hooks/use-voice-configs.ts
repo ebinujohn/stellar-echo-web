@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type {
   CreateVoiceConfigInput,
+  CreateVoiceConfigSimplifiedInput,
   UpdateVoiceConfigInput,
   CreateVoiceConfigVersionInput,
 } from '@/lib/validations/voice-configs';
@@ -129,7 +130,8 @@ export function useCreateVoiceConfig() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: CreateVoiceConfigInput) => {
+    // Accept simplified input (name, voiceId, description only) or full input
+    mutationFn: async (data: CreateVoiceConfigSimplifiedInput | CreateVoiceConfigInput) => {
       const response = await fetch('/api/voice-configs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
