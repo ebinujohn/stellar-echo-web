@@ -697,12 +697,8 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
         </div>
 
         {/* Right Sidebar: Properties Panel */}
-        <div
-          className={`transition-all duration-200 border-l bg-card/30 overflow-hidden ${
-            rightPanelOpen ? 'w-[360px]' : 'w-0'
-          }`}
-        >
-          {rightPanelOpen && (
+        {rightPanelOpen ? (
+          <div className="w-[360px] border-l bg-card/30 overflow-hidden transition-all duration-200">
             <PropertiesPanel
               selectedNode={selectedNode}
               allNodes={nodes}
@@ -710,19 +706,19 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
               onUpdateNode={handleUpdateNode}
               onDeleteNode={handleDeleteNode}
             />
-          )}
-        </div>
-
-        {/* Toggle button for right panel when closed */}
-        {!rightPanelOpen && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute right-2 top-2 h-8 w-8"
-            onClick={() => setRightPanelOpen(true)}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
+          </div>
+        ) : (
+          <div className="w-10 border-l bg-card/30 flex items-start pt-2 justify-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setRightPanelOpen(true)}
+              title="Open Properties Panel"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+          </div>
         )}
       </div>
 

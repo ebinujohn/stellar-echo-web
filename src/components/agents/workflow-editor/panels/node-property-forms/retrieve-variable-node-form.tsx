@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select';
 import { Plus, Trash2 } from 'lucide-react';
 import type { WorkflowNodeData } from '../../utils/json-converter';
+import { TransitionConditionEditor } from './transition-condition-editor';
 
 interface TargetNodeOption {
   id: string;
@@ -273,17 +274,14 @@ export function RetrieveVariableNodeForm({
                     </Select>
                   </div>
 
-                  <div>
-                    <Label className="text-xs">Condition</Label>
-                    <Input
-                      value={transition.condition}
-                      onChange={(e) =>
-                        updateTransition(index, { condition: e.target.value })
-                      }
-                      placeholder="always, success, failure"
-                      className="mt-1.5 h-8 text-sm font-mono"
-                    />
-                  </div>
+                  <TransitionConditionEditor
+                    condition={transition.condition}
+                    onChange={(value) =>
+                      updateTransition(index, { condition: value })
+                    }
+                    nodeType="retrieve_variable"
+                    availableVariables={variables.map((v) => v.variable_name).filter(Boolean)}
+                  />
 
                   <div>
                     <Label className="text-xs">Priority</Label>

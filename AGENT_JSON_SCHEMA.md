@@ -40,9 +40,8 @@ This document provides a comprehensive specification of the JSON schema used for
 
 ## Overview
 
-Agent configurations are stored as JSON files with the naming convention:
-- **Multi-tenant**: `agents/tenant_{tenant_id}/agent_{agent_id}.json`
-- **Legacy**: `agents/agent_{agent_id}.json`
+Agent configurations are stored in the **PostgreSQL database** (`agent_config_versions` table). Seed data files follow this naming convention:
+- **Seed files**: `scripts/seed_data/tenant_{tenant_id}/agent_{agent_id}.json`
 
 All agents **must** use node-based workflows. Traditional single-prompt mode has been removed.
 
@@ -327,7 +326,9 @@ Regular conversation node with system prompt and LLM processing.
   "transitions": [ ... ],
   "rag": { ... },
   "llm_override": { ... },
-  "actions": { ... }
+  "actions": { ... },
+  "intents": { ... },
+  "intent_config": { ... }
 }
 ```
 
@@ -345,6 +346,8 @@ Regular conversation node with system prompt and LLM processing.
 | `rag` | object | ❌ No | `null` | Per-node RAG configuration override |
 | `llm_override` | object | ❌ No | `null` | Per-node LLM configuration override (model, temperature, etc.) |
 | `actions` | object | ❌ No | `{}` | Actions to execute on entry/exit |
+| `intents` | object | ❌ No | `null` | Intent definitions for `intent:` transitions (see below) |
+| `intent_config` | object | ❌ No | `null` | Intent classification configuration (see below) |
 
 **Important**: Node must have **either** `system_prompt` OR `static_text`, but not both.
 
@@ -405,6 +408,113 @@ Regular conversation node with system prompt and LLM processing.
   ]
 }
 ```
+
+#### Intent-Based Transitions
+
+For content-based routing where you need to classify user responses into predefined categories, use intent-based transitions. A single LLM call classifies the user input against all defined intents (~100-150ms).
+
+##### `intents` Object
+
+Defines the intents that can be matched for this node.
+
+```json
+{
+  "intents": {
+    "intent_id": {
+      "description": "string (required)",
+      "examples": ["string", "string"]
+    }
+  }
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `description` | string | ✅ Yes | Clear description of what this intent represents |
+| `examples` | array | ❌ No | Example user messages that should trigger this intent |
+
+##### `intent_config` Object
+
+Configures how intent classification is performed.
+
+```json
+{
+  "intent_config": {
+    "confidence_threshold": 0.7,
+    "context_scope": "node",
+    "context_messages": 6
+  }
+}
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `confidence_threshold` | number | `0.7` | Minimum confidence (0.0-1.0) to match an intent |
+| `context_scope` | string | `"node"` | `"node"` = messages since entering node, `"conversation"` = entire call |
+| `context_messages` | int | `6` | Maximum messages to include in classification context |
+
+##### Example: Node with Intent-Based Routing
+
+```json
+{
+  "id": "topic_selection",
+  "type": "standard",
+  "name": "Topic Selection",
+  "system_prompt": "Ask the user what aspect they'd like to explore: basics, practical tips, or advanced topics.",
+  "intents": {
+    "wants_basics": {
+      "description": "User wants to learn fundamentals or get started",
+      "examples": ["tell me the basics", "I'm new to this", "introduction"]
+    },
+    "wants_practical": {
+      "description": "User wants practical tips or how-to guides",
+      "examples": ["practical tips", "how do I apply this", "real world examples"]
+    },
+    "wants_advanced": {
+      "description": "User wants deep dive or expert level content",
+      "examples": ["advanced topics", "deep dive", "complex stuff"]
+    }
+  },
+  "intent_config": {
+    "confidence_threshold": 0.6,
+    "context_scope": "node",
+    "context_messages": 4
+  },
+  "transitions": [
+    {
+      "condition": "intent:wants_basics",
+      "target": "basics_node",
+      "priority": 1
+    },
+    {
+      "condition": "intent:wants_practical",
+      "target": "practical_node",
+      "priority": 1
+    },
+    {
+      "condition": "intent:wants_advanced",
+      "target": "advanced_node",
+      "priority": 1
+    },
+    {
+      "condition": "intent:no_match",
+      "target": "clarify",
+      "priority": 2
+    },
+    {
+      "condition": "max_turns:3",
+      "target": "fallback",
+      "priority": 10
+    }
+  ]
+}
+```
+
+**Key Points:**
+- Use `intent:intent_id` in transition conditions to match specific intents
+- Use `intent:no_match` to handle cases where no intent matched with sufficient confidence
+- Intent classification is cached per user input per node (avoids re-classification)
+- `context_scope: "node"` is best for decision points; `"conversation"` when broader context matters
 
 ### Retrieve Variable Node
 
@@ -841,18 +951,19 @@ Transitions move between nodes based on conditions. Conditions are evaluated in 
 | **Always** | `always` | Immediate transition | `always` |
 | **Variables Extracted** | `variables_extracted:var1,var2` | All variables present and non-null | `variables_extracted:name,email` |
 | **Extraction Failed** | `extraction_failed:var1,var2` | Any variable missing or null | `extraction_failed:name,email` |
+| **Intent** | `intent:intent_id` | LLM batch classification (~100-150ms) | `intent:wants_basics` |
 
-#### 2. Semantic Conditions (LLM-Based)
+#### 2. Intent-Based Conditions (LLM Batch Classification)
 
-Custom conditions evaluated by LLM based on conversation context:
+For content-based routing where you need to classify user intent, use `intent:` conditions. A single LLM call classifies the user input against all defined intents (~100-150ms).
 
-- `user_satisfied`
-- `topic_is:glp1`
-- `user_wants_help`
-- `ready_to_close`
-- Any custom natural language condition
+**Syntax:** `intent:{intent_id}` or `intent:no_match`
 
-**Note**: Requires `EXTRACTION_LLM_API_KEY` or `OPENAI_API_KEY` in `.env`.
+**Requirements:** Node must have `intents` dict defining the intents to match.
+
+See [Intent-Based Transitions](#intent-based-transitions) under Standard Node for complete documentation.
+
+**Note**: Semantic conditions (e.g., `user_satisfied`) have been removed. Use intent-based transitions for LLM-powered routing. See [Intent-Based Transitions](#intent-based-transitions) under Standard Node.
 
 ### Examples
 
@@ -914,15 +1025,17 @@ Custom conditions evaluated by LLM based on conversation context:
 }
 ```
 
-#### Semantic Condition
+#### Intent Condition
 
 ```json
 {
-  "condition": "user_satisfied",
-  "target": "closing",
+  "condition": "intent:wants_billing",
+  "target": "billing_support",
   "priority": 3
 }
 ```
+
+**Note:** Requires `intents` dict defined on the node. See [Intent-Based Transitions](#intent-based-transitions).
 
 ### Transition Priority and Evaluation Order
 
@@ -1172,7 +1285,7 @@ Individual nodes can override the agent's default LLM settings using `llm_overri
 
 ### Extraction LLM Configuration
 
-Variable extraction and semantic transition evaluation use a separate configuration:
+Variable extraction and intent classification use a separate configuration:
 
 - Controlled by `EXTRACTION_LLM_*` environment variables
 - Falls back to `OPENAI_*` environment variables
@@ -1196,13 +1309,13 @@ Temperature controls response randomness:
 
 | Temperature | Behavior | Use Case |
 |-------------|----------|----------|
-| `0.0` | Deterministic - always same response | Variable extraction, semantic transitions |
+| `0.0` | Deterministic - always same response | Variable extraction, intent classification |
 | `0.5` - `0.7` | Focused - mostly consistent | Medical information, critical data |
 | `0.8` - `1.0` (default) | Balanced | Natural conversation, general purpose |
 | `1.0` - `1.5` | Creative - varied responses | Personalized greetings, sales calls |
 | `1.5` - `2.0` | Very creative - highly unpredictable | Brainstorming (NOT for critical tasks) |
 
-**Note**: Variable extraction and semantic evaluation always use `temperature: 0.0` internally, regardless of this setting.
+**Note**: Variable extraction and intent classification always use `temperature: 0.0` internally, regardless of this setting.
 
 ---
 
@@ -1592,10 +1705,16 @@ This example shows a technical support agent with different RAG configurations p
           "vector_weight": 0.6,
           "fts_weight": 0.4
         },
+        "intents": {
+          "api_reference": {"description": "User asking about API details, methods, parameters"},
+          "conceptual": {"description": "User asking conceptual or how-it-works questions"},
+          "error": {"description": "User asking about errors or troubleshooting"}
+        },
         "transitions": [
-          {"condition": "topic_is:api_reference", "target": "api_lookup"},
-          {"condition": "topic_is:conceptual", "target": "education"},
-          {"condition": "topic_is:error", "target": "error_troubleshooting"}
+          {"condition": "intent:api_reference", "target": "api_lookup"},
+          {"condition": "intent:conceptual", "target": "education"},
+          {"condition": "intent:error", "target": "error_troubleshooting"},
+          {"condition": "intent:no_match", "target": "education"}
         ]
       },
       {
@@ -2161,11 +2280,15 @@ This section provides a comprehensive reference for all workflow configuration t
 | `variables_extracted` | `variables_extracted:{var1,var2}` | True if ALL specified variables are present and non-null. | retrieve_variable |
 | `extraction_failed` | `extraction_failed:{var1,var2}` | True if ANY specified variable is missing or null. | retrieve_variable |
 
-#### Semantic Conditions (LLM-Based, ~100-300ms)
+#### Intent-Based Conditions (LLM Batch Classification, ~100-150ms)
 
-| Condition | Description | Examples |
-|-----------|-------------|----------|
-| Any arbitrary string | Evaluated by GPT-4o-mini against last 6 messages. Returns YES/NO with reasoning. | `user_satisfied`, `user_wants_help`, `ready_to_close`, `user_frustrated`, `topic_is:diabetes` |
+| Condition | Syntax | Description | Applicable To |
+|-----------|--------|-------------|---------------|
+| `intent` | `intent:{intent_id}` | LLM batch classification against node's `intents` dict. Single LLM call for all intents. Use `intent:no_match` for fallback when no intent matches with sufficient confidence. | standard |
+
+**Configuration:** Requires `intents` dict and optional `intent_config` in node. See [Intent-Based Transitions](#intent-based-transitions).
+
+**Note:** Semantic conditions (e.g., `user_satisfied`, `topic_is:X`) have been removed. Use intent-based transitions instead.
 
 ### Action Types
 
@@ -2219,8 +2342,8 @@ ORDER BY category, display_order;
 - **Workflow Reference**: `docs/WORKFLOW_REFERENCE.md` - Detailed workflow concepts
 - **Config Reference**: `docs/CONFIG_REFERENCE.md` - Environment variables
 - **Recording Config**: `docs/RECORDING_CONFIG.md` - Call recording setup
-- **Example Agent**: `agents/tenant_12345/agent_workflow_simple.json` - Working example
+- **Example Agent**: `scripts/seed_data/tenant_*/agent_*.json` - Working examples (seeded to database)
 
 ---
 
-**Last Updated**: 2025-11-22 (LLM configuration simplified to JSON-based approach in `workflow.llm` section; llm_models table retained for model catalog; removed llm_configs table; per-node llm_override support maintained)
+**Last Updated**: 2025-11-22 (Removed semantic conditions - use intent-based transitions; Added intent-based transitions with LLM batch classification; Removed agents/ directory - all configs now database-backed via scripts/seed_data/; LLM config in workflow.llm section; llm_models table for model catalog)

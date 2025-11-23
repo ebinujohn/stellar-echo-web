@@ -25,8 +25,10 @@ import {
 import { Plus, Trash2, ChevronDown, ChevronRight, Database, Cpu } from 'lucide-react';
 import type { WorkflowNodeData } from '../../utils/json-converter';
 import { useLlmModelsDropdown } from '@/lib/hooks/use-llm-configs';
-import { useTransitionConditions, useActionTypes } from '@/lib/hooks/use-workflow-config-types';
+import { useActionTypes } from '@/lib/hooks/use-workflow-config-types';
 import { AutocompleteInput } from '@/components/ui/autocomplete-input';
+import { TransitionConditionEditor } from './transition-condition-editor';
+import { IntentEditor } from './intent-editor';
 
 interface TargetNodeOption {
   id: string;
@@ -81,21 +83,17 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
   const [llmServiceTier, setLlmServiceTier] = useState(nodeData.llm_override?.service_tier || 'auto');
   const [llmCollapsibleOpen, setLlmCollapsibleOpen] = useState(false);
 
+  // Intent-based transitions
+  const [intents, setIntents] = useState<Record<string, { description: string; examples?: string[] }>>(
+    nodeData.intents || {}
+  );
+  const [intentConfig, setIntentConfig] = useState(nodeData.intent_config || {});
+
   // Fetch available LLM models
   const { data: llmModels = [] } = useLlmModelsDropdown();
 
   // Fetch workflow config types for autocomplete
-  const { data: transitionConditions = [], isLoading: conditionsLoading } = useTransitionConditions();
   const { data: actionTypes = [], isLoading: actionsLoading } = useActionTypes();
-
-  // Transform config types to autocomplete suggestions format
-  const conditionSuggestions = transitionConditions.map((c) => ({
-    value: c.value,
-    displayName: c.displayName,
-    description: c.description,
-    examples: c.examples,
-    isPatternBased: c.isPatternBased,
-  }));
 
   const actionSuggestions = actionTypes.map((a) => ({
     value: a.value,
@@ -152,6 +150,15 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
       updates.llm_override = undefined;
     }
 
+    // Add intents if any are defined
+    if (Object.keys(intents).length > 0) {
+      updates.intents = intents;
+      updates.intent_config = Object.keys(intentConfig).length > 0 ? intentConfig : undefined;
+    } else {
+      updates.intents = undefined;
+      updates.intent_config = undefined;
+    }
+
     onUpdate(updates);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -175,6 +182,8 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
     llmTemperature,
     llmMaxTokens,
     llmServiceTier,
+    intents,
+    intentConfig,
   ]);
 
   const addTransition = () => {
@@ -385,19 +394,14 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
                     </Select>
                   </div>
 
-                  <div>
-                    <Label className="text-xs">Condition</Label>
-                    <AutocompleteInput
-                      suggestions={conditionSuggestions}
-                      value={transition.condition}
-                      onChange={(value) =>
-                        updateTransition(index, { condition: value })
-                      }
-                      placeholder="always, timeout:10, contains:keyword"
-                      className="mt-1.5 h-8 text-sm"
-                      isLoading={conditionsLoading}
-                    />
-                  </div>
+                  <TransitionConditionEditor
+                    condition={transition.condition}
+                    onChange={(value) =>
+                      updateTransition(index, { condition: value })
+                    }
+                    nodeType="standard"
+                    availableIntents={Object.keys(intents)}
+                  />
 
                   <div>
                     <Label className="text-xs">Priority</Label>
@@ -417,6 +421,16 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
             </div>
           )}
         </div>
+
+        <Separator />
+
+        {/* Intents for Intent-Based Transitions */}
+        <IntentEditor
+          intents={intents}
+          intentConfig={intentConfig}
+          onIntentsChange={setIntents}
+          onIntentConfigChange={setIntentConfig}
+        />
 
         <Separator />
 

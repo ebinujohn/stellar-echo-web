@@ -43,6 +43,16 @@ export interface WorkflowNodeData {
     max_tokens?: number;
     service_tier?: 'auto' | 'default' | 'flex';
   };
+  // Intent-based transitions (for standard nodes)
+  intents?: Record<string, {
+    description: string;
+    examples?: string[];
+  }>;
+  intent_config?: {
+    confidence_threshold?: number;
+    context_scope?: 'node' | 'conversation';
+    context_messages?: number;
+  };
 }
 
 /**
@@ -79,6 +89,8 @@ export function workflowToNodes(config: WorkflowConfig): {
         actions: (node as any).actions,
         rag: (node as any).rag,
         llm_override: (node as any).llm_override,
+        intents: (node as any).intents,
+        intent_config: (node as any).intent_config,
       },
     };
 
@@ -157,6 +169,8 @@ export function nodesToWorkflow(
         ...(data.actions && { actions: data.actions }),
         ...(data.rag && { rag: data.rag }),
         ...(data.llm_override && { llm_override: data.llm_override }),
+        ...(data.intents && Object.keys(data.intents).length > 0 && { intents: data.intents }),
+        ...(data.intent_config && { intent_config: data.intent_config }),
       };
     } else if (data.type === 'retrieve_variable') {
       configNode = {
