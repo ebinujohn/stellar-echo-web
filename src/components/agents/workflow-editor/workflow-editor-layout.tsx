@@ -32,12 +32,10 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import {
-  Save,
   Wand2,
   CheckCircle2,
   AlertTriangle,
   ChevronLeft,
-  ChevronRight,
   Keyboard,
   MessageSquare,
   Database,
@@ -484,11 +482,7 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
         }
       }
 
-      // Save workflow (Ctrl/Cmd + S)
-      if ((event.ctrlKey || event.metaKey) && event.key === 's') {
-        event.preventDefault();
-        handleSave();
-      }
+      // Note: Ctrl+S removed - use "Save All Changes" button in page header
 
       // Auto layout (Ctrl/Cmd + L)
       if ((event.ctrlKey || event.metaKey) && event.key === 'l') {
@@ -511,7 +505,7 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedNode, selectedEdge, shortcutsOpen, handleDeleteNode, handleSave, handleAutoLayout, setEdges]);
+  }, [selectedNode, selectedEdge, shortcutsOpen, handleDeleteNode, handleAutoLayout, setEdges]);
 
   return (
     <div className="flex flex-col h-[calc(100vh-12rem)]">
@@ -543,9 +537,6 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
                 </DialogHeader>
                 <div className="space-y-4 mt-4">
                   <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="font-medium">Save Workflow</div>
-                    <div className="text-muted-foreground font-mono">Ctrl/⌘ + S</div>
-
                     <div className="font-medium">Auto Layout</div>
                     <div className="text-muted-foreground font-mono">Ctrl/⌘ + L</div>
 
@@ -558,6 +549,9 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
                     <div className="font-medium">Show Shortcuts</div>
                     <div className="text-muted-foreground font-mono">?</div>
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    Use &quot;Save All Changes&quot; button in the page header to save.
+                  </p>
                 </div>
               </DialogContent>
             </Dialog>
@@ -579,12 +573,7 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
             )}
           </div>
 
-          <div className="flex items-center gap-2">
-            <Button variant="default" size="sm" onClick={handleSave} disabled={isSaving}>
-              <Save className="mr-2 h-4 w-4" />
-              {isSaving ? 'Saving...' : 'Save Workflow'}
-            </Button>
-          </div>
+          {/* Save button removed - use "Save All Changes" in page header to save all tabs together */}
         </div>
       </div>
 

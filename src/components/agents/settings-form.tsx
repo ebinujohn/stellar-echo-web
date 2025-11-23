@@ -16,7 +16,7 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Save, ExternalLink, Database, Volume2, Phone, AlertTriangle, MessageSquare } from 'lucide-react';
+import { ExternalLink, Database, Volume2, Phone, AlertTriangle, MessageSquare } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { useRagConfigsDropdown, useRagConfig } from '@/lib/hooks/use-rag-configs';
@@ -332,24 +332,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
 
   return (
     <div className="flex flex-col">
-      {/* Toolbar */}
-      <div className="border-b bg-card/50 backdrop-blur supports-[backdrop-filter]:bg-card/80 mb-6">
-        <div className="flex items-center justify-end px-4 py-2">
-          <Button type="submit" onClick={handleSubmit} disabled={isSaving}>
-            {isSaving ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="mr-2 h-4 w-4" />
-                Save Settings
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
+      {/* Note: Save button removed - use "Save All Changes" in page header to save all tabs together */}
 
       <form onSubmit={handleSubmit} className="space-y-6 pb-6">
         {/* Global Prompt */}
