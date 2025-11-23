@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,27 +20,151 @@ import {
   CheckCircle2,
   Clock,
   FileCode,
+  Save,
 } from 'lucide-react';
 import { useAgent, useCreateVersion } from '@/lib/hooks/use-agents';
 import { useAgentPhoneConfigs } from '@/lib/hooks/use-phone-configs';
 import { formatDateTime, formatPhoneNumber } from '@/lib/utils/formatters';
 import { DeleteAgentDialog } from './dialogs/delete-agent-dialog';
+import { UnsavedChangesDialog, UnsavedChangesAction } from './dialogs/unsaved-changes-dialog';
 import { WorkflowEditorLayout } from './workflow-editor/workflow-editor-layout';
 import { SettingsForm } from './settings-form';
 import { VersionsTab } from './versions-tab';
+import { AgentDraftProvider, useAgentDraft, useUnsavedChangesWarning } from './contexts/agent-draft-context';
 import { toast } from 'sonner';
 
 interface AgentDetailClientProps {
   agentId: string;
 }
 
-export function AgentDetailClient({ agentId }: AgentDetailClientProps) {
+// Inner component that uses the context
+function AgentDetailContent({ agentId }: AgentDetailClientProps) {
   const router = useRouter();
   const { data: agent, isLoading, error } = useAgent(agentId);
   const { data: phoneConfigs } = useAgentPhoneConfigs(agentId);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const createVersion = useCreateVersion();
+
+  // Unsaved changes dialog state
+  const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+  const [isSavingFromDialog, setIsSavingFromDialog] = useState(false);
+
+  // Ref to track if we should allow navigation (after user confirms)
+  const allowNavigationRef = useRef(false);
+
+  // Get draft context
+  const {
+    isDirty,
+    isWorkflowDirty,
+    isSettingsDirty,
+    workflowDraft,
+    settingsDraft,
+    clearAllDrafts,
+    clearWorkflowDraft,
+    clearSettingsDraft,
+    setBaseVersionId,
+  } = useAgentDraft();
+
+  // Update base version ID when agent data changes
+  useEffect(() => {
+    if (agent?.activeVersion?.id) {
+      setBaseVersionId(agent.activeVersion.id);
+    }
+  }, [agent?.activeVersion?.id, setBaseVersionId]);
+
+  // Browser beforeunload warning
+  useUnsavedChangesWarning(isDirty);
+
+  // Simple tab change - no dialog, just switch tabs (state is preserved in context)
+  const handleTabChange = useCallback((newTab: string) => {
+    setActiveTab(newTab);
+  }, []);
+
+  // Global navigation interception for SPA navigation
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      // If navigation was explicitly allowed (user clicked "Discard"), let it through
+      if (allowNavigationRef.current) {
+        allowNavigationRef.current = false;
+        return;
+      }
+
+      // Only intercept when there are unsaved changes
+      if (!isDirty) return;
+
+      // Find the closest anchor tag
+      const target = e.target as HTMLElement;
+      const anchor = target.closest('a');
+      if (!anchor) return;
+
+      // Get the href
+      const href = anchor.getAttribute('href');
+      if (!href) return;
+
+      // Only intercept internal navigation (starts with /)
+      if (!href.startsWith('/')) return;
+
+      // Don't intercept navigation within the current agent page
+      if (href.startsWith(`/agents/${agentId}`)) return;
+
+      // Intercept the navigation
+      e.preventDefault();
+      e.stopPropagation();
+      setPendingNavigation(href);
+      setUnsavedDialogOpen(true);
+    };
+
+    // Add listener with capture to intercept before navigation
+    document.addEventListener('click', handleClick, true);
+    return () => document.removeEventListener('click', handleClick, true);
+  }, [isDirty, agentId]);
+
+  // Handle unsaved changes dialog action
+  const handleUnsavedAction = useCallback(
+    async (action: UnsavedChangesAction) => {
+      if (action === 'cancel') {
+        setUnsavedDialogOpen(false);
+        setPendingNavigation(null);
+        return;
+      }
+
+      if (action === 'discard') {
+        // Clear all drafts and navigate
+        clearAllDrafts();
+        setUnsavedDialogOpen(false);
+        if (pendingNavigation) {
+          // Allow navigation through and trigger it
+          allowNavigationRef.current = true;
+          router.push(pendingNavigation);
+          setPendingNavigation(null);
+        }
+        return;
+      }
+
+      if (action === 'save') {
+        setIsSavingFromDialog(true);
+        try {
+          // Save ALL tabs with changes (combined save)
+          await handleCombinedSave();
+
+          setUnsavedDialogOpen(false);
+          if (pendingNavigation) {
+            // Allow navigation through and trigger it
+            allowNavigationRef.current = true;
+            router.push(pendingNavigation);
+            setPendingNavigation(null);
+          }
+        } catch (error) {
+          // Error already handled in save functions
+        } finally {
+          setIsSavingFromDialog(false);
+        }
+      }
+    },
+    [pendingNavigation, router, clearAllDrafts]
+  );
 
   // Handler for settings form - passes all settings explicitly
   const handleSettingsSave = async (
@@ -60,10 +184,47 @@ export function AgentDetailClient({ agentId }: AgentDetailClientProps) {
         ragConfigId,
         voiceConfigId,
       });
+      clearSettingsDraft();
       toast.success('New workflow version created');
     } catch (error) {
       throw error;
     }
+  };
+
+  // Helper to save settings from draft
+  const handleSettingsSaveFromDraft = async () => {
+    if (!settingsDraft || !agent?.activeVersion) return;
+
+    const activeVersion = agent.activeVersion as any;
+    const currentConfig = activeVersion.configJson;
+
+    // Build the config from draft
+    const llmConfig = {
+      enabled: settingsDraft.llmEnabled,
+      model_name: settingsDraft.llmModel,
+      temperature: settingsDraft.llmTemperature,
+      max_tokens: settingsDraft.llmMaxTokens,
+      service_tier: settingsDraft.llmServiceTier,
+    };
+
+    const updatedConfig = {
+      ...currentConfig,
+      workflow: {
+        ...currentConfig.workflow,
+        global_prompt: settingsDraft.globalPrompt || undefined,
+        llm: llmConfig,
+      },
+      tts: { enabled: settingsDraft.ttsEnabled },
+      auto_hangup: { enabled: settingsDraft.autoHangupEnabled },
+    };
+
+    await handleSettingsSave(
+      updatedConfig,
+      settingsDraft.ragEnabled,
+      settingsDraft.ragConfigId,
+      settingsDraft.voiceConfigId,
+      settingsDraft.globalPrompt
+    );
   };
 
   // Handler for workflow editor - preserves existing settings (globalPrompt, rag, voice configs)
@@ -80,9 +241,90 @@ export function AgentDetailClient({ agentId }: AgentDetailClientProps) {
         ragConfigId: activeVersion?.ragConfigId,
         voiceConfigId: activeVersion?.voiceConfigId,
       });
+      clearWorkflowDraft();
       toast.success('New workflow version created');
     } catch (error) {
       throw error; // Re-throw to let WorkflowEditorLayout handle it
+    }
+  };
+
+  // Combined save handler - saves ALL tabs with changes in a single version
+  const handleCombinedSave = async () => {
+    if (!agent?.activeVersion) return;
+
+    const activeVersion = agent.activeVersion as any;
+    let configJson = activeVersion.configJson;
+    let globalPrompt = activeVersion.globalPrompt;
+    let ragEnabled = activeVersion.ragEnabled;
+    let ragConfigId = activeVersion.ragConfigId;
+    let voiceConfigId = activeVersion.voiceConfigId;
+    const notes: string[] = [];
+
+    // Apply workflow draft changes if dirty
+    if (isWorkflowDirty && workflowDraft?.config) {
+      configJson = workflowDraft.config;
+      notes.push('workflow');
+    }
+
+    // Apply settings draft changes if dirty
+    if (isSettingsDirty && settingsDraft) {
+      const llmConfig = {
+        enabled: settingsDraft.llmEnabled,
+        model_name: settingsDraft.llmModel,
+        temperature: settingsDraft.llmTemperature,
+        max_tokens: settingsDraft.llmMaxTokens,
+        service_tier: settingsDraft.llmServiceTier,
+      };
+
+      configJson = {
+        ...configJson,
+        workflow: {
+          ...configJson.workflow,
+          global_prompt: settingsDraft.globalPrompt || undefined,
+          llm: llmConfig,
+        },
+        tts: { enabled: settingsDraft.ttsEnabled },
+        auto_hangup: { enabled: settingsDraft.autoHangupEnabled },
+      };
+
+      globalPrompt = settingsDraft.globalPrompt;
+      ragEnabled = settingsDraft.ragEnabled;
+      ragConfigId = settingsDraft.ragConfigId;
+      voiceConfigId = settingsDraft.voiceConfigId;
+      notes.push('settings');
+    }
+
+    try {
+      await createVersion.mutateAsync({
+        agentId,
+        configJson,
+        notes: `Updated ${notes.join(' and ')}`,
+        globalPrompt,
+        ragEnabled,
+        ragConfigId,
+        voiceConfigId,
+      });
+      clearAllDrafts();
+      toast.success('Changes saved successfully');
+    } catch (error) {
+      toast.error('Failed to save changes');
+      throw error;
+    }
+  };
+
+  // Get tab label for dialog
+  const getTabLabel = (tab: string) => {
+    switch (tab) {
+      case 'overview':
+        return 'Overview';
+      case 'workflow':
+        return 'Workflow Editor';
+      case 'versions':
+        return 'Versions';
+      case 'settings':
+        return 'Settings';
+      default:
+        return tab;
     }
   };
 
@@ -138,20 +380,38 @@ export function AgentDetailClient({ agentId }: AgentDetailClientProps) {
                 <Activity className="mr-1 h-3 w-3" />
                 Active
               </Badge>
+              {isDirty && (
+                <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                  Unsaved Changes
+                </Badge>
+              )}
             </div>
             {agent.description && (
               <p className="text-muted-foreground mt-1">{agent.description}</p>
             )}
           </div>
         </div>
-        <Button
-          variant="destructive"
-          size="sm"
-          onClick={() => setDeleteDialogOpen(true)}
-        >
-          <Trash2 className="mr-2 h-4 w-4" />
-          Delete Agent
-        </Button>
+        <div className="flex items-center gap-2">
+          {isDirty && (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleCombinedSave}
+              disabled={createVersion.isPending}
+            >
+              <Save className="mr-2 h-4 w-4" />
+              {createVersion.isPending ? 'Saving...' : 'Save All Changes'}
+            </Button>
+          )}
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => setDeleteDialogOpen(true)}
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            Delete Agent
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -214,12 +474,22 @@ export function AgentDetailClient({ agentId }: AgentDetailClientProps) {
       </div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="workflow">Workflow Editor</TabsTrigger>
+          <TabsTrigger value="workflow" className="relative">
+            Workflow Editor
+            {isWorkflowDirty && (
+              <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-500" />
+            )}
+          </TabsTrigger>
           <TabsTrigger value="versions">Versions</TabsTrigger>
-          <TabsTrigger value="settings">Settings</TabsTrigger>
+          <TabsTrigger value="settings" className="relative">
+            Settings
+            {isSettingsDirty && (
+              <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-500" />
+            )}
+          </TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
@@ -381,7 +651,7 @@ export function AgentDetailClient({ agentId }: AgentDetailClientProps) {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setActiveTab('workflow')}
+                    onClick={() => handleTabChange('workflow')}
                     className="mt-2"
                   >
                     <Edit className="mr-2 h-4 w-4" />
@@ -581,6 +851,24 @@ export function AgentDetailClient({ agentId }: AgentDetailClientProps) {
         onOpenChange={setDeleteDialogOpen}
         agent={agent}
       />
+
+      {/* Unsaved Changes Dialog */}
+      <UnsavedChangesDialog
+        open={unsavedDialogOpen}
+        onOpenChange={setUnsavedDialogOpen}
+        onAction={handleUnsavedAction}
+        isNavigatingAway={!!pendingNavigation}
+        isSaving={isSavingFromDialog}
+      />
     </div>
+  );
+}
+
+// Wrapper component with provider
+export function AgentDetailClient({ agentId }: AgentDetailClientProps) {
+  return (
+    <AgentDraftProvider>
+      <AgentDetailContent agentId={agentId} />
+    </AgentDraftProvider>
   );
 }

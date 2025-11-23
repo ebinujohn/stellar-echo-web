@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,6 +24,16 @@ import { useVoiceConfigsDropdown, useVoiceConfig } from '@/lib/hooks/use-voice-c
 import { useAgentPhoneConfigs } from '@/lib/hooks/use-phone-configs';
 import { useLlmModelsDropdown } from '@/lib/hooks/use-llm-configs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useAgentDraft, SettingsDraft } from './contexts/agent-draft-context';
+
+// Safe hook to get draft context (returns null if not in provider)
+function useOptionalAgentDraft() {
+  try {
+    return useAgentDraft();
+  } catch {
+    return null;
+  }
+}
 
 interface SettingsFormProps {
   agentId: string;
@@ -38,6 +48,9 @@ interface SettingsFormProps {
 export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlobalPrompt, ragEnabled: initialRagEnabled, ragConfigId: initialRagConfigId, voiceConfigId: initialVoiceConfigId, onSave }: SettingsFormProps) {
   const [isSaving, setIsSaving] = useState(false);
 
+  // Get draft context (optional - component can work without it)
+  const draftContext = useOptionalAgentDraft();
+
   // Fetch available RAG configs
   const { data: ragConfigs } = useRagConfigsDropdown();
 
@@ -50,12 +63,23 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
   // Fetch available LLM models for dropdown
   const { data: llmModels } = useLlmModelsDropdown();
 
+  // Get initial values from draft or props
+  const getInitialValue = <T,>(draftValue: T | undefined, propValue: T): T => {
+    return draftContext?.settingsDraft ? (draftValue as T) : propValue;
+  };
+
   // RAG Config Selection
-  const [selectedRagConfigId, setSelectedRagConfigId] = useState(initialRagConfigId || '');
-  const [ragEnabledState, setRagEnabledState] = useState(initialRagEnabled ?? false);
+  const [selectedRagConfigId, setSelectedRagConfigId] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.ragConfigId ?? undefined, initialRagConfigId || '')
+  );
+  const [ragEnabledState, setRagEnabledState] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.ragEnabled, initialRagEnabled ?? false)
+  );
 
   // Voice Config Selection
-  const [selectedVoiceConfigId, setSelectedVoiceConfigId] = useState(initialVoiceConfigId || '');
+  const [selectedVoiceConfigId, setSelectedVoiceConfigId] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.voiceConfigId ?? undefined, initialVoiceConfigId || '')
+  );
 
   // Fetch selected RAG config details for preview
   const { data: selectedRagConfig } = useRagConfig(selectedRagConfigId || '');
@@ -65,20 +89,98 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
 
   // LLM Settings (stored in workflow.llm per AGENT_JSON_SCHEMA.md)
   const workflowLlm = currentConfig.workflow?.llm;
-  const [llmEnabled, setLlmEnabled] = useState(workflowLlm?.enabled ?? true);
-  const [llmModel, setLlmModel] = useState(workflowLlm?.model_name || 'gpt-4o-mini');
-  const [llmTemperature, setLlmTemperature] = useState(workflowLlm?.temperature ?? 1.0);
-  const [llmMaxTokens, setLlmMaxTokens] = useState(workflowLlm?.max_tokens ?? 150);
-  const [llmServiceTier, setLlmServiceTier] = useState(workflowLlm?.service_tier || 'auto');
+  const [llmEnabled, setLlmEnabled] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.llmEnabled, workflowLlm?.enabled ?? true)
+  );
+  const [llmModel, setLlmModel] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.llmModel, workflowLlm?.model_name || 'gpt-4o-mini')
+  );
+  const [llmTemperature, setLlmTemperature] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.llmTemperature, workflowLlm?.temperature ?? 1.0)
+  );
+  const [llmMaxTokens, setLlmMaxTokens] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.llmMaxTokens, workflowLlm?.max_tokens ?? 150)
+  );
+  const [llmServiceTier, setLlmServiceTier] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.llmServiceTier, workflowLlm?.service_tier || 'auto')
+  );
 
   // TTS Settings (only enabled flag - voice config is selected from shared configs)
-  const [ttsEnabled, setTtsEnabled] = useState(currentConfig.tts?.enabled ?? true);
+  const [ttsEnabled, setTtsEnabled] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.ttsEnabled, currentConfig.tts?.enabled ?? true)
+  );
 
   // Workflow Settings
-  const [globalPrompt, setGlobalPrompt] = useState(initialGlobalPrompt || '');
+  const [globalPrompt, setGlobalPrompt] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.globalPrompt, initialGlobalPrompt || '')
+  );
 
   // Other Settings
-  const [autoHangupEnabled, setAutoHangupEnabled] = useState(currentConfig.auto_hangup?.enabled ?? true);
+  const [autoHangupEnabled, setAutoHangupEnabled] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.autoHangupEnabled, currentConfig.auto_hangup?.enabled ?? true)
+  );
+
+  // Track initial state for dirty detection
+  const initialStateRef = useRef<string>('');
+
+  // Build current settings state for comparison
+  const getCurrentSettingsState = useCallback((): SettingsDraft => ({
+    globalPrompt,
+    llmEnabled,
+    llmModel,
+    llmTemperature,
+    llmMaxTokens,
+    llmServiceTier,
+    ttsEnabled,
+    ragEnabled: ragEnabledState,
+    ragConfigId: selectedRagConfigId || null,
+    voiceConfigId: selectedVoiceConfigId || null,
+    autoHangupEnabled,
+  }), [
+    globalPrompt, llmEnabled, llmModel, llmTemperature, llmMaxTokens,
+    llmServiceTier, ttsEnabled, ragEnabledState, selectedRagConfigId,
+    selectedVoiceConfigId, autoHangupEnabled
+  ]);
+
+  // Store initial state on mount
+  useEffect(() => {
+    const initialSettings: SettingsDraft = {
+      globalPrompt: initialGlobalPrompt || '',
+      llmEnabled: workflowLlm?.enabled ?? true,
+      llmModel: workflowLlm?.model_name || 'gpt-4o-mini',
+      llmTemperature: workflowLlm?.temperature ?? 1.0,
+      llmMaxTokens: workflowLlm?.max_tokens ?? 150,
+      llmServiceTier: workflowLlm?.service_tier || 'auto',
+      ttsEnabled: currentConfig.tts?.enabled ?? true,
+      ragEnabled: initialRagEnabled ?? false,
+      ragConfigId: initialRagConfigId || null,
+      voiceConfigId: initialVoiceConfigId || null,
+      autoHangupEnabled: currentConfig.auto_hangup?.enabled ?? true,
+    };
+    initialStateRef.current = JSON.stringify(initialSettings);
+  }, []);
+
+  // Sync current state to draft context and track dirty state
+  // Use a ref for draftContext to avoid circular updates
+  const draftContextRef = useRef(draftContext);
+  draftContextRef.current = draftContext;
+
+  useEffect(() => {
+    if (!initialStateRef.current) return;
+
+    const currentSettings = getCurrentSettingsState();
+    const currentState = JSON.stringify(currentSettings);
+    const isDirty = currentState !== initialStateRef.current;
+
+    if (draftContextRef.current) {
+      draftContextRef.current.setIsSettingsDirty(isDirty);
+      if (isDirty) {
+        draftContextRef.current.setSettingsDraft(currentSettings);
+      } else {
+        draftContextRef.current.setSettingsDraft(null);
+      }
+    }
+  }, [getCurrentSettingsState]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,6 +226,14 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
       };
 
       await onSave(updatedConfig, finalRagEnabled, finalRagConfigId, finalVoiceConfigId, globalPrompt || null);
+      // Update initial state after successful save
+      const currentSettings = getCurrentSettingsState();
+      initialStateRef.current = JSON.stringify(currentSettings);
+      // Clear dirty state
+      if (draftContext) {
+        draftContext.setIsSettingsDirty(false);
+        draftContext.setSettingsDraft(null);
+      }
       toast.success('Settings saved successfully');
     } catch (error: any) {
       toast.error(error.message || 'Failed to save settings');

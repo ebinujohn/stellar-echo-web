@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useMemo, useRef, ReactNode } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef, ReactNode, useContext } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -52,10 +52,20 @@ import { workflowToNodes, nodesToWorkflow, validateWorkflowGraph } from './utils
 import { getLayoutedNodes } from './utils/auto-layout';
 import type { WorkflowConfig } from '@/lib/validations/agents';
 import { PropertiesPanel } from './panels/properties-panel';
+import { useAgentDraft } from '../contexts/agent-draft-context';
 
 interface WorkflowEditorLayoutProps {
   initialConfig?: WorkflowConfig;
   onSave?: (config: Partial<WorkflowConfig>) => void | Promise<void>;
+}
+
+// Safe hook to get draft context (returns null if not in provider)
+function useOptionalAgentDraft() {
+  try {
+    return useAgentDraft();
+  } catch {
+    return null;
+  }
 }
 
 function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutProps) {
@@ -74,22 +84,57 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition } = useReactFlow();
 
+  // Get draft context (optional - component can work without it)
+  const draftContext = useOptionalAgentDraft();
+
+  // Track initial state for dirty detection
+  const initialStateRef = useRef<string>('');
+  const isInitializedRef = useRef(false);
+
   // Initialize nodes and edges from config with auto-layout
+  // If there's a draft, restore from draft instead
   useEffect(() => {
+    if (isInitializedRef.current) return;
+
     if (initialConfig) {
-      const { nodes: initialNodes, edges: initialEdges } = workflowToNodes(initialConfig);
+      // Check if we have a draft to restore
+      if (draftContext?.workflowDraft) {
+        const draftConfig = draftContext.workflowDraft.config as WorkflowConfig;
+        const { nodes: draftNodes, edges: draftEdges } = workflowToNodes(draftConfig);
+        const layoutedNodes = getLayoutedNodes(draftNodes, draftEdges, {
+          direction: 'TB',
+          nodeWidth: 280,
+          nodeHeight: 180,
+        });
+        setNodes(layoutedNodes);
+        setEdges(draftEdges);
+        // Store initial state from server for dirty comparison
+        const serverConfig = nodesToWorkflow(
+          workflowToNodes(initialConfig).nodes,
+          workflowToNodes(initialConfig).edges,
+          initialConfig
+        );
+        initialStateRef.current = JSON.stringify(serverConfig);
+      } else {
+        const { nodes: initialNodes, edges: initialEdges } = workflowToNodes(initialConfig);
 
-      // Apply auto-layout immediately for better initial presentation
-      const layoutedNodes = getLayoutedNodes(initialNodes, initialEdges, {
-        direction: 'TB',
-        nodeWidth: 280,
-        nodeHeight: 180,
-      });
+        // Apply auto-layout immediately for better initial presentation
+        const layoutedNodes = getLayoutedNodes(initialNodes, initialEdges, {
+          direction: 'TB',
+          nodeWidth: 280,
+          nodeHeight: 180,
+        });
 
-      setNodes(layoutedNodes);
-      setEdges(initialEdges);
+        setNodes(layoutedNodes);
+        setEdges(initialEdges);
+
+        // Store initial state for dirty comparison
+        const currentConfig = nodesToWorkflow(layoutedNodes, initialEdges, initialConfig);
+        initialStateRef.current = JSON.stringify(currentConfig);
+      }
+      isInitializedRef.current = true;
     }
-  }, [initialConfig, setNodes, setEdges]);
+  }, [initialConfig, setNodes, setEdges, draftContext?.workflowDraft]);
 
   // Sync edges to node.data.transitions whenever edges change
   // This ensures node labels and properties panel stay in sync with canvas
@@ -132,6 +177,36 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
       })
     );
   }, [edges, setNodes]);
+
+  // Sync current state to draft context and track dirty state
+  // Use a ref for draftContext to avoid circular updates
+  const draftContextRef = useRef(draftContext);
+  draftContextRef.current = draftContext;
+
+  useEffect(() => {
+    if (!isInitializedRef.current || !initialConfig || nodes.length === 0) return;
+
+    // Build current config from nodes and edges
+    const currentConfig = nodesToWorkflow(nodes, edges, initialConfig);
+    const currentState = JSON.stringify(currentConfig);
+
+    // Check if dirty (different from initial state)
+    const isDirty = currentState !== initialStateRef.current;
+
+    // Update draft context if available
+    if (draftContextRef.current) {
+      draftContextRef.current.setIsWorkflowDirty(isDirty);
+      if (isDirty) {
+        draftContextRef.current.setWorkflowDraft({
+          config: currentConfig,
+          serializedState: currentState,
+        });
+      } else {
+        // Clear draft if back to initial state
+        draftContextRef.current.setWorkflowDraft(null);
+      }
+    }
+  }, [nodes, edges, initialConfig]);
 
   // Handle node selection
   const handleNodeClick = useCallback(
@@ -357,6 +432,13 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
     try {
       const updatedConfig = nodesToWorkflow(nodes, edges, initialConfig);
       await onSave(updatedConfig);
+      // Update initial state after successful save
+      initialStateRef.current = JSON.stringify(updatedConfig);
+      // Clear dirty state
+      if (draftContext) {
+        draftContext.setIsWorkflowDirty(false);
+        draftContext.setWorkflowDraft(null);
+      }
       toast.success('Workflow saved successfully');
     } catch (error) {
       console.error('Failed to save workflow:', error);
@@ -364,7 +446,7 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
     } finally {
       setIsSaving(false);
     }
-  }, [nodes, edges, initialConfig, onSave]);
+  }, [nodes, edges, initialConfig, onSave, draftContext]);
 
   // Calculate validation counts
   const validationCounts = useMemo(() => {

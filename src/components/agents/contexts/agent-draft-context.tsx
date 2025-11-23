@@ -1,0 +1,164 @@
+'use client';
+
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+  ReactNode,
+} from 'react';
+import type { WorkflowConfig } from '@/lib/validations/agents';
+
+/**
+ * Draft state for the Settings form
+ */
+export interface SettingsDraft {
+  globalPrompt: string;
+  llmEnabled: boolean;
+  llmModel: string;
+  llmTemperature: number;
+  llmMaxTokens: number;
+  llmServiceTier: string;
+  ttsEnabled: boolean;
+  ragEnabled: boolean;
+  ragConfigId: string | null;
+  voiceConfigId: string | null;
+  autoHangupEnabled: boolean;
+}
+
+/**
+ * Draft state for the Workflow editor
+ */
+export interface WorkflowDraft {
+  config: Partial<WorkflowConfig>;
+  // Store the serialized state to detect changes
+  serializedState: string;
+}
+
+interface AgentDraftContextValue {
+  // Workflow draft state
+  workflowDraft: WorkflowDraft | null;
+  setWorkflowDraft: (draft: WorkflowDraft | null) => void;
+  isWorkflowDirty: boolean;
+  setIsWorkflowDirty: (dirty: boolean) => void;
+
+  // Settings draft state
+  settingsDraft: SettingsDraft | null;
+  setSettingsDraft: (draft: SettingsDraft | null) => void;
+  isSettingsDirty: boolean;
+  setIsSettingsDirty: (dirty: boolean) => void;
+
+  // Combined dirty state
+  isDirty: boolean;
+
+  // Clear all drafts (after save or discard)
+  clearAllDrafts: () => void;
+  clearWorkflowDraft: () => void;
+  clearSettingsDraft: () => void;
+
+  // Base version ID to detect when server data changes
+  baseVersionId: string | null;
+  setBaseVersionId: (id: string | null) => void;
+}
+
+const AgentDraftContext = createContext<AgentDraftContextValue | null>(null);
+
+interface AgentDraftProviderProps {
+  children: ReactNode;
+  initialVersionId?: string | null;
+}
+
+export function AgentDraftProvider({ children, initialVersionId }: AgentDraftProviderProps) {
+  // Workflow state
+  const [workflowDraft, setWorkflowDraft] = useState<WorkflowDraft | null>(null);
+  const [isWorkflowDirty, setIsWorkflowDirty] = useState(false);
+
+  // Settings state
+  const [settingsDraft, setSettingsDraft] = useState<SettingsDraft | null>(null);
+  const [isSettingsDirty, setIsSettingsDirty] = useState(false);
+
+  // Base version tracking
+  const [baseVersionId, setBaseVersionId] = useState<string | null>(initialVersionId || null);
+
+  // Clear drafts if the server version changes (e.g., another user saved)
+  useEffect(() => {
+    if (initialVersionId && baseVersionId && initialVersionId !== baseVersionId) {
+      // Server version changed, clear drafts
+      setWorkflowDraft(null);
+      setIsWorkflowDirty(false);
+      setSettingsDraft(null);
+      setIsSettingsDirty(false);
+      setBaseVersionId(initialVersionId);
+    }
+  }, [initialVersionId, baseVersionId]);
+
+  const clearAllDrafts = useCallback(() => {
+    setWorkflowDraft(null);
+    setIsWorkflowDirty(false);
+    setSettingsDraft(null);
+    setIsSettingsDirty(false);
+  }, []);
+
+  const clearWorkflowDraft = useCallback(() => {
+    setWorkflowDraft(null);
+    setIsWorkflowDirty(false);
+  }, []);
+
+  const clearSettingsDraft = useCallback(() => {
+    setSettingsDraft(null);
+    setIsSettingsDirty(false);
+  }, []);
+
+  const isDirty = isWorkflowDirty || isSettingsDirty;
+
+  const value: AgentDraftContextValue = {
+    workflowDraft,
+    setWorkflowDraft,
+    isWorkflowDirty,
+    setIsWorkflowDirty,
+    settingsDraft,
+    setSettingsDraft,
+    isSettingsDirty,
+    setIsSettingsDirty,
+    isDirty,
+    clearAllDrafts,
+    clearWorkflowDraft,
+    clearSettingsDraft,
+    baseVersionId,
+    setBaseVersionId,
+  };
+
+  return (
+    <AgentDraftContext.Provider value={value}>
+      {children}
+    </AgentDraftContext.Provider>
+  );
+}
+
+export function useAgentDraft() {
+  const context = useContext(AgentDraftContext);
+  if (!context) {
+    throw new Error('useAgentDraft must be used within an AgentDraftProvider');
+  }
+  return context;
+}
+
+/**
+ * Hook to handle beforeunload warning for unsaved changes
+ */
+export function useUnsavedChangesWarning(isDirty: boolean) {
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+        // Modern browsers ignore custom messages, but this is required
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
+}
