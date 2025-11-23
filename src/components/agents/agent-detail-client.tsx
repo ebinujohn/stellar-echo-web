@@ -215,14 +215,36 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
       service_tier: settingsDraft.llmServiceTier,
     };
 
+    // Build TTS config from draft - must be in workflow.tts per AGENT_JSON_SCHEMA.md
+    const ttsConfig = {
+      enabled: settingsDraft.ttsEnabled,
+      voice_name: currentConfig.workflow?.tts?.voice_name, // Preserve existing voice_name
+      model: settingsDraft.tts.model,
+      stability: settingsDraft.tts.stability,
+      similarity_boost: settingsDraft.tts.similarityBoost,
+      style: settingsDraft.tts.style,
+      use_speaker_boost: settingsDraft.tts.useSpeakerBoost,
+      enable_ssml_parsing: settingsDraft.tts.enableSsmlParsing,
+      pronunciation_dictionaries_enabled: settingsDraft.tts.pronunciationDictionariesEnabled,
+      pronunciation_dictionary_ids: settingsDraft.tts.pronunciationDictionaryIds
+        .split(',')
+        .map((id: string) => id.trim())
+        .filter(Boolean),
+    };
+
     const updatedConfig = {
       ...currentConfig,
       workflow: {
         ...currentConfig.workflow,
-        global_prompt: settingsDraft.globalPrompt || undefined,
+        // Note: global_prompt goes to DB column, not workflow JSON
         llm: llmConfig,
+        tts: ttsConfig, // TTS config inside workflow per AGENT_JSON_SCHEMA.md
       },
-      tts: { enabled: settingsDraft.ttsEnabled },
+      // Remove deprecated root-level fields
+      tts: undefined,
+      stt: undefined,
+      llm: undefined,
+      rag: undefined,
       auto_hangup: { enabled: settingsDraft.autoHangupEnabled },
     };
 
@@ -286,14 +308,36 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
         service_tier: settingsDraft.llmServiceTier,
       };
 
+      // Build TTS config from draft - must be in workflow.tts per AGENT_JSON_SCHEMA.md
+      const ttsConfig = {
+        enabled: settingsDraft.ttsEnabled,
+        voice_name: configJson.workflow?.tts?.voice_name, // Preserve existing voice_name
+        model: settingsDraft.tts.model,
+        stability: settingsDraft.tts.stability,
+        similarity_boost: settingsDraft.tts.similarityBoost,
+        style: settingsDraft.tts.style,
+        use_speaker_boost: settingsDraft.tts.useSpeakerBoost,
+        enable_ssml_parsing: settingsDraft.tts.enableSsmlParsing,
+        pronunciation_dictionaries_enabled: settingsDraft.tts.pronunciationDictionariesEnabled,
+        pronunciation_dictionary_ids: settingsDraft.tts.pronunciationDictionaryIds
+          .split(',')
+          .map((id: string) => id.trim())
+          .filter(Boolean),
+      };
+
       configJson = {
         ...configJson,
         workflow: {
           ...configJson.workflow,
-          global_prompt: settingsDraft.globalPrompt || undefined,
+          // Note: global_prompt goes to DB column, not workflow JSON
           llm: llmConfig,
+          tts: ttsConfig, // TTS config inside workflow per AGENT_JSON_SCHEMA.md
         },
-        tts: { enabled: settingsDraft.ttsEnabled },
+        // Remove deprecated root-level fields
+        tts: undefined,
+        stt: undefined,
+        llm: undefined,
+        rag: undefined,
         auto_hangup: { enabled: settingsDraft.autoHangupEnabled },
       };
 
