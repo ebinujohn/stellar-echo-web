@@ -6,6 +6,7 @@ import {
   useState,
   useCallback,
   useEffect,
+  useRef,
   ReactNode,
 } from 'react';
 import type { WorkflowConfig } from '@/lib/validations/agents';
@@ -78,20 +79,22 @@ export function AgentDraftProvider({ children, initialVersionId }: AgentDraftPro
   const [settingsDraft, setSettingsDraft] = useState<SettingsDraft | null>(null);
   const [isSettingsDirty, setIsSettingsDirty] = useState(false);
 
-  // Base version tracking
-  const [baseVersionId, setBaseVersionId] = useState<string | null>(initialVersionId || null);
+  // Base version tracking - use ref to track previous value
+  const [baseVersionId, setBaseVersionIdState] = useState<string | null>(initialVersionId || null);
+  const previousVersionIdRef = useRef<string | null>(initialVersionId || null);
 
-  // Clear drafts if the server version changes (e.g., another user saved)
-  useEffect(() => {
-    if (initialVersionId && baseVersionId && initialVersionId !== baseVersionId) {
-      // Server version changed, clear drafts
+  // Custom setter that clears drafts when version changes externally
+  const setBaseVersionId = useCallback((newVersionId: string | null) => {
+    if (newVersionId && previousVersionIdRef.current && newVersionId !== previousVersionIdRef.current) {
+      // Version changed externally (e.g., activated different version), clear all drafts
       setWorkflowDraft(null);
       setIsWorkflowDirty(false);
       setSettingsDraft(null);
       setIsSettingsDirty(false);
-      setBaseVersionId(initialVersionId);
     }
-  }, [initialVersionId, baseVersionId]);
+    previousVersionIdRef.current = newVersionId;
+    setBaseVersionIdState(newVersionId);
+  }, []);
 
   const clearAllDrafts = useCallback(() => {
     setWorkflowDraft(null);

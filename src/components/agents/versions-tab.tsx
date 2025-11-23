@@ -54,6 +54,10 @@ interface AgentVersion {
   tenantId: string;
   version: number;
   configJson: WorkflowConfig;
+  globalPrompt: string | null;
+  ragEnabled: boolean;
+  ragConfigId: string | null;
+  voiceConfigId: string | null;
   isActive: boolean;
   createdBy: string | null;
   createdAt: Date;
@@ -262,26 +266,43 @@ export function VersionsTab({ agentId, activeVersionId }: VersionsTabProps) {
             </DialogDescription>
           </DialogHeader>
           <ScrollArea className="max-h-[60vh] pr-4">
-            {selectedVersion?.configJson && (
+            {selectedVersion && (
               <div className="space-y-4">
-                {/* Agent Section */}
+                {/* Version-level Settings Section */}
                 <ConfigSection
-                  title="Agent"
-                  data={selectedVersion.configJson.agent}
-                  expanded={expandedSections.has('agent')}
-                  onToggle={() => toggleSection('agent')}
+                  title="Version Settings"
+                  data={{
+                    globalPrompt: selectedVersion.globalPrompt || '(not set)',
+                    ragEnabled: selectedVersion.ragEnabled,
+                    ragConfigId: selectedVersion.ragConfigId || '(not set)',
+                    voiceConfigId: selectedVersion.voiceConfigId || '(not set)',
+                  }}
+                  expanded={expandedSections.has('version_settings')}
+                  onToggle={() => toggleSection('version_settings')}
                 />
+
+                {/* Agent Section */}
+                {selectedVersion.configJson?.agent && (
+                  <ConfigSection
+                    title="Agent"
+                    data={selectedVersion.configJson.agent}
+                    expanded={expandedSections.has('agent')}
+                    onToggle={() => toggleSection('agent')}
+                  />
+                )}
 
                 {/* Workflow Section */}
-                <ConfigSection
-                  title="Workflow"
-                  data={selectedVersion.configJson.workflow}
-                  expanded={expandedSections.has('workflow')}
-                  onToggle={() => toggleSection('workflow')}
-                />
+                {selectedVersion.configJson?.workflow && (
+                  <ConfigSection
+                    title="Workflow"
+                    data={selectedVersion.configJson.workflow}
+                    expanded={expandedSections.has('workflow')}
+                    onToggle={() => toggleSection('workflow')}
+                  />
+                )}
 
                 {/* LLM Section */}
-                {(selectedVersion.configJson as any).llm && (
+                {(selectedVersion.configJson as any)?.llm && (
                   <ConfigSection
                     title="LLM Configuration"
                     data={(selectedVersion.configJson as any).llm}
@@ -291,7 +312,7 @@ export function VersionsTab({ agentId, activeVersionId }: VersionsTabProps) {
                 )}
 
                 {/* TTS Section */}
-                {(selectedVersion.configJson as any).tts && (
+                {(selectedVersion.configJson as any)?.tts && (
                   <ConfigSection
                     title="TTS Configuration"
                     data={(selectedVersion.configJson as any).tts}
@@ -301,7 +322,7 @@ export function VersionsTab({ agentId, activeVersionId }: VersionsTabProps) {
                 )}
 
                 {/* STT Section */}
-                {(selectedVersion.configJson as any).stt && (
+                {(selectedVersion.configJson as any)?.stt && (
                   <ConfigSection
                     title="STT Configuration"
                     data={(selectedVersion.configJson as any).stt}
@@ -310,10 +331,10 @@ export function VersionsTab({ agentId, activeVersionId }: VersionsTabProps) {
                   />
                 )}
 
-                {/* RAG Section */}
-                {(selectedVersion.configJson as any).rag && (
+                {/* RAG Section (from configJson if present) */}
+                {(selectedVersion.configJson as any)?.rag && (
                   <ConfigSection
-                    title="RAG Configuration"
+                    title="RAG Configuration (configJson)"
                     data={(selectedVersion.configJson as any).rag}
                     expanded={expandedSections.has('rag')}
                     onToggle={() => toggleSection('rag')}
@@ -321,7 +342,7 @@ export function VersionsTab({ agentId, activeVersionId }: VersionsTabProps) {
                 )}
 
                 {/* Auto Hangup Section */}
-                {selectedVersion.configJson.auto_hangup && (
+                {selectedVersion.configJson?.auto_hangup && (
                   <ConfigSection
                     title="Auto Hangup"
                     data={selectedVersion.configJson.auto_hangup}

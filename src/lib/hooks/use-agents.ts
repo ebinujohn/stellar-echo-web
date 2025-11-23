@@ -46,6 +46,10 @@ interface AgentVersion {
   tenantId: string;
   version: number;
   configJson: WorkflowConfig;
+  globalPrompt: string | null;
+  ragEnabled: boolean;
+  ragConfigId: string | null;
+  voiceConfigId: string | null;
   isActive: boolean;
   createdBy: string | null;
   createdAt: Date;

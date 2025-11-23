@@ -781,6 +781,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
         <TabsContent value="workflow" className="space-y-4">
           {agent.activeVersion ? (
             <WorkflowEditorLayout
+              key={agent.activeVersion.id}
               initialConfig={agent.activeVersion.configJson}
               onSave={handleWorkflowSave}
             />
@@ -815,6 +816,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
         <TabsContent value="settings" className="space-y-4">
           {agent.activeVersion ? (
             <SettingsForm
+              key={agent.activeVersion.id}
               agentId={agentId}
               currentConfig={agent.activeVersion.configJson}
               globalPrompt={agent.activeVersion.globalPrompt}
