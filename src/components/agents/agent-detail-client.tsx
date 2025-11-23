@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { useAgent, useCreateVersion } from '@/lib/hooks/use-agents';
 import { useAgentPhoneConfigs } from '@/lib/hooks/use-phone-configs';
+import { useVoiceConfig } from '@/lib/hooks/use-voice-configs';
 import { formatDateTime, formatPhoneNumber } from '@/lib/utils/formatters';
 import { DeleteAgentDialog } from './dialogs/delete-agent-dialog';
 import { UnsavedChangesDialog, UnsavedChangesAction } from './dialogs/unsaved-changes-dialog';
@@ -42,6 +43,11 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
   const router = useRouter();
   const { data: agent, isLoading, error } = useAgent(agentId);
   const { data: phoneConfigs } = useAgentPhoneConfigs(agentId);
+
+  // Get voice config ID from active version
+  const voiceConfigId = (agent?.activeVersion as any)?.voiceConfigId;
+  const { data: voiceConfig } = useVoiceConfig(voiceConfigId || '');
+
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const createVersion = useCreateVersion();
@@ -716,7 +722,26 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
                   <CardDescription>Voice configuration (database-backed)</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="text-sm text-muted-foreground">
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <div className="text-muted-foreground">Selected Voice</div>
+                      <div className="font-medium">
+                        {voiceConfig?.name || 'Not Configured'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">TTS Enabled</div>
+                      <div className="font-medium">
+                        {(agent.activeVersion.configJson as any).tts?.enabled !== false ? 'Yes' : 'No'}
+                      </div>
+                    </div>
+                  </div>
+                  {voiceConfig?.description && (
+                    <div className="text-xs text-muted-foreground">
+                      {voiceConfig.description}
+                    </div>
+                  )}
+                  <div className="text-xs text-muted-foreground">
                     Voice/TTS settings are managed via shared configurations in Settings → Voice Configurations.
                   </div>
                 </CardContent>
