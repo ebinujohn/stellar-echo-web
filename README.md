@@ -16,6 +16,131 @@ A modern, production-ready web application for managing voice AI agent calls and
 - **Workflow Editor**: ReactFlow 11.11.4 with Dagre layout
 - **Code Editor**: Monaco Editor (for JSON editing)
 
+## Technologies & Libraries
+
+### Core Framework
+
+**Next.js 16 (App Router)**
+- Full-stack React framework providing server-side rendering, API routes, and file-based routing
+- Uses the App Router architecture with React Server Components for optimal performance
+- Handles both frontend rendering and backend API endpoints in a unified codebase
+- Provides middleware for authentication and request processing
+
+**React 19**
+- Latest version of the UI library with improved performance and concurrent features
+- Powers all interactive components including the workflow editor and dashboard visualizations
+- Leverages React hooks extensively for state management and side effects
+
+### Language & Type Safety
+
+**TypeScript 5**
+- Statically typed superset of JavaScript ensuring type safety across the entire codebase
+- Provides IntelliSense, refactoring support, and catches errors at compile time
+- All database schemas, API responses, and component props are strictly typed
+
+**Zod 3**
+- Runtime schema validation library used for validating API inputs and form data
+- Ensures data integrity at API boundaries before database operations
+- Generates TypeScript types from schemas for end-to-end type safety
+
+### Database & ORM
+
+**PostgreSQL**
+- Robust relational database storing all application data
+- Leverages JSONB columns for flexible storage of metrics data and transcripts
+- Supports complex aggregations for analytics dashboards
+
+**Drizzle ORM**
+- Type-safe ORM providing SQL-like query syntax with full TypeScript integration
+- Schema definitions in `src/lib/db/schema/` map directly to database tables
+- Supports connection pooling, migrations, and Drizzle Studio for database inspection
+
+### Authentication & Security
+
+**JWT (JSON Web Tokens)**
+- Stateless authentication using signed tokens stored in HTTP-only cookies
+- Access tokens (15-minute expiry) and refresh tokens (7-day expiry) for session management
+- Custom middleware validates tokens and injects user context into requests
+
+**bcrypt**
+- Industry-standard password hashing algorithm
+- Securely stores and verifies user credentials in the database
+
+### State Management & Data Fetching
+
+**TanStack Query v5**
+- Powerful data fetching library handling caching, background updates, and request deduplication
+- Configurable stale times (30 seconds to 5 minutes) balance freshness with performance
+- Provides loading, error, and success states out of the box
+- Custom hooks in `src/lib/hooks/` wrap all API calls for consistent data management
+
+### UI Components & Styling
+
+**Tailwind CSS v4**
+- Utility-first CSS framework for rapid UI development
+- Theme-aware styling supporting light and dark modes via CSS custom properties
+- Responsive design utilities for mobile, tablet, and desktop layouts
+
+**shadcn/ui**
+- High-quality, accessible component library built on Radix UI primitives
+- Components in `src/components/ui/` include buttons, dialogs, tables, tabs, and more
+- Fully customizable and integrated with Tailwind CSS theming
+
+**Radix UI**
+- Unstyled, accessible UI primitives powering shadcn/ui components
+- Handles complex interactions like dropdowns, modals, and tooltips
+- Ensures WCAG accessibility compliance
+
+**Lucide React**
+- Modern icon library providing consistent iconography throughout the application
+- Tree-shakeable for optimal bundle size
+
+### Data Visualization
+
+**Recharts 3.4.1**
+- Composable charting library built on React and D3
+- Powers all dashboard visualizations: line charts, bar charts, pie charts, and area charts
+- Theme-aware configuration in `src/lib/charts/config.ts` ensures consistent styling
+- Responsive containers adapt to different screen sizes
+
+### Workflow Editor
+
+**ReactFlow 11.11.4**
+- Interactive node-based diagram library for the visual workflow editor
+- Custom node components render different node types (Standard, Retrieve Variable, End Call)
+- Built-in features include pan/zoom, minimap, and node selection
+- Handles complex edge routing and connection validation
+
+**Dagre**
+- Directed graph layout algorithm for automatic node positioning
+- Converts workflow JSON into hierarchical layouts
+- Ensures readable flow diagrams without manual positioning
+
+### Code Editing
+
+**Monaco Editor**
+- The same editor that powers VS Code, embedded for JSON configuration editing
+- Provides syntax highlighting, validation, and auto-completion
+- Used for advanced workflow configuration and debugging
+
+### Development Tools
+
+**ESLint**
+- JavaScript/TypeScript linter enforcing code quality and consistency
+- Custom rules configured for Next.js and React best practices
+
+**Prettier**
+- Opinionated code formatter ensuring consistent code style
+- Integrated with ESLint for seamless development workflow
+
+**Vitest**
+- Fast unit testing framework compatible with Vite
+- Used for testing utility functions, hooks, and business logic
+
+**Playwright**
+- End-to-end testing framework for browser automation
+- Tests critical user flows including authentication and navigation
+
 ## Prerequisites
 
 - Node.js 20+ or Bun

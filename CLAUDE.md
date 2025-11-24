@@ -215,3 +215,4 @@ All metrics show min/avg/max values with interruption indicators.
 - `rm -rf .next && pnpm build`
 - `pnpm db:generate`
 - `pnpm type-check`
+- Use Context7 MCP for any library documentation. Use Playwright MCP for UI & UX testing and checking.
