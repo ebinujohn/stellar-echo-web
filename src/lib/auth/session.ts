@@ -1,7 +1,26 @@
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { verifyToken, type JWTPayload } from './jwt';
 
 export async function getSession(): Promise<JWTPayload | null> {
+  // First check if middleware already validated and injected user info
+  // This handles the race condition where middleware refreshed the token
+  // but the cookie hasn't been updated yet in the current request
+  const headerStore = await headers();
+  const userId = headerStore.get('x-user-id');
+  const tenantId = headerStore.get('x-tenant-id');
+  const role = headerStore.get('x-user-role');
+  const email = headerStore.get('x-user-email');
+
+  if (userId && tenantId && role && email) {
+    return {
+      userId,
+      tenantId,
+      role: role as 'admin' | 'viewer',
+      email,
+    };
+  }
+
+  // Fallback to cookie verification for non-middleware routes
   const cookieStore = await cookies();
   const token = cookieStore.get('access_token')?.value;
 

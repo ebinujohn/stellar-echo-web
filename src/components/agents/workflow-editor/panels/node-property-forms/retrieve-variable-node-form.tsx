@@ -7,7 +7,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Select,
   SelectContent,
@@ -100,7 +99,7 @@ export function RetrieveVariableNodeForm({
   };
 
   return (
-    <ScrollArea className="h-full">
+    <div className="h-full overflow-y-auto [scrollbar-gutter:stable]">
       <div className="space-y-6 p-4">
         {/* Basic Info */}
         <div className="space-y-4">
@@ -302,6 +301,6 @@ export function RetrieveVariableNodeForm({
           )}
         </div>
       </div>
-    </ScrollArea>
+    </div>
   );
 }

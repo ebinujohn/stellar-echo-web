@@ -9,7 +9,6 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Select,
   SelectContent,
@@ -62,8 +61,16 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
   );
 
   // RAG Override Settings
-  const [ragOverrideEnabled, setRagOverrideEnabled] = useState(
+  // Track if user has touched RAG settings (to know when to save)
+  const [ragTouched, setRagTouched] = useState(
     nodeData.rag !== undefined && nodeData.rag !== null
+  );
+  // Override enabled controls showing/saving tuning params (off by default)
+  const [ragOverrideEnabled, setRagOverrideEnabled] = useState(
+    // Only enable if existing config has tuning params (more than just enabled)
+    nodeData.rag !== undefined &&
+    nodeData.rag !== null &&
+    (nodeData.rag.search_mode !== undefined || nodeData.rag.top_k !== undefined)
   );
   const [ragEnabled, setRagEnabled] = useState(nodeData.rag?.enabled ?? false);
   const [ragSearchMode, setRagSearchMode] = useState(nodeData.rag?.search_mode || 'hybrid');
@@ -124,16 +131,24 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
       updates.system_prompt = systemPrompt;
     }
 
-    // Add RAG configuration if override is enabled
-    if (ragOverrideEnabled) {
-      updates.rag = {
-        enabled: ragEnabled,
-        search_mode: ragSearchMode,
-        top_k: ragTopK,
-        rrf_k: ragRrfK,
-        vector_weight: ragVectorWeight,
-        fts_weight: ragFtsWeight,
-      };
+    // Add RAG configuration if user has touched RAG settings
+    if (ragTouched) {
+      if (ragOverrideEnabled) {
+        // Include full tuning params when override is enabled
+        updates.rag = {
+          enabled: ragEnabled,
+          search_mode: ragSearchMode,
+          top_k: ragTopK,
+          rrf_k: ragRrfK,
+          vector_weight: ragVectorWeight,
+          fts_weight: ragFtsWeight,
+        };
+      } else {
+        // Only save basic enabled state when override is off
+        updates.rag = {
+          enabled: ragEnabled,
+        };
+      }
     } else {
       updates.rag = undefined;
     }
@@ -170,6 +185,7 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
     transitions,
     onEntryActions,
     onExitActions,
+    ragTouched,
     ragOverrideEnabled,
     ragEnabled,
     ragSearchMode,
@@ -236,7 +252,7 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
   };
 
   return (
-    <ScrollArea className="h-full">
+    <div className="h-full overflow-y-auto [scrollbar-gutter:stable]">
       <div className="space-y-6 p-4">
         {/* Basic Info */}
         <div className="space-y-4">
@@ -527,7 +543,7 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
 
         <Separator />
 
-        {/* RAG Override Configuration */}
+        {/* RAG Configuration */}
         <div className="space-y-4">
           <Collapsible open={ragCollapsibleOpen} onOpenChange={setRagCollapsibleOpen}>
             <div className="flex items-center justify-between">
@@ -543,120 +559,139 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
                 </CollapsibleTrigger>
                 <Label className="cursor-pointer" onClick={() => setRagCollapsibleOpen(!ragCollapsibleOpen)}>
                   <Database className="h-4 w-4 inline mr-2" />
-                  RAG Overrides
+                  Enable RAG
                 </Label>
               </div>
               <Switch
-                checked={ragOverrideEnabled}
-                onCheckedChange={setRagOverrideEnabled}
+                checked={ragEnabled}
+                onCheckedChange={(checked) => {
+                  setRagEnabled(checked);
+                  // Mark RAG settings as touched to save the state
+                  setRagTouched(true);
+                }}
               />
             </div>
 
             <CollapsibleContent className="space-y-4 mt-4">
-              {ragOverrideEnabled && (
-                <>
-                  <div className="p-3 border rounded-lg bg-muted/50 space-y-4">
-                    <p className="text-xs text-muted-foreground">
-                      Override global RAG settings for this node only. Unset fields will use global defaults.
-                    </p>
+              <div className="p-3 border rounded-lg bg-muted/50 space-y-4">
+                <p className="text-xs text-muted-foreground">
+                  {ragEnabled
+                    ? 'RAG is enabled for this node. Toggle Override Settings below to customize search parameters.'
+                    : 'RAG is disabled for this node. Toggle the switch to enable knowledge base retrieval.'}
+                </p>
 
+                {/* RAG Override Toggle - only show when RAG is enabled */}
+                {ragEnabled && (
+                  <>
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
-                        <Label className="text-sm">Enable RAG</Label>
+                        <Label className="text-sm">Override Settings</Label>
                         <p className="text-xs text-muted-foreground">
-                          Enable/disable knowledge base for this node
+                          Customize search parameters for this node
                         </p>
                       </div>
-                      <Switch checked={ragEnabled} onCheckedChange={setRagEnabled} />
+                      <Switch
+                        checked={ragOverrideEnabled}
+                        onCheckedChange={setRagOverrideEnabled}
+                      />
                     </div>
 
-                    <Separator />
+                    {/* RAG Tuning Options - only show when override is enabled */}
+                    {ragOverrideEnabled && (
+                      <>
+                        <Separator />
 
-                    <div className="space-y-3">
-                      <div>
-                        <Label className="text-xs">Search Mode</Label>
-                        <Select value={ragSearchMode} onValueChange={setRagSearchMode}>
-                          <SelectTrigger className="h-8 mt-1.5">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="vector">Vector (Semantic)</SelectItem>
-                            <SelectItem value="fts">FTS (Keyword)</SelectItem>
-                            <SelectItem value="hybrid">Hybrid</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+                        <div className="space-y-3">
+                          <div>
+                            <Label className="text-xs">Search Mode</Label>
+                            <Select value={ragSearchMode} onValueChange={setRagSearchMode}>
+                              <SelectTrigger className="h-8 mt-1.5">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="vector">Vector (Semantic)</SelectItem>
+                                <SelectItem value="fts">FTS (Keyword)</SelectItem>
+                                <SelectItem value="hybrid">Hybrid</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
 
-                      <div>
-                        <Label className="text-xs">Top K Results</Label>
-                        <Input
-                          type="number"
-                          min="1"
-                          max="50"
-                          value={ragTopK}
-                          onChange={(e) => setRagTopK(parseInt(e.target.value) || 5)}
-                          className="h-8 mt-1.5"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Number of chunks (1-50)
-                        </p>
-                      </div>
-                    </div>
+                          <div>
+                            <Label className="text-xs">Top K Results</Label>
+                            <Input
+                              type="number"
+                              min="1"
+                              max="50"
+                              value={ragTopK}
+                              onChange={(e) => setRagTopK(parseInt(e.target.value) || 5)}
+                              className="h-8 mt-1.5"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Number of chunks (1-50)
+                            </p>
+                          </div>
+                        </div>
 
-                    <Separator />
-                    <div className="text-xs font-medium">Hybrid Search Weights</div>
+                        {ragSearchMode === 'hybrid' && (
+                          <>
+                            <Separator />
+                            <div className="text-xs font-medium">Hybrid Search Weights</div>
 
-                    <div className="grid grid-cols-3 gap-3">
-                      <div>
-                        <Label className="text-xs">RRF K</Label>
-                        <Input
-                          type="number"
-                          min="1"
-                          max="200"
-                          value={ragRrfK}
-                          onChange={(e) => setRagRrfK(parseInt(e.target.value) || 60)}
-                          className="h-8 mt-1.5"
-                        />
-                      </div>
+                            <div className="grid grid-cols-3 gap-3">
+                              <div>
+                                <Label className="text-xs">RRF K</Label>
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  max="200"
+                                  value={ragRrfK}
+                                  onChange={(e) => setRagRrfK(parseInt(e.target.value) || 60)}
+                                  className="h-8 mt-1.5"
+                                />
+                              </div>
 
-                      <div>
-                        <Label className="text-xs">Vector Weight</Label>
-                        <Input
-                          type="number"
-                          step="0.05"
-                          min="0"
-                          max="1"
-                          value={ragVectorWeight}
-                          onChange={(e) => setRagVectorWeight(parseFloat(e.target.value) || 0.6)}
-                          className="h-8 mt-1.5"
-                        />
-                      </div>
+                              <div>
+                                <Label className="text-xs">Vector Weight</Label>
+                                <Input
+                                  type="number"
+                                  step="0.05"
+                                  min="0"
+                                  max="1"
+                                  value={ragVectorWeight}
+                                  onChange={(e) => setRagVectorWeight(parseFloat(e.target.value) || 0.6)}
+                                  className="h-8 mt-1.5"
+                                />
+                              </div>
 
-                      <div>
-                        <Label className="text-xs">FTS Weight</Label>
-                        <Input
-                          type="number"
-                          step="0.05"
-                          min="0"
-                          max="1"
-                          value={ragFtsWeight}
-                          onChange={(e) => setRagFtsWeight(parseFloat(e.target.value) || 0.4)}
-                          className="h-8 mt-1.5"
-                        />
-                      </div>
-                    </div>
+                              <div>
+                                <Label className="text-xs">FTS Weight</Label>
+                                <Input
+                                  type="number"
+                                  step="0.05"
+                                  min="0"
+                                  max="1"
+                                  value={ragFtsWeight}
+                                  onChange={(e) => setRagFtsWeight(parseFloat(e.target.value) || 0.4)}
+                                  className="h-8 mt-1.5"
+                                />
+                              </div>
+                            </div>
 
-                    {/* Weight validation warning */}
-                    {ragSearchMode === 'hybrid' && Math.abs((ragVectorWeight + ragFtsWeight) - 1.0) > 0.01 && (
-                      <div className="rounded border border-yellow-500/50 bg-yellow-500/10 p-2">
-                        <p className="text-xs text-yellow-600 dark:text-yellow-500">
-                          <strong>Warning:</strong> Weights should sum to 1.0. Current: {(ragVectorWeight + ragFtsWeight).toFixed(2)}
-                        </p>
-                      </div>
+                            {/* Weight validation warning */}
+                            {Math.abs((ragVectorWeight + ragFtsWeight) - 1.0) > 0.01 && (
+                              <div className="rounded border border-yellow-500/50 bg-yellow-500/10 p-2">
+                                <p className="text-xs text-yellow-600 dark:text-yellow-500">
+                                  <strong>Warning:</strong> Weights should sum to 1.0. Current: {(ragVectorWeight + ragFtsWeight).toFixed(2)}
+                                </p>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </>
                     )}
-                  </div>
-                </>
-              )}
+                  </>
+                )}
+              </div>
             </CollapsibleContent>
           </Collapsible>
         </div>
@@ -773,6 +808,6 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
           </Collapsible>
         </div>
       </div>
-    </ScrollArea>
+    </div>
   );
 }

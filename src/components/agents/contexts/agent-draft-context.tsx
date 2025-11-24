@@ -26,6 +26,18 @@ export interface TtsDraft {
 }
 
 /**
+ * Draft state for RAG tuning parameters (configured per-agent)
+ * These override the base RAG config's settings when ragOverrideEnabled is true
+ */
+export interface RagDraft {
+  searchMode: 'vector' | 'fts' | 'hybrid';
+  topK: number;
+  rrfK: number;
+  vectorWeight: number;
+  ftsWeight: number;
+}
+
+/**
  * Draft state for the Settings form
  */
 export interface SettingsDraft {
@@ -39,6 +51,8 @@ export interface SettingsDraft {
   tts: TtsDraft; // TTS tuning parameters
   ragEnabled: boolean;
   ragConfigId: string | null;
+  ragOverrideEnabled: boolean; // Whether to override RAG config settings
+  rag: RagDraft; // RAG tuning parameters (when ragOverrideEnabled is true)
   voiceConfigId: string | null;
   autoHangupEnabled: boolean;
 }

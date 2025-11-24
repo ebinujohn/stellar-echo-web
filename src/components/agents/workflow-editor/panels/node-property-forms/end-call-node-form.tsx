@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import type { WorkflowNodeData } from '../../utils/json-converter';
 
 interface EndCallNodeFormProps {
@@ -23,7 +22,7 @@ export function EndCallNodeForm({ nodeData, onUpdate }: EndCallNodeFormProps) {
   }, [name]);
 
   return (
-    <ScrollArea className="h-full">
+    <div className="h-full overflow-y-auto [scrollbar-gutter:stable]">
       <div className="space-y-6 p-4">
         {/* Basic Info */}
         <div className="space-y-4">
@@ -64,6 +63,6 @@ export function EndCallNodeForm({ nodeData, onUpdate }: EndCallNodeFormProps) {
           </p>
         </div>
       </div>
-    </ScrollArea>
+    </div>
   );
 }

@@ -26,7 +26,7 @@ import { useLlmModelsDropdown } from '@/lib/hooks/use-llm-configs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Slider } from '@/components/ui/slider';
 import { ttsModels } from '@/lib/validations/voice-configs';
-import { useAgentDraft, SettingsDraft, TtsDraft } from './contexts/agent-draft-context';
+import { useAgentDraft, SettingsDraft, TtsDraft, RagDraft } from './contexts/agent-draft-context';
 
 // Safe hook to get draft context (returns null if not in provider)
 function useOptionalAgentDraft() {
@@ -76,6 +76,35 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
   );
   const [ragEnabledState, setRagEnabledState] = useState(() =>
     getInitialValue(draftContext?.settingsDraft?.ragEnabled, initialRagEnabled ?? false)
+  );
+
+  // RAG Tuning Parameters (stored in workflow.rag per AGENT_JSON_SCHEMA.md)
+  const workflowRag = currentConfig.workflow?.rag;
+  const defaultRag: RagDraft = {
+    searchMode: 'hybrid',
+    topK: 5,
+    rrfK: 60,
+    vectorWeight: 0.6,
+    ftsWeight: 0.4,
+  };
+
+  const [ragOverrideEnabled, setRagOverrideEnabled] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.ragOverrideEnabled, workflowRag?.override_enabled ?? false)
+  );
+  const [ragSearchMode, setRagSearchMode] = useState<'vector' | 'fts' | 'hybrid'>(() =>
+    getInitialValue(draftContext?.settingsDraft?.rag?.searchMode, workflowRag?.search_mode ?? defaultRag.searchMode)
+  );
+  const [ragTopK, setRagTopK] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.rag?.topK, workflowRag?.top_k ?? defaultRag.topK)
+  );
+  const [ragRrfK, setRagRrfK] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.rag?.rrfK, workflowRag?.rrf_k ?? defaultRag.rrfK)
+  );
+  const [ragVectorWeight, setRagVectorWeight] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.rag?.vectorWeight, workflowRag?.vector_weight ?? defaultRag.vectorWeight)
+  );
+  const [ragFtsWeight, setRagFtsWeight] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.rag?.ftsWeight, workflowRag?.fts_weight ?? defaultRag.ftsWeight)
   );
 
   // Voice Config Selection - initialize from workflow.tts.voice_name if no ID provided
@@ -198,6 +227,14 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
     },
     ragEnabled: ragEnabledState,
     ragConfigId: selectedRagConfigId || null,
+    ragOverrideEnabled,
+    rag: {
+      searchMode: ragSearchMode,
+      topK: ragTopK,
+      rrfK: ragRrfK,
+      vectorWeight: ragVectorWeight,
+      ftsWeight: ragFtsWeight,
+    },
     voiceConfigId: selectedVoiceConfigId || null,
     autoHangupEnabled,
   }), [
@@ -205,6 +242,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
     llmServiceTier, ttsEnabled, ttsModel, ttsStability, ttsSimilarityBoost,
     ttsStyle, ttsUseSpeakerBoost, ttsEnableSsmlParsing, ttsPronunciationEnabled,
     ttsPronunciationDictionaryIds, ragEnabledState, selectedRagConfigId,
+    ragOverrideEnabled, ragSearchMode, ragTopK, ragRrfK, ragVectorWeight, ragFtsWeight,
     selectedVoiceConfigId, autoHangupEnabled
   ]);
 
@@ -232,6 +270,14 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
       },
       ragEnabled: initialRagEnabled ?? false,
       ragConfigId: initialRagConfigId || null,
+      ragOverrideEnabled: workflowRag?.override_enabled ?? false,
+      rag: {
+        searchMode: workflowRag?.search_mode ?? defaultRag.searchMode,
+        topK: workflowRag?.top_k ?? defaultRag.topK,
+        rrfK: workflowRag?.rrf_k ?? defaultRag.rrfK,
+        vectorWeight: workflowRag?.vector_weight ?? defaultRag.vectorWeight,
+        ftsWeight: workflowRag?.fts_weight ?? defaultRag.ftsWeight,
+      },
       voiceConfigId: initialVoiceConfigId || null,
       autoHangupEnabled: currentConfig.auto_hangup?.enabled ?? true,
     };
@@ -272,10 +318,10 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
       // Voice config - only use shared config reference
       const finalVoiceConfigId = selectedVoiceConfigId || null;
 
-      // TTS config - full settings stored in workflow.tts per AGENT_JSON_SCHEMA.md
+      // TTS config - tuning parameters stored in workflow.tts per AGENT_JSON_SCHEMA.md
+      // Note: voice_name is NOT included here - voice selection is via voiceConfigId FK
       const ttsConfig = {
         enabled: ttsEnabled,
-        voice_name: selectedVoiceConfig?.name || undefined, // Reference to voice catalog
         model: ttsModel,
         stability: ttsStability,
         similarity_boost: ttsSimilarityBoost,
@@ -298,6 +344,18 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
         service_tier: llmServiceTier,
       };
 
+      // Build RAG config for workflow.rag section (tuning overrides for base RAG config)
+      const ragConfig = ragOverrideEnabled ? {
+        override_enabled: true,
+        search_mode: ragSearchMode,
+        top_k: ragTopK,
+        rrf_k: ragRrfK,
+        vector_weight: ragVectorWeight,
+        fts_weight: ragFtsWeight,
+      } : {
+        override_enabled: false,
+      };
+
       // Merge the form data with the existing config
       // LLM config goes in workflow.llm, TTS config goes in workflow.tts per AGENT_JSON_SCHEMA.md
       // Note: Root-level tts is removed - all TTS config must be in workflow.tts
@@ -308,6 +366,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
           global_prompt: globalPrompt || undefined,
           llm: llmConfig,
           tts: ttsConfig, // TTS settings stored in workflow.tts (per AGENT_JSON_SCHEMA.md)
+          rag: ragConfig, // RAG tuning overrides stored in workflow.rag
         },
         // Remove deprecated root-level fields that should be in workflow section
         tts: undefined,
@@ -725,7 +784,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
                 </div>
 
                 {/* Show selected config preview */}
-                {selectedRagConfig?.activeVersion && (
+                {selectedRagConfig?.activeVersion && !ragOverrideEnabled && (
                   <div className="rounded-lg border bg-muted/50 p-4 space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="font-medium">{selectedRagConfig.name}</span>
@@ -751,6 +810,142 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
                       )}
                     </div>
                   </div>
+                )}
+
+                <Separator />
+
+                {/* RAG Override Toggle */}
+                <div className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-0.5">
+                    <Label className="text-base">Override RAG Settings</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Customize search parameters for this agent
+                    </p>
+                  </div>
+                  <Switch checked={ragOverrideEnabled} onCheckedChange={setRagOverrideEnabled} />
+                </div>
+
+                {/* RAG Tuning Options */}
+                {ragOverrideEnabled && (
+                  <>
+                    <Separator />
+
+                    <div className="space-y-4">
+                      <h4 className="text-sm font-medium">Search Settings</h4>
+
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="rag-search-mode">Search Mode</Label>
+                          <Select
+                            value={ragSearchMode}
+                            onValueChange={(value) => setRagSearchMode(value as 'vector' | 'fts' | 'hybrid')}
+                          >
+                            <SelectTrigger id="rag-search-mode">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="vector">
+                                <div className="flex flex-col">
+                                  <span>Vector (Semantic)</span>
+                                  <span className="text-xs text-muted-foreground">Best for meaning-based queries</span>
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="fts">
+                                <div className="flex flex-col">
+                                  <span>FTS (Keyword)</span>
+                                  <span className="text-xs text-muted-foreground">Best for exact matches</span>
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="hybrid">
+                                <div className="flex flex-col">
+                                  <span>Hybrid</span>
+                                  <span className="text-xs text-muted-foreground">Combines both approaches</span>
+                                </div>
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="rag-top-k">Top K Results</Label>
+                          <Input
+                            id="rag-top-k"
+                            type="number"
+                            min={1}
+                            max={50}
+                            value={ragTopK}
+                            onChange={(e) => setRagTopK(parseInt(e.target.value) || 5)}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Number of chunks to retrieve (1-50)
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {ragSearchMode === 'hybrid' && (
+                      <>
+                        <Separator />
+
+                        <div className="space-y-4">
+                          <h4 className="text-sm font-medium">Hybrid Search Weights</h4>
+
+                          {/* Weight validation warning */}
+                          {Math.abs((ragVectorWeight + ragFtsWeight) - 1.0) > 0.01 && (
+                            <Alert variant="destructive">
+                              <AlertTriangle className="h-4 w-4" />
+                              <AlertDescription>
+                                Vector and FTS weights must sum to 1.0 (currently: {(ragVectorWeight + ragFtsWeight).toFixed(2)})
+                              </AlertDescription>
+                            </Alert>
+                          )}
+
+                          <div className="grid gap-4 md:grid-cols-3">
+                            <div className="space-y-2">
+                              <Label htmlFor="rag-vector-weight">Vector Weight</Label>
+                              <Input
+                                id="rag-vector-weight"
+                                type="number"
+                                step="0.1"
+                                min={0}
+                                max={1}
+                                value={ragVectorWeight}
+                                onChange={(e) => setRagVectorWeight(parseFloat(e.target.value) || 0.6)}
+                              />
+                              <p className="text-xs text-muted-foreground">Semantic search (0-1)</p>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label htmlFor="rag-fts-weight">FTS Weight</Label>
+                              <Input
+                                id="rag-fts-weight"
+                                type="number"
+                                step="0.1"
+                                min={0}
+                                max={1}
+                                value={ragFtsWeight}
+                                onChange={(e) => setRagFtsWeight(parseFloat(e.target.value) || 0.4)}
+                              />
+                              <p className="text-xs text-muted-foreground">Keyword search (0-1)</p>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label htmlFor="rag-rrf-k">RRF K Constant</Label>
+                              <Input
+                                id="rag-rrf-k"
+                                type="number"
+                                min={1}
+                                max={200}
+                                value={ragRrfK}
+                                onChange={(e) => setRagRrfK(parseInt(e.target.value) || 60)}
+                              />
+                              <p className="text-xs text-muted-foreground">Fusion constant (1-200)</p>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </>
                 )}
 
                 {!ragConfigs?.length && (

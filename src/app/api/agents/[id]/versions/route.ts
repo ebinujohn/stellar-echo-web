@@ -3,8 +3,10 @@ import { requireAuth } from '@/lib/auth/session';
 import {
   getAgentVersions,
   createAgentVersion,
+  activateVersion,
 } from '@/lib/db/queries/agents';
 import { createVersionSchema, validateAgentConfig } from '@/lib/validations/agents';
+import { refreshAgentConfigCache } from '@/lib/external-apis/admin-api';
 import { z } from 'zod';
 
 type RouteContext = {
@@ -78,7 +80,7 @@ export async function POST(
     // Create new version
     // voiceConfigId is FK to voice_configs table (voice selection)
     // TTS tuning params are in configJson.workflow.tts (per AGENT_JSON_SCHEMA.md)
-    const newVersion = await createAgentVersion(
+    let newVersion = await createAgentVersion(
       agentId,
       data.configJson,
       session.email,
@@ -90,9 +92,25 @@ export async function POST(
       data.voiceConfigId
     );
 
+    // Auto-activate the new version if requested
+    let cacheRefreshed = false;
+    if (data.autoActivate) {
+      newVersion = await activateVersion(newVersion.id, agentId, session.tenantId);
+
+      // Refresh the agent config cache in the orchestrator
+      // This ensures the orchestrator picks up the new active configuration
+      // Note: Cache refresh failure should not block the response
+      const cacheRefreshResult = await refreshAgentConfigCache({
+        tenantId: session.tenantId,
+        agentId,
+      });
+      cacheRefreshed = cacheRefreshResult !== null;
+    }
+
     return NextResponse.json({
       success: true,
       data: newVersion,
+      cacheRefreshed,
       // Include warnings in successful response so frontend can display them
       warnings: validationResult.warnings.length > 0 ? validationResult.warnings : undefined,
     }, { status: 201 });

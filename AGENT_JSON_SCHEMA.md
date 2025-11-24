@@ -68,12 +68,14 @@ All agents **must** use node-based workflows. Traditional single-prompt mode has
 > **Agent JSON (`workflow` section):**
 > - **LLM**: `workflow.llm` section with model_name, temperature, max_tokens (model_name resolved via `llm_models` table)
 > - **TTS Tuning**: `workflow.tts` section with stability, similarity_boost, etc. (voice selection via `voice_config_id` FK in database)
+> - **RAG Tuning**: `workflow.rag` section with search_mode, top_k, rrf_k, weights (base config via `rag_config_id` FK in database)
 >
 > **Database:**
 > - **Voice Selection**: `agent_config_versions.voice_config_id` FK links to `voice_configs` table
+> - **RAG Config Selection**: `agent_config_versions.rag_config_id` FK links to `rag_configs` table
 >
 > **Database-backed:**
-> - **RAG**: `rag_configs` and `rag_config_versions` tables
+> - **RAG Base Config**: `rag_configs` and `rag_config_versions` tables (agent JSON `workflow.rag` can override search params)
 > - **Voice Catalog**: `voice_configs` table (system-level, maps voice_name → voice_id)
 > - **LLM Model Catalog**: `llm_models` table (system-level, maps model_name → actual_model_id)
 > - **Phone Numbers**: `phone_configs` table (phone number pool) + `phone_mappings` table
@@ -1612,11 +1614,13 @@ Retrieval-Augmented Generation (RAG) provides knowledge base integration for age
 
 ### Database-Based Configuration
 
-> **Important:** RAG configuration is stored in the **database**, NOT in the agent JSON file. This allows:
+> **Important:** Base RAG configuration (file paths, bedrock settings, relevance_filter) is stored in the **database**. This allows:
 > - Shared RAG configs across multiple agents
 > - Independent versioning of RAG settings
 > - Easier RAG config management and updates
-> - Node-level overrides remain in the agent JSON
+>
+> **Agent-level overrides:** `workflow.rag` section can override search tuning parameters (search_mode, top_k, rrf_k, weights)
+> **Node-level overrides:** Each node's `rag` field can override parameters for that specific node
 
 ### Database Tables
 
@@ -1657,6 +1661,48 @@ The `agent_config_versions` table has two columns for RAG:
 2. Create a version in `rag_config_versions` with settings
 3. Link agent to RAG config via `agent_config_versions.rag_config_id`
 4. Enable RAG with `agent_config_versions.rag_enabled = true`
+
+### Agent-Level RAG Tuning Overrides (Agent JSON)
+
+Similar to how TTS tuning is in `workflow.tts`, agents can override RAG search parameters at the agent level via `workflow.rag`. This allows customizing search behavior without modifying the shared database RAG config.
+
+```json
+{
+  "workflow": {
+    "rag": {
+      "override_enabled": true,
+      "search_mode": "hybrid",
+      "top_k": 8,
+      "rrf_k": 70,
+      "vector_weight": 0.7,
+      "fts_weight": 0.3
+    },
+    "nodes": [...]
+  }
+}
+```
+
+#### Agent-Level RAG Fields
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `override_enabled` | boolean | ❌ No | `false` | Enable agent-level RAG overrides (if false, uses database config only) |
+| `search_mode` | string | ❌ No | from DB | Search mode: `"vector"`, `"fts"`, `"hybrid"` |
+| `top_k` | integer | ❌ No | from DB | Number of chunks to retrieve (1-50) |
+| `rrf_k` | integer | ❌ No | from DB | RRF fusion constant (1-200) |
+| `vector_weight` | decimal | ❌ No | from DB | Vector search weight (0.0-1.0) |
+| `fts_weight` | decimal | ❌ No | from DB | FTS weight (0.0-1.0) |
+
+**How it works:**
+- If `override_enabled` is `false` or `workflow.rag` is omitted, database RAG config is used as-is
+- If `override_enabled` is `true`, specified fields override the database config defaults
+- Node-level `rag` overrides take precedence over both database and `workflow.rag` settings
+- Only search tuning parameters can be overridden (not file paths, bedrock settings, etc.)
+
+**Override Hierarchy:**
+```
+Database RAG Config (base) → workflow.rag (agent-level) → node.rag (node-level)
+```
 
 ### RAG Config Parameters
 
@@ -2119,15 +2165,6 @@ Simplest valid configuration:
   },
   "workflow": {
     "initial_node": "greeting",
-    "llm": {
-      "enabled": true,
-      "model_name": "gpt4.1",
-      "temperature": 1.0,
-      "max_tokens": 150
-    },
-    "tts": {
-      "enabled": true
-    },
     "nodes": [
       {
         "id": "greeting",
@@ -2150,7 +2187,7 @@ Simplest valid configuration:
 }
 ```
 
-> **Note:** The `workflow.llm` and `workflow.tts` sections are **required** per the CRITICAL warnings above. Voice selection is via `voice_config_id` FK in the database. See [LLM Configuration](#llm-configuration-json-based), [Voice/TTS Configuration](#voicetts-configuration-database-fk--json-tuning), and [Phone Number Pool](#phone-number-pool-database-backed).
+> **Note:** LLM configuration is in the agent JSON (`workflow.llm` section). Voice/TTS and phone configurations are set via the database. See [LLM Configuration](#llm-configuration-json-based), [Voice/TTS Configuration](#voicetts-configuration-database-backed), and [Phone Number Pool](#phone-number-pool-database-backed).
 
 ### Multi-Stage Workflow with Variable Extraction
 
@@ -2166,17 +2203,6 @@ Simplest valid configuration:
     "global_prompt": "You are a friendly survey bot. Be concise and polite.",
     "history_window": 10,
     "max_transitions": 30,
-    "llm": {
-      "enabled": true,
-      "model_name": "gpt4.1",
-      "temperature": 0.8,
-      "max_tokens": 150
-    },
-    "tts": {
-      "enabled": true,
-      "stability": 0.5,
-      "similarity_boost": 0.75
-    },
     "interruption_settings": {
       "enabled": true,
       "delay_ms": 300,
@@ -2281,7 +2307,7 @@ Simplest valid configuration:
 }
 ```
 
-> **Note:** This example includes the required `workflow.llm` and `workflow.tts` sections. Voice selection is via `voice_config_id` FK in the database.
+> **Note:** LLM configuration is in the agent JSON (`workflow.llm` section). Voice/TTS and phone configurations are set via the database.
 
 ### Medical Assistant with RAG
 
@@ -2296,18 +2322,6 @@ Simplest valid configuration:
     "initial_node": "greeting",
     "global_prompt": "You are a medical education assistant.\n\nIMPORTANT:\n- Provide education only, NOT medical advice\n- Always recommend consulting a healthcare provider\n- Use clear, jargon-free language",
     "history_window": 20,
-    "llm": {
-      "enabled": true,
-      "model_name": "gpt4.1",
-      "temperature": 0.7,
-      "max_tokens": 200
-    },
-    "tts": {
-      "enabled": true,
-      "stability": 0.6,
-      "similarity_boost": 0.8,
-      "pronunciation_dictionaries_enabled": true
-    },
     "nodes": [
       {
         "id": "greeting",
@@ -2380,9 +2394,10 @@ Simplest valid configuration:
 }
 ```
 
-> **Note:** This example includes the required `workflow.llm` and `workflow.tts` sections. Additionally:
-> - `rag_enabled=true` and `rag_config_id` must be set in the database pointing to a RAG config with appropriate paths for medical knowledge base
-> - `voice_config_id` must be set in the database to link to a voice from the voice catalog
+> **Note:** This agent requires:
+> - `workflow.llm` section in agent JSON with `enabled: true` and appropriate model selection
+> - `rag_enabled=true` and `rag_config_id` set in the database pointing to a RAG config with appropriate paths for medical knowledge base
+> - `voice_config_id` set in the database with pronunciation dictionaries enabled for medical terms
 
 **RAG Configuration Notes:**
 - **Greeting node**: RAG disabled - no knowledge needed for welcome message
@@ -2564,4 +2579,4 @@ ORDER BY category, display_order;
 
 ---
 
-**Last Updated**: 2025-11-23 (Added CRITICAL warnings for TTS/LLM section requirements; documented proactive LLM generation behavior and two-node speak-then-listen pattern; fixed priority documentation; updated Complete Examples to include required workflow.llm and workflow.tts sections)
+**Last Updated**: 2025-11-23 (Added CRITICAL warnings for TTS/LLM section requirements; documented proactive LLM generation behavior and two-node speak-then-listen pattern; fixed priority documentation)

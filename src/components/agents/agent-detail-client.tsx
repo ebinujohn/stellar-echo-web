@@ -29,6 +29,7 @@ import { useVoiceConfig } from '@/lib/hooks/use-voice-configs';
 import { formatDateTime, formatPhoneNumber } from '@/lib/utils/formatters';
 import { DeleteAgentDialog } from './dialogs/delete-agent-dialog';
 import { UnsavedChangesDialog, UnsavedChangesAction } from './dialogs/unsaved-changes-dialog';
+import { SaveVersionDialog } from './dialogs/save-version-dialog';
 import { WorkflowEditorLayout } from './workflow-editor/workflow-editor-layout';
 import { SettingsForm } from './settings-form';
 import { VersionsTab } from './versions-tab';
@@ -61,6 +62,18 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
   const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
   const [isSavingFromDialog, setIsSavingFromDialog] = useState(false);
+
+  // Save version dialog state
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [saveDialogContext, setSaveDialogContext] = useState<{
+    type: 'workflow' | 'settings' | 'combined';
+    config?: any;
+    ragEnabled?: boolean;
+    ragConfigId?: string | null;
+    voiceConfigId?: string | null;
+    globalPrompt?: string | null;
+    navigateAfterSave?: string; // URL to navigate to after successful save
+  } | null>(null);
 
   // Ref to track if we should allow navigation (after user confirms)
   const allowNavigationRef = useRef(false);
@@ -155,29 +168,91 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
       }
 
       if (action === 'save') {
-        setIsSavingFromDialog(true);
-        try {
-          // Save ALL tabs with changes (combined save)
-          await handleCombinedSave();
-
-          setUnsavedDialogOpen(false);
-          if (pendingNavigation) {
-            // Allow navigation through and trigger it
-            allowNavigationRef.current = true;
-            router.push(pendingNavigation);
-            setPendingNavigation(null);
-          }
-        } catch (error) {
-          // Error already handled in save functions
-        } finally {
-          setIsSavingFromDialog(false);
-        }
+        // Close unsaved dialog and open save notes dialog with navigation context
+        setUnsavedDialogOpen(false);
+        // Trigger combined save which will open the notes dialog
+        // Pass the pending navigation to continue after save
+        handleCombinedSaveWithNavigation(pendingNavigation);
+        setPendingNavigation(null);
       }
     },
     [pendingNavigation, router, clearAllDrafts]
   );
 
-  // Handler for settings form - passes all settings explicitly
+  // Combined save that includes navigation after save
+  const handleCombinedSaveWithNavigation = (navigateTo: string | null) => {
+    if (!agent?.activeVersion) return;
+
+    const activeVersion = agent.activeVersion as any;
+    let configJson = activeVersion.configJson;
+    let globalPrompt = activeVersion.globalPrompt;
+    let ragEnabled = activeVersion.ragEnabled;
+    let ragConfigId = activeVersion.ragConfigId;
+    let voiceConfigId = activeVersion.voiceConfigId;
+
+    // Apply workflow draft changes if dirty
+    if (isWorkflowDirty && workflowDraft?.config) {
+      configJson = workflowDraft.config;
+    }
+
+    // Apply settings draft changes if dirty
+    if (isSettingsDirty && settingsDraft) {
+      const llmConfig = {
+        enabled: settingsDraft.llmEnabled,
+        model_name: settingsDraft.llmModel,
+        temperature: settingsDraft.llmTemperature,
+        max_tokens: settingsDraft.llmMaxTokens,
+        service_tier: settingsDraft.llmServiceTier,
+      };
+
+      const ttsConfig = {
+        enabled: settingsDraft.ttsEnabled,
+        model: settingsDraft.tts.model,
+        stability: settingsDraft.tts.stability,
+        similarity_boost: settingsDraft.tts.similarityBoost,
+        style: settingsDraft.tts.style,
+        use_speaker_boost: settingsDraft.tts.useSpeakerBoost,
+        enable_ssml_parsing: settingsDraft.tts.enableSsmlParsing,
+        pronunciation_dictionaries_enabled: settingsDraft.tts.pronunciationDictionariesEnabled,
+        pronunciation_dictionary_ids: settingsDraft.tts.pronunciationDictionaryIds
+          .split(',')
+          .map((id: string) => id.trim())
+          .filter(Boolean),
+      };
+
+      configJson = {
+        ...configJson,
+        workflow: {
+          ...configJson.workflow,
+          llm: llmConfig,
+          tts: ttsConfig,
+        },
+        tts: undefined,
+        stt: undefined,
+        llm: undefined,
+        rag: undefined,
+        auto_hangup: { enabled: settingsDraft.autoHangupEnabled },
+      };
+
+      globalPrompt = settingsDraft.globalPrompt;
+      ragEnabled = settingsDraft.ragEnabled;
+      ragConfigId = settingsDraft.ragConfigId;
+      voiceConfigId = settingsDraft.voiceConfigId;
+    }
+
+    setSaveDialogContext({
+      type: 'combined',
+      config: configJson,
+      ragEnabled,
+      ragConfigId,
+      voiceConfigId,
+      globalPrompt,
+      navigateAfterSave: navigateTo || undefined,
+    });
+    setSaveDialogOpen(true);
+  };
+
+  // Handler for settings form - opens dialog to get notes, then saves
   // voiceConfigId is FK to voice_configs table (voice selection)
   // TTS tuning params are in configJson.workflow.tts
   const handleSettingsSave = async (
@@ -187,21 +262,16 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
     voiceConfigId?: string | null,
     globalPrompt?: string | null
   ) => {
-    try {
-      await createVersion.mutateAsync({
-        agentId,
-        configJson: config,
-        notes: 'Updated via settings',
-        globalPrompt,
-        ragEnabled,
-        ragConfigId,
-        voiceConfigId,
-      });
-      clearSettingsDraft();
-      toast.success('New workflow version created');
-    } catch (error) {
-      throw error;
-    }
+    // Store context and open dialog
+    setSaveDialogContext({
+      type: 'settings',
+      config,
+      ragEnabled,
+      ragConfigId,
+      voiceConfigId,
+      globalPrompt,
+    });
+    setSaveDialogOpen(true);
   };
 
   // Helper to save settings from draft
@@ -220,10 +290,10 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
       service_tier: settingsDraft.llmServiceTier,
     };
 
-    // Build TTS config from draft - must be in workflow.tts per AGENT_JSON_SCHEMA.md
+    // Build TTS config from draft - tuning params in workflow.tts per AGENT_JSON_SCHEMA.md
+    // Note: voice_name is NOT included - voice selection is via voiceConfigId FK
     const ttsConfig = {
       enabled: settingsDraft.ttsEnabled,
-      voice_name: currentConfig.workflow?.tts?.voice_name, // Preserve existing voice_name
       model: settingsDraft.tts.model,
       stability: settingsDraft.tts.stability,
       similarity_boost: settingsDraft.tts.similarityBoost,
@@ -243,7 +313,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
         ...currentConfig.workflow,
         // Note: global_prompt goes to DB column, not workflow JSON
         llm: llmConfig,
-        tts: ttsConfig, // TTS config inside workflow per AGENT_JSON_SCHEMA.md
+        tts: ttsConfig, // TTS tuning params inside workflow per AGENT_JSON_SCHEMA.md
       },
       // Remove deprecated root-level fields
       tts: undefined,
@@ -262,29 +332,23 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
     );
   };
 
-  // Handler for workflow editor - preserves existing settings (globalPrompt, rag configs, voice config)
+  // Handler for workflow editor - opens dialog to get notes, then saves
   // voiceConfigId is FK to voice_configs table (voice selection)
   const handleWorkflowSave = async (config: any) => {
-    try {
-      // Preserve existing settings from active version
-      const activeVersion = agent?.activeVersion as any;
-      await createVersion.mutateAsync({
-        agentId,
-        configJson: config,
-        notes: 'Updated via visual editor',
-        globalPrompt: activeVersion?.globalPrompt,
-        ragEnabled: activeVersion?.ragEnabled,
-        ragConfigId: activeVersion?.ragConfigId,
-        voiceConfigId: activeVersion?.voiceConfigId,
-      });
-      clearWorkflowDraft();
-      toast.success('New workflow version created');
-    } catch (error) {
-      throw error; // Re-throw to let WorkflowEditorLayout handle it
-    }
+    // Store context and open dialog
+    const activeVersion = agent?.activeVersion as any;
+    setSaveDialogContext({
+      type: 'workflow',
+      config,
+      ragEnabled: activeVersion?.ragEnabled,
+      ragConfigId: activeVersion?.ragConfigId,
+      voiceConfigId: activeVersion?.voiceConfigId,
+      globalPrompt: activeVersion?.globalPrompt,
+    });
+    setSaveDialogOpen(true);
   };
 
-  // Combined save handler - saves ALL tabs with changes in a single version
+  // Combined save handler - opens dialog to get notes, then saves ALL tabs with changes
   // voiceConfigId is FK to voice_configs table (voice selection)
   const handleCombinedSave = async () => {
     if (!agent?.activeVersion) return;
@@ -295,12 +359,10 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
     let ragEnabled = activeVersion.ragEnabled;
     let ragConfigId = activeVersion.ragConfigId;
     let voiceConfigId = activeVersion.voiceConfigId;
-    const notes: string[] = [];
 
     // Apply workflow draft changes if dirty
     if (isWorkflowDirty && workflowDraft?.config) {
       configJson = workflowDraft.config;
-      notes.push('workflow');
     }
 
     // Apply settings draft changes if dirty
@@ -313,10 +375,10 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
         service_tier: settingsDraft.llmServiceTier,
       };
 
-      // Build TTS config from draft - must be in workflow.tts per AGENT_JSON_SCHEMA.md
+      // Build TTS config from draft - tuning params in workflow.tts per AGENT_JSON_SCHEMA.md
+      // Note: voice_name is NOT included - voice selection is via voiceConfigId FK
       const ttsConfig = {
         enabled: settingsDraft.ttsEnabled,
-        voice_name: configJson.workflow?.tts?.voice_name, // Preserve existing voice_name
         model: settingsDraft.tts.model,
         stability: settingsDraft.tts.stability,
         similarity_boost: settingsDraft.tts.similarityBoost,
@@ -336,7 +398,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
           ...configJson.workflow,
           // Note: global_prompt goes to DB column, not workflow JSON
           llm: llmConfig,
-          tts: ttsConfig, // TTS config inside workflow per AGENT_JSON_SCHEMA.md
+          tts: ttsConfig, // TTS tuning params inside workflow per AGENT_JSON_SCHEMA.md
         },
         // Remove deprecated root-level fields
         tts: undefined,
@@ -350,21 +412,58 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
       ragEnabled = settingsDraft.ragEnabled;
       ragConfigId = settingsDraft.ragConfigId;
       voiceConfigId = settingsDraft.voiceConfigId;
-      notes.push('settings');
     }
+
+    // Store context and open dialog
+    setSaveDialogContext({
+      type: 'combined',
+      config: configJson,
+      ragEnabled,
+      ragConfigId,
+      voiceConfigId,
+      globalPrompt,
+    });
+    setSaveDialogOpen(true);
+  };
+
+  // Handler that performs the actual save with user-provided notes
+  const handleSaveWithNotes = async (notes: string) => {
+    if (!saveDialogContext) return;
+
+    const navigateTo = saveDialogContext.navigateAfterSave;
 
     try {
       await createVersion.mutateAsync({
         agentId,
-        configJson,
-        notes: `Updated ${notes.join(' and ')}`,
-        globalPrompt,
-        ragEnabled,
-        ragConfigId,
-        voiceConfigId,
+        configJson: saveDialogContext.config,
+        notes,
+        globalPrompt: saveDialogContext.globalPrompt,
+        ragEnabled: saveDialogContext.ragEnabled,
+        ragConfigId: saveDialogContext.ragConfigId,
+        voiceConfigId: saveDialogContext.voiceConfigId,
+        autoActivate: true, // Auto-activate so changes are immediately visible
       });
-      clearAllDrafts();
-      toast.success('Changes saved successfully');
+
+      // Clear appropriate drafts based on save type
+      if (saveDialogContext.type === 'workflow') {
+        clearWorkflowDraft();
+        toast.success('Workflow saved and activated');
+      } else if (saveDialogContext.type === 'settings') {
+        clearSettingsDraft();
+        toast.success('Settings saved and activated');
+      } else {
+        clearAllDrafts();
+        toast.success('Changes saved and activated');
+      }
+
+      setSaveDialogOpen(false);
+      setSaveDialogContext(null);
+
+      // Navigate if we were saving before navigating away
+      if (navigateTo) {
+        allowNavigationRef.current = true;
+        router.push(navigateTo);
+      }
     } catch (error) {
       toast.error('Failed to save changes');
       throw error;
@@ -908,7 +1007,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
               globalPrompt={agent.activeVersion.globalPrompt}
               ragEnabled={agent.activeVersion.ragEnabled}
               ragConfigId={agent.activeVersion.ragConfigId}
-              voiceConfigId={null} // Voice selection stored in configJson.workflow.tts
+              voiceConfigId={(agent.activeVersion as any)?.voiceConfigId}
               onSave={handleSettingsSave}
             />
           ) : (
@@ -962,6 +1061,17 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
         onAction={handleUnsavedAction}
         isNavigatingAway={!!pendingNavigation}
         isSaving={isSavingFromDialog}
+      />
+
+      {/* Save Version Dialog */}
+      <SaveVersionDialog
+        open={saveDialogOpen}
+        onOpenChange={(open) => {
+          setSaveDialogOpen(open);
+          if (!open) setSaveDialogContext(null);
+        }}
+        onSave={handleSaveWithNotes}
+        isSaving={createVersion.isPending}
       />
     </div>
   );

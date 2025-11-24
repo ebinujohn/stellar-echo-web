@@ -39,6 +39,7 @@ export const createVersionSchema = z.object({
   ragEnabled: z.boolean().optional(),
   ragConfigId: z.string().uuid().nullable().optional(),
   voiceConfigId: z.string().uuid().nullable().optional(),
+  autoActivate: z.boolean().optional(), // Auto-activate the new version after creation
 });
 
 export type CreateVersionInput = z.infer<typeof createVersionSchema>;
@@ -272,6 +273,20 @@ const ttsConfigSchema = z.object({
 });
 
 /**
+ * Global RAG configuration schema (workflow.rag section)
+ * These are agent-level overrides for the base RAG config (selected via rag_config_id)
+ * Only applied when rag_override_enabled is true
+ */
+const globalRagConfigSchema = z.object({
+  override_enabled: z.boolean().optional().default(false),
+  search_mode: z.enum(['vector', 'fts', 'hybrid']).optional(),
+  top_k: z.number().int().min(1).max(50).optional(),
+  rrf_k: z.number().int().min(1).max(200).optional(),
+  vector_weight: z.number().min(0).max(1).optional(),
+  fts_weight: z.number().min(0).max(1).optional(),
+});
+
+/**
  * Workflow configuration schema
  * Note: llm and tts configs are inside workflow section per AGENT_JSON_SCHEMA.md
  */
@@ -284,6 +299,7 @@ const workflowSchema = z.object({
   recording: recordingSchema.optional(),
   llm: llmConfigSchema.optional(), // LLM config lives in workflow section
   tts: ttsConfigSchema.optional(), // TTS tuning config lives in workflow section (per AGENT_JSON_SCHEMA.md)
+  rag: globalRagConfigSchema.optional(), // RAG tuning overrides for agent-level settings
   nodes: z.array(nodeSchema).min(1, 'At least one node is required'),
 });
 
@@ -447,6 +463,7 @@ export type EndCallNode = z.infer<typeof endCallNodeSchema>;
 export type Transition = z.infer<typeof transitionSchema>;
 export type LlmOverride = z.infer<typeof llmOverrideSchema>;
 export type RagOverride = z.infer<typeof ragConfigSchema>;
+export type GlobalRagConfig = z.infer<typeof globalRagConfigSchema>;
 export type TtsConfig = z.infer<typeof ttsConfigSchema>;
 
 // ========================================
