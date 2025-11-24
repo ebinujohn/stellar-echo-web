@@ -216,6 +216,10 @@ export function nodesToWorkflow(
     ...(existingConfig && (existingConfig.workflow as any)?.llm && {
       llm: (existingConfig.workflow as any).llm,
     }),
+    // Preserve TTS config (lives in workflow.tts per AGENT_JSON_SCHEMA.md)
+    ...(existingConfig && (existingConfig.workflow as any)?.tts && {
+      tts: (existingConfig.workflow as any).tts,
+    }),
     nodes: configNodes,
   };
 

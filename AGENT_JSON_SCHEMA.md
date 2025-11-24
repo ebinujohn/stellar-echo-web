@@ -1022,6 +1022,71 @@ See [Intent-Based Transitions](#intent-based-transitions) under Standard Node fo
 - Cancelled if user input triggers different transition
 - Cancelled if manually transitioning to different node
 
+#### Proactive LLM Generation (Speak-Then-Listen Pattern)
+
+**Key Behavior:** When transitioning to a node, if that node has a `skip_response` transition, the system triggers **proactive LLM generation**. This causes the bot to speak immediately upon entering the node without waiting for user input.
+
+**Why this matters:** Without `skip_response`, nodes wait for user input before generating LLM responses. This is the correct behavior for "listen-then-speak" nodes, but wrong for "speak-then-listen" nodes (like greetings or prompts).
+
+**Two-Node Pattern for Speak-Then-Listen:**
+
+```json
+{
+  "nodes": [
+    {
+      "id": "greeting",
+      "name": "Greeting",
+      "system_prompt": "Greet the user and ask for their name.",
+      "transitions": [
+        {
+          "condition": "skip_response",
+          "target": "listen_for_name"
+        }
+      ]
+    },
+    {
+      "id": "listen_for_name",
+      "name": "Listen for Name",
+      "system_prompt": "Wait for the user to provide their name.",
+      "transitions": [
+        {
+          "condition": "user_responded",
+          "target": "extract_name"
+        }
+      ]
+    }
+  ]
+}
+```
+
+**How it works:**
+1. User enters `greeting` node
+2. System detects `skip_response` transition → triggers proactive LLM generation
+3. LLM generates greeting → TTS speaks it
+4. After speech completes → auto-transitions to `listen_for_name`
+5. `listen_for_name` has `user_responded` (not `skip_response`) → waits for user input
+
+**Common Mistake:** Using `always` instead of `skip_response`:
+
+```json
+// ❌ WRONG: Bot won't speak - transitions immediately without LLM generation
+{
+  "condition": "always",
+  "target": "next_node"
+}
+
+// ✅ CORRECT: Bot speaks first, then transitions after speech completes
+{
+  "condition": "skip_response",
+  "target": "next_node"
+}
+```
+
+**Summary:**
+- `skip_response` = "Speak first, then transition"
+- `always` = "Transition immediately without speaking"
+- `user_responded` = "Wait for user input before doing anything"
+
 #### Variable Extraction Success
 
 ```json
@@ -1046,48 +1111,44 @@ See [Intent-Based Transitions](#intent-based-transitions) under Standard Node fo
 
 ### Transition Priority and Evaluation Order
 
-⚠️ **Important**: The `priority` field is accepted in the JSON schema for future use but is **currently NOT implemented**. Transitions are evaluated in the order they appear in the JSON array, not by priority value.
+Transitions are sorted by priority before evaluation. **Lower priority number = evaluated first** (like "1st priority", "2nd priority").
 
-**Current Behavior** (v0.0.93):
-- Transitions evaluated **sequentially** from first to last in the array
-- **First matching condition triggers immediately**
-- `priority` field accepted but ignored in evaluation
-- Array order determines evaluation sequence
+**Behavior:**
+- Transitions sorted by `priority` field (ascending order)
+- Lower number = higher priority (evaluated first)
+- Transitions with **same priority** maintain array order (stable sort)
+- **First matching condition triggers immediately** (others skipped)
 
-**Future Implementation**:
-- Will sort transitions by priority (highest first) before evaluation
-- Higher priority = evaluated first
-
-**Current Workaround**: Place high-priority conditions **first** in the transitions array:
+**Example:**
 
 ```json
 {
   "transitions": [
     {
-      "condition": "contains:emergency",
-      "target": "emergency_node",
-      "priority": 100
-    },
-    {
       "condition": "contains:goodbye",
       "target": "closing",
-      "priority": 50
+      "priority": 1
+    },
+    {
+      "condition": "contains:bye",
+      "target": "closing",
+      "priority": 1
     },
     {
       "condition": "max_turns:10",
-      "target": "closing",
-      "priority": 10
+      "target": "timeout",
+      "priority": 2
     },
     {
       "condition": "skip_response",
       "target": "next_node",
-      "priority": 0
+      "priority": 10
     }
   ]
 }
 ```
 
-In this example, `contains:emergency` is checked first (array position 0), even though priority sorting is not implemented yet.
+**Evaluation order:** goodbye → bye (both priority 1, array order preserved) → max_turns (priority 2) → skip_response (priority 10)
 
 ---
 
@@ -1179,6 +1240,18 @@ Actions support variable substitution with `{{variable_name}}`:
 ## LLM Configuration (JSON-based)
 
 LLM configuration is stored in the agent's JSON config (`workflow.llm` section), with model name resolution via the `llm_models` database table.
+
+> ⚠️ **CRITICAL**: The `workflow.llm` section **MUST exist** in the agent JSON for LLM responses to work. If this section is entirely missing, LLM will be **disabled** and the bot will not generate dynamic responses. At minimum, include:
+> ```json
+> {
+>   "workflow": {
+>     "llm": {
+>       "enabled": true,
+>       "model_name": "gpt4.1"
+>     }
+>   }
+> }
+> ```
 
 ### Architecture
 
@@ -1331,6 +1404,17 @@ Temperature controls response randomness:
 Voice/TTS configuration uses a split approach:
 - **Voice selection** is via `voice_config_id` FK in `agent_config_versions` table
 - **TTS tuning parameters** are stored in agent JSON (`workflow.tts` section)
+
+> ⚠️ **CRITICAL**: The `workflow.tts` section **MUST exist** in the agent JSON for TTS to function. If this section is entirely missing, TTS will be **disabled** and the bot will not speak. At minimum, include:
+> ```json
+> {
+>   "workflow": {
+>     "tts": {
+>       "enabled": true
+>     }
+>   }
+> }
+> ```
 
 This allows:
 - **Referential integrity** - FK prevents referencing non-existent voices
@@ -2035,6 +2119,15 @@ Simplest valid configuration:
   },
   "workflow": {
     "initial_node": "greeting",
+    "llm": {
+      "enabled": true,
+      "model_name": "gpt4.1",
+      "temperature": 1.0,
+      "max_tokens": 150
+    },
+    "tts": {
+      "enabled": true
+    },
     "nodes": [
       {
         "id": "greeting",
@@ -2057,7 +2150,7 @@ Simplest valid configuration:
 }
 ```
 
-> **Note:** LLM configuration is in the agent JSON (`workflow.llm` section). Voice/TTS and phone configurations are set via the database. See [LLM Configuration](#llm-configuration-json-based), [Voice/TTS Configuration](#voicetts-configuration-database-backed), and [Phone Number Pool](#phone-number-pool-database-backed).
+> **Note:** The `workflow.llm` and `workflow.tts` sections are **required** per the CRITICAL warnings above. Voice selection is via `voice_config_id` FK in the database. See [LLM Configuration](#llm-configuration-json-based), [Voice/TTS Configuration](#voicetts-configuration-database-fk--json-tuning), and [Phone Number Pool](#phone-number-pool-database-backed).
 
 ### Multi-Stage Workflow with Variable Extraction
 
@@ -2073,6 +2166,17 @@ Simplest valid configuration:
     "global_prompt": "You are a friendly survey bot. Be concise and polite.",
     "history_window": 10,
     "max_transitions": 30,
+    "llm": {
+      "enabled": true,
+      "model_name": "gpt4.1",
+      "temperature": 0.8,
+      "max_tokens": 150
+    },
+    "tts": {
+      "enabled": true,
+      "stability": 0.5,
+      "similarity_boost": 0.75
+    },
     "interruption_settings": {
       "enabled": true,
       "delay_ms": 300,
@@ -2177,7 +2281,7 @@ Simplest valid configuration:
 }
 ```
 
-> **Note:** LLM configuration is in the agent JSON (`workflow.llm` section). Voice/TTS and phone configurations are set via the database.
+> **Note:** This example includes the required `workflow.llm` and `workflow.tts` sections. Voice selection is via `voice_config_id` FK in the database.
 
 ### Medical Assistant with RAG
 
@@ -2192,6 +2296,18 @@ Simplest valid configuration:
     "initial_node": "greeting",
     "global_prompt": "You are a medical education assistant.\n\nIMPORTANT:\n- Provide education only, NOT medical advice\n- Always recommend consulting a healthcare provider\n- Use clear, jargon-free language",
     "history_window": 20,
+    "llm": {
+      "enabled": true,
+      "model_name": "gpt4.1",
+      "temperature": 0.7,
+      "max_tokens": 200
+    },
+    "tts": {
+      "enabled": true,
+      "stability": 0.6,
+      "similarity_boost": 0.8,
+      "pronunciation_dictionaries_enabled": true
+    },
     "nodes": [
       {
         "id": "greeting",
@@ -2264,10 +2380,9 @@ Simplest valid configuration:
 }
 ```
 
-> **Note:** This agent requires:
-> - `workflow.llm` section in agent JSON with `enabled: true` and appropriate model selection
-> - `rag_enabled=true` and `rag_config_id` set in the database pointing to a RAG config with appropriate paths for medical knowledge base
-> - `voice_config_id` set in the database with pronunciation dictionaries enabled for medical terms
+> **Note:** This example includes the required `workflow.llm` and `workflow.tts` sections. Additionally:
+> - `rag_enabled=true` and `rag_config_id` must be set in the database pointing to a RAG config with appropriate paths for medical knowledge base
+> - `voice_config_id` must be set in the database to link to a voice from the voice catalog
 
 **RAG Configuration Notes:**
 - **Greeting node**: RAG disabled - no knowledge needed for welcome message
@@ -2449,4 +2564,4 @@ ORDER BY category, display_order;
 
 ---
 
-**Last Updated**: 2025-11-23 (Voice selection via voice_config_id FK in database; TTS tuning params remain in JSON; voice_name in JSON only for seeding)
+**Last Updated**: 2025-11-23 (Added CRITICAL warnings for TTS/LLM section requirements; documented proactive LLM generation behavior and two-node speak-then-listen pattern; fixed priority documentation; updated Complete Examples to include required workflow.llm and workflow.tts sections)
