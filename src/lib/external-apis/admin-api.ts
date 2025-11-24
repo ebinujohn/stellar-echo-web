@@ -26,6 +26,44 @@ interface RefreshAgentCacheParams {
   agentId: string;
 }
 
+// RAG Query Types
+export interface RAGQueryParams {
+  tenantId: string;
+  agentId: string;
+  query: string;
+  version?: number;
+  searchMode?: 'vector' | 'fts' | 'hybrid';
+  topK?: number;
+}
+
+export interface RAGChunk {
+  chunk_id: number;
+  content: string;
+  filename: string;
+  score: number | null;
+  document_id: number;
+  chunk_index: number;
+  token_count: number | null;
+  s3_key: string;
+}
+
+export interface RAGQueryMetadata {
+  search_mode: 'vector' | 'fts' | 'hybrid';
+  top_k: number;
+  processing_time_ms: number;
+  total_chunks: number;
+  rag_config_id: string | null;
+  agent_config_version: number;
+  is_active_version: boolean;
+}
+
+export interface RAGQueryResponse {
+  success: boolean;
+  query: string;
+  chunks: RAGChunk[];
+  metadata: RAGQueryMetadata;
+}
+
 /**
  * Computes HMAC-SHA256 signature for Admin API requests.
  *
@@ -137,4 +175,60 @@ export async function refreshAgentConfigCache(
  */
 export function isAdminApiConfigured(): boolean {
   return Boolean(ADMIN_API_BASE_URL && ADMIN_API_KEY);
+}
+
+/**
+ * Queries the RAG knowledge base for an agent.
+ *
+ * Searches the knowledge base using the agent's RAG configuration.
+ * Can optionally target a specific agent config version.
+ *
+ * @param params - Query parameters including tenant, agent, and search options
+ * @returns The RAG query response with chunks and metadata
+ * @throws Error if Admin API is not configured or query fails
+ */
+export async function queryRAG(params: RAGQueryParams): Promise<RAGQueryResponse> {
+  if (!ADMIN_API_BASE_URL || !ADMIN_API_KEY) {
+    throw new Error('Admin API is not configured. Set ADMIN_API_BASE_URL and ADMIN_API_KEY.');
+  }
+
+  const requestBody: Record<string, unknown> = {
+    tenant_id: params.tenantId,
+    agent_id: params.agentId,
+    query: params.query,
+  };
+
+  // Add optional parameters only if provided
+  if (params.version !== undefined) {
+    requestBody.version = params.version;
+  }
+  if (params.searchMode) {
+    requestBody.search_mode = params.searchMode;
+  }
+  if (params.topK !== undefined) {
+    requestBody.top_k = params.topK;
+  }
+
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const path = '/admin/rag/query';
+  const bodyStr = JSON.stringify(requestBody);
+  const signature = computeSignature(ADMIN_API_KEY, timestamp, 'POST', path, bodyStr);
+
+  const response = await fetch(`${ADMIN_API_BASE_URL}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Timestamp': timestamp,
+      'X-Signature': signature,
+    },
+    body: bodyStr,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+    const errorMessage = errorData.detail || `Admin API error: ${response.status}`;
+    throw new Error(errorMessage);
+  }
+
+  return response.json() as Promise<RAGQueryResponse>;
 }

@@ -21,8 +21,9 @@ import {
   Clock,
   FileCode,
   Save,
+  Database,
 } from 'lucide-react';
-import { useAgent, useCreateVersion } from '@/lib/hooks/use-agents';
+import { useAgent, useCreateVersion, useAgentVersions } from '@/lib/hooks/use-agents';
 import { useAgentPhoneConfigs } from '@/lib/hooks/use-phone-configs';
 import { useVoiceConfig } from '@/lib/hooks/use-voice-configs';
 import { formatDateTime, formatPhoneNumber } from '@/lib/utils/formatters';
@@ -31,6 +32,7 @@ import { UnsavedChangesDialog, UnsavedChangesAction } from './dialogs/unsaved-ch
 import { WorkflowEditorLayout } from './workflow-editor/workflow-editor-layout';
 import { SettingsForm } from './settings-form';
 import { VersionsTab } from './versions-tab';
+import { RagQueryTab } from './rag-query-tab';
 import { AgentDraftProvider, useAgentDraft, useUnsavedChangesWarning } from './contexts/agent-draft-context';
 import { toast } from 'sonner';
 
@@ -47,6 +49,9 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
   // Get voice config ID from active version
   const voiceConfigId = (agent?.activeVersion as any)?.voiceConfigId;
   const { data: voiceConfig } = useVoiceConfig(voiceConfigId || '');
+
+  // Get versions for RAG Query tab
+  const { data: versions } = useAgentVersions(agentId);
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
@@ -377,6 +382,8 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
         return 'Versions';
       case 'settings':
         return 'Settings';
+      case 'rag-query':
+        return 'RAG Query';
       default:
         return tab;
     }
@@ -544,6 +551,12 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
               <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-500" />
             )}
           </TabsTrigger>
+          {(agent.activeVersion as any)?.ragEnabled && (
+            <TabsTrigger value="rag-query">
+              <Database className="mr-1.5 h-4 w-4" />
+              RAG Query
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* Overview Tab */}
@@ -918,6 +931,21 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
             </Card>
           )}
         </TabsContent>
+
+        {/* RAG Query Tab - Only shown when RAG is enabled */}
+        {(agent.activeVersion as any)?.ragEnabled && versions && (
+          <TabsContent value="rag-query" className="space-y-4">
+            <RagQueryTab
+              agentId={agentId}
+              versions={versions.map((v: any) => ({
+                id: v.id,
+                version: v.version,
+                isActive: v.isActive,
+                createdAt: v.createdAt,
+              }))}
+            />
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Delete Dialog */}

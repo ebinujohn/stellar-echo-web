@@ -9,6 +9,7 @@ export const QUERY_KEYS = {
     detail: (id: string) => ['agents', id] as const,
     versions: (id: string) => ['agents', id, 'versions'] as const,
     phoneConfigs: (id: string) => ['agents', id, 'phone-configs'] as const,
+    ragQuery: (id: string) => ['agents', id, 'rag-query'] as const,
   },
 
   // Calls
