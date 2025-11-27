@@ -1,4 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiFetch, apiMutate, createDropdownHook } from './factories/create-api-hooks';
+import { QUERY_KEYS } from './constants/query-keys';
+import { STALE_TIMES } from './constants/stale-times';
 import type { CreatePhoneConfigInput, UpdatePhoneConfigInput } from '@/lib/validations/phone-configs';
 
 // ========================================
@@ -35,109 +38,64 @@ interface AgentPhoneConfig {
 }
 
 // ========================================
-// Phone Config Queries
+// Query Hooks
 // ========================================
-
-async function fetchPhoneConfigs(): Promise<PhoneConfig[]> {
-  const response = await fetch('/api/phone-configs');
-  if (!response.ok) {
-    throw new Error('Failed to fetch phone configs');
-  }
-  const json = await response.json();
-  return json.data;
-}
-
-async function fetchPhoneConfig(id: string): Promise<PhoneConfig> {
-  const response = await fetch(`/api/phone-configs/${id}`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch phone config');
-  }
-  const json = await response.json();
-  return json.data;
-}
-
-async function fetchPhoneConfigsDropdown(): Promise<PhoneConfigDropdownItem[]> {
-  const response = await fetch('/api/phone-configs/dropdown');
-  if (!response.ok) {
-    throw new Error('Failed to fetch phone configs for dropdown');
-  }
-  const json = await response.json();
-  return json.data;
-}
 
 export function usePhoneConfigs() {
   return useQuery({
-    queryKey: ['phone-configs'],
-    queryFn: fetchPhoneConfigs,
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    queryKey: QUERY_KEYS.phoneConfigs.all,
+    queryFn: () => apiFetch<PhoneConfig[]>('/api/phone-configs'),
+    staleTime: STALE_TIMES.DETAIL,
   });
 }
 
 export function usePhoneConfig(id: string) {
   return useQuery({
-    queryKey: ['phone-configs', id],
-    queryFn: () => fetchPhoneConfig(id),
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    queryKey: QUERY_KEYS.phoneConfigs.detail(id),
+    queryFn: () => apiFetch<PhoneConfig>(`/api/phone-configs/${id}`),
+    staleTime: STALE_TIMES.DETAIL,
     enabled: !!id,
   });
 }
 
-export function usePhoneConfigsDropdown() {
-  return useQuery({
-    queryKey: ['phone-configs', 'dropdown'],
-    queryFn: fetchPhoneConfigsDropdown,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-}
-
-async function fetchAgentPhoneConfigs(agentId: string): Promise<AgentPhoneConfig[]> {
-  const response = await fetch(`/api/agents/${agentId}/phone-configs`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch agent phone configs');
-  }
-  const json = await response.json();
-  return json.data;
-}
+export const usePhoneConfigsDropdown = createDropdownHook<PhoneConfigDropdownItem[]>(
+  '/api/phone-configs',
+  QUERY_KEYS.phoneConfigs.dropdown,
+  STALE_TIMES.DROPDOWN
+);
 
 export function useAgentPhoneConfigs(agentId: string) {
   return useQuery({
-    queryKey: ['agents', agentId, 'phone-configs'],
-    queryFn: () => fetchAgentPhoneConfigs(agentId),
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    queryKey: QUERY_KEYS.agents.phoneConfigs(agentId),
+    queryFn: () => apiFetch<AgentPhoneConfig[]>(`/api/agents/${agentId}/phone-configs`),
+    staleTime: STALE_TIMES.DETAIL,
     enabled: !!agentId,
   });
 }
 
 // ========================================
-// Phone Config Mutations
+// Mutation Hooks (with custom agent invalidation)
 // ========================================
+
+// Helper to invalidate agent-related queries when phone mappings change
+function invalidateAgentQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({
+    predicate: (query) =>
+      Array.isArray(query.queryKey) &&
+      query.queryKey[0] === 'agents' &&
+      (query.queryKey.length === 2 || query.queryKey[2] === 'phone-configs'),
+  });
+}
 
 export function useCreatePhoneConfig() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: CreatePhoneConfigInput) => {
-      const response = await fetch('/api/phone-configs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to create phone config');
-      }
-      return response.json();
-    },
+    mutationFn: (data: CreatePhoneConfigInput) =>
+      apiMutate('/api/phone-configs', 'POST', data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['phone-configs'] });
-      // Also invalidate all agent-related queries since mapping may have changed
-      // This includes agent details (for phoneMappingCount) and agent phone-configs
-      queryClient.invalidateQueries({
-        predicate: (query) =>
-          Array.isArray(query.queryKey) &&
-          query.queryKey[0] === 'agents' &&
-          (query.queryKey.length === 2 || query.queryKey[2] === 'phone-configs'),
-      });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.phoneConfigs.all });
+      invalidateAgentQueries(queryClient);
     },
   });
 }
@@ -146,29 +104,12 @@ export function useUpdatePhoneConfig() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, ...data }: UpdatePhoneConfigInput & { id: string }) => {
-      const response = await fetch(`/api/phone-configs/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to update phone config');
-      }
-      return response.json();
-    },
+    mutationFn: ({ id, ...data }: UpdatePhoneConfigInput & { id: string }) =>
+      apiMutate(`/api/phone-configs/${id}`, 'PUT', data),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['phone-configs'] });
-      queryClient.invalidateQueries({ queryKey: ['phone-configs', variables.id] });
-      // Also invalidate all agent-related queries since mapping may have changed
-      // This includes agent details (for phoneMappingCount) and agent phone-configs
-      queryClient.invalidateQueries({
-        predicate: (query) =>
-          Array.isArray(query.queryKey) &&
-          query.queryKey[0] === 'agents' &&
-          (query.queryKey.length === 2 || query.queryKey[2] === 'phone-configs'),
-      });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.phoneConfigs.all });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.phoneConfigs.detail(variables.id) });
+      invalidateAgentQueries(queryClient);
     },
   });
 }
@@ -177,26 +118,10 @@ export function useDeletePhoneConfig() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: string) => {
-      const response = await fetch(`/api/phone-configs/${id}`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to delete phone config');
-      }
-      return response.json();
-    },
+    mutationFn: (id: string) => apiMutate(`/api/phone-configs/${id}`, 'DELETE'),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['phone-configs'] });
-      // Also invalidate all agent-related queries since mapping may have been removed
-      // This includes agent details (for phoneMappingCount) and agent phone-configs
-      queryClient.invalidateQueries({
-        predicate: (query) =>
-          Array.isArray(query.queryKey) &&
-          query.queryKey[0] === 'agents' &&
-          (query.queryKey.length === 2 || query.queryKey[2] === 'phone-configs'),
-      });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.phoneConfigs.all });
+      invalidateAgentQueries(queryClient);
     },
   });
 }

@@ -14,13 +14,21 @@ export async function apiFetch<T>(endpoint: string): Promise<T> {
 }
 
 /**
+ * Standard API mutation response format
+ */
+export interface ApiMutationResponse<T = unknown> {
+  success: boolean;
+  data: T;
+}
+
+/**
  * Generic POST/PUT/DELETE fetch wrapper
  */
-export async function apiMutate<T>(
+export async function apiMutate<T = unknown>(
   endpoint: string,
   method: 'POST' | 'PUT' | 'DELETE',
   data?: unknown
-): Promise<T> {
+): Promise<ApiMutationResponse<T>> {
   const response = await fetch(endpoint, {
     method,
     headers: data ? { 'Content-Type': 'application/json' } : undefined,
@@ -36,9 +44,17 @@ export async function apiMutate<T>(
 }
 
 /**
+ * Response type for created/updated resources
+ */
+interface ResourceWithId {
+  id: string;
+  [key: string]: unknown;
+}
+
+/**
  * Configuration for creating CRUD hooks
  */
-interface CrudHooksConfig<TList, TDetail, TCreate, TUpdate> {
+interface CrudHooksConfig<TList, TDetail> {
   /** Base endpoint, e.g., '/api/rag-configs' */
   endpoint: string;
   /** Query key for list, e.g., ['rag-configs'] */
@@ -58,8 +74,8 @@ interface CrudHooksConfig<TList, TDetail, TCreate, TUpdate> {
 /**
  * Creates standard CRUD hooks for a resource
  */
-export function createCrudHooks<TList, TDetail, TCreate, TUpdate>(
-  config: CrudHooksConfig<TList, TDetail, TCreate, TUpdate>
+export function createCrudHooks<TList, TDetail>(
+  config: CrudHooksConfig<TList, TDetail>
 ) {
   const {
     endpoint,
@@ -96,23 +112,23 @@ export function createCrudHooks<TList, TDetail, TCreate, TUpdate>(
     });
   }
 
-  // Create mutation
-  function useCreate() {
+  // Create mutation - accepts any object, returns response with { id }
+  function useCreate<TCreate extends Record<string, unknown> = Record<string, unknown>>() {
     const queryClient = useQueryClient();
     return useMutation({
-      mutationFn: (data: TCreate) => apiMutate(endpoint, 'POST', data),
+      mutationFn: (data: TCreate) => apiMutate<ResourceWithId>(endpoint, 'POST', data),
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: listKey });
       },
     });
   }
 
-  // Update mutation
-  function useUpdate() {
+  // Update mutation - requires id field
+  function useUpdate<TUpdate extends Record<string, unknown> = Record<string, unknown>>() {
     const queryClient = useQueryClient();
     return useMutation({
       mutationFn: ({ id, ...data }: TUpdate & { id: string }) =>
-        apiMutate(`${endpoint}/${id}`, 'PUT', data),
+        apiMutate<ResourceWithId>(`${endpoint}/${id}`, 'PUT', data),
       onSuccess: (_, variables) => {
         queryClient.invalidateQueries({ queryKey: listKey });
         queryClient.invalidateQueries({ queryKey: detailKey(variables.id) });
@@ -143,62 +159,61 @@ export function createCrudHooks<TList, TDetail, TCreate, TUpdate>(
 /**
  * Configuration for versioned resource hooks
  */
-interface VersionedHooksConfig {
+interface VersionedHooksConfig<TVersion, TIdKey extends string = 'id'> {
   /** Base endpoint, e.g., '/api/rag-configs' */
   endpoint: string;
   /** Function to get versions query key */
   versionsKey: (id: string) => QueryKey;
   /** Function to get detail query key for invalidation */
   detailKey: (id: string) => QueryKey;
+  /** List query key for invalidation on activate */
+  listKey?: QueryKey;
   /** Stale time for versions list */
   staleTime: number;
+  /** The key name for the resource ID (e.g., 'agentId', 'ragConfigId') */
+  idKey?: TIdKey;
 }
 
 /**
  * Creates version management hooks for versioned resources
  */
-export function createVersionHooks(config: VersionedHooksConfig) {
-  const { endpoint, versionsKey, detailKey, staleTime } = config;
+export function createVersionHooks<
+  TVersion,
+  TIdKey extends string = 'id',
+>(config: VersionedHooksConfig<TVersion, TIdKey>) {
+  const { endpoint, versionsKey, detailKey, listKey, staleTime, idKey = 'id' as TIdKey } = config;
 
   // Get versions list
   function useVersions(id: string) {
     return useQuery({
       queryKey: versionsKey(id),
-      queryFn: () => apiFetch(`${endpoint}/${id}/versions`),
+      queryFn: () => apiFetch<TVersion[]>(`${endpoint}/${id}/versions`),
       enabled: !!id,
       staleTime,
     });
   }
 
-  // Create new version
-  function useCreateVersion() {
-    const queryClient = useQueryClient();
-    return useMutation({
-      mutationFn: ({ id, ...data }: { id: string } & Record<string, unknown>) =>
-        apiMutate(`${endpoint}/${id}/versions`, 'POST', data),
-      onSuccess: (_, variables) => {
-        queryClient.invalidateQueries({ queryKey: versionsKey(variables.id) });
-        queryClient.invalidateQueries({ queryKey: detailKey(variables.id) });
-      },
-    });
-  }
-
-  // Activate version
+  // Activate version - uses configurable ID key name
   function useActivateVersion() {
     const queryClient = useQueryClient();
     return useMutation({
-      mutationFn: ({ id, versionId }: { id: string; versionId: string }) =>
-        apiMutate(`${endpoint}/${id}/versions/${versionId}/activate`, 'PUT'),
-      onSuccess: (_, variables) => {
-        queryClient.invalidateQueries({ queryKey: versionsKey(variables.id) });
-        queryClient.invalidateQueries({ queryKey: detailKey(variables.id) });
+      mutationFn: (params: Record<TIdKey, string> & { versionId: string }) => {
+        const resourceId = params[idKey as keyof typeof params] as string;
+        return apiMutate(`${endpoint}/${resourceId}/versions/${params.versionId}/activate`, 'PUT');
+      },
+      onSuccess: (_, params) => {
+        const resourceId = params[idKey as keyof typeof params] as string;
+        queryClient.invalidateQueries({ queryKey: versionsKey(resourceId) });
+        queryClient.invalidateQueries({ queryKey: detailKey(resourceId) });
+        if (listKey) {
+          queryClient.invalidateQueries({ queryKey: listKey });
+        }
       },
     });
   }
 
   return {
     useVersions,
-    useCreateVersion,
     useActivateVersion,
   };
 }

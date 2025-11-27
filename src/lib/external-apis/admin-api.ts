@@ -1,4 +1,5 @@
 import { createHash, createHmac } from 'crypto';
+import type { RAGChunk, RAGQueryMetadata, RAGQueryResponse } from '@/types';
 
 /**
  * Admin API Client for the Orchestrator Service
@@ -9,9 +10,6 @@ import { createHash, createHmac } from 'crypto';
 
 const ADMIN_API_BASE_URL = process.env.ADMIN_API_BASE_URL;
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
-
-// Timestamp tolerance for replay attack protection (5 minutes)
-const TIMESTAMP_TOLERANCE_SECONDS = 300;
 
 interface AdminApiResponse {
   success: boolean;
@@ -26,7 +24,6 @@ interface RefreshAgentCacheParams {
   agentId: string;
 }
 
-// RAG Query Types
 export interface RAGQueryParams {
   tenantId: string;
   agentId: string;
@@ -36,33 +33,8 @@ export interface RAGQueryParams {
   topK?: number;
 }
 
-export interface RAGChunk {
-  chunk_id: number;
-  content: string;
-  filename: string;
-  score: number | null;
-  document_id: number;
-  chunk_index: number;
-  token_count: number | null;
-  s3_key: string;
-}
-
-export interface RAGQueryMetadata {
-  search_mode: 'vector' | 'fts' | 'hybrid';
-  top_k: number;
-  processing_time_ms: number;
-  total_chunks: number;
-  rag_config_id: string | null;
-  agent_config_version: number;
-  is_active_version: boolean;
-}
-
-export interface RAGQueryResponse {
-  success: boolean;
-  query: string;
-  chunks: RAGChunk[];
-  metadata: RAGQueryMetadata;
-}
+// Re-export types for consumers that import from this module
+export type { RAGChunk, RAGQueryMetadata, RAGQueryResponse };
 
 /**
  * Computes HMAC-SHA256 signature for Admin API requests.

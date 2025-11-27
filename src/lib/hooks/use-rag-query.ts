@@ -1,9 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
-import { apiMutate } from './factories/create-api-hooks';
+import { apiMutate, type ApiMutationResponse } from './factories/create-api-hooks';
+import type { RAGQueryResponse } from '@/types';
 
-/**
- * RAG Query Request
- */
 export interface RAGQueryRequest {
   query: string;
   version?: number;
@@ -11,42 +9,8 @@ export interface RAGQueryRequest {
   topK?: number;
 }
 
-/**
- * RAG Chunk from search results
- */
-export interface RAGChunk {
-  chunk_id: number;
-  content: string;
-  filename: string;
-  score: number | null;
-  document_id: number;
-  chunk_index: number;
-  token_count: number | null;
-  s3_key: string;
-}
-
-/**
- * RAG Query metadata
- */
-export interface RAGQueryMetadata {
-  search_mode: 'vector' | 'fts' | 'hybrid';
-  top_k: number;
-  processing_time_ms: number;
-  total_chunks: number;
-  rag_config_id: string | null;
-  agent_config_version: number;
-  is_active_version: boolean;
-}
-
-/**
- * RAG Query Response
- */
-export interface RAGQueryResponse {
-  success: boolean;
-  query: string;
-  chunks: RAGChunk[];
-  metadata: RAGQueryMetadata;
-}
+// Re-export types for consumers
+export type { RAGChunk, RAGQueryMetadata, RAGQueryResponse } from '@/types';
 
 /**
  * Hook for querying RAG knowledge base for an agent.
@@ -76,13 +40,12 @@ export interface RAGQueryResponse {
  */
 export function useRAGQuery(agentId: string) {
   return useMutation({
-    mutationFn: async (request: RAGQueryRequest) => {
-      const response = await apiMutate<{ success: boolean; data: RAGQueryResponse }>(
+    mutationFn: async (request: RAGQueryRequest): Promise<ApiMutationResponse<RAGQueryResponse>> => {
+      return apiMutate<RAGQueryResponse>(
         `/api/agents/${agentId}/rag-query`,
         'POST',
         request
       );
-      return response;
     },
   });
 }

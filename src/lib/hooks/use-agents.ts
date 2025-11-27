@@ -1,10 +1,14 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  createCrudHooks,
+  createVersionHooks,
+  apiMutate,
+} from './factories/create-api-hooks';
+import { QUERY_KEYS } from './constants/query-keys';
+import { STALE_TIMES } from './constants/stale-times';
 import type {
   CreateAgentInput,
-  UpdateAgentInput,
   CreateVersionInput,
-  CreatePhoneMappingInput,
-  UpdatePhoneMappingInput,
   WorkflowConfig,
 } from '@/lib/validations/agents';
 
@@ -31,7 +35,7 @@ interface AgentDetail extends Omit<Agent, 'activeVersion'> {
     globalPrompt: string | null;
     ragEnabled: boolean;
     ragConfigId: string | null;
-    voiceConfigId: string | null; // FK to voice_configs table
+    voiceConfigId: string | null;
     createdBy: string | null;
     createdAt: Date;
     notes: string | null;
@@ -49,283 +53,81 @@ interface AgentVersion {
   globalPrompt: string | null;
   ragEnabled: boolean;
   ragConfigId: string | null;
-  voiceConfigId: string | null; // FK to voice_configs table
+  voiceConfigId: string | null;
   isActive: boolean;
   createdBy: string | null;
   createdAt: Date;
   notes: string | null;
 }
 
-interface PhoneMapping {
-  phoneNumber: string;
-  agentId: string | null;
-  agentName: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
 // ========================================
-// Agent Queries
+// Factory-based Hooks
 // ========================================
 
-async function fetchAgents(): Promise<Agent[]> {
-  const response = await fetch('/api/agents');
-  if (!response.ok) {
-    throw new Error('Failed to fetch agents');
-  }
-  const json = await response.json();
-  return json.data;
-}
+const agentCrud = createCrudHooks<Agent[], AgentDetail>({
+  endpoint: '/api/agents',
+  listKey: QUERY_KEYS.agents.all,
+  detailKey: QUERY_KEYS.agents.detail,
+  listStaleTime: STALE_TIMES.AGENT_LIST,
+  detailStaleTime: STALE_TIMES.DETAIL,
+});
 
-async function fetchAgent(id: string): Promise<AgentDetail> {
-  const response = await fetch(`/api/agents/${id}`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch agent');
-  }
-  const json = await response.json();
-  return json.data;
-}
-
-async function fetchAgentVersions(agentId: string): Promise<AgentVersion[]> {
-  const response = await fetch(`/api/agents/${agentId}/versions`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch versions');
-  }
-  const json = await response.json();
-  return json.data;
-}
-
-export function useAgents() {
-  return useQuery({
-    queryKey: ['agents'],
-    queryFn: fetchAgents,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-}
-
-export function useAgent(id: string) {
-  return useQuery({
-    queryKey: ['agents', id],
-    queryFn: () => fetchAgent(id),
-    staleTime: 2 * 60 * 1000, // 2 minutes
-  });
-}
-
-export function useAgentVersions(agentId: string) {
-  return useQuery({
-    queryKey: ['agents', agentId, 'versions'],
-    queryFn: () => fetchAgentVersions(agentId),
-    staleTime: 2 * 60 * 1000, // 2 minutes
-  });
-}
+const agentVersions = createVersionHooks<AgentVersion, 'agentId'>({
+  endpoint: '/api/agents',
+  versionsKey: QUERY_KEYS.agents.versions,
+  detailKey: QUERY_KEYS.agents.detail,
+  listKey: QUERY_KEYS.agents.all,
+  staleTime: STALE_TIMES.DETAIL,
+  idKey: 'agentId',
+});
 
 // ========================================
-// Agent Mutations
+// Exported Hooks
 // ========================================
 
-export function useCreateAgent() {
-  const queryClient = useQueryClient();
+export const useAgents = agentCrud.useList;
+export const useAgent = agentCrud.useDetail;
+export const useCreateAgent = agentCrud.useCreate;
+export const useUpdateAgent = agentCrud.useUpdate;
 
-  return useMutation({
-    mutationFn: async (data: CreateAgentInput & { configJson?: WorkflowConfig }) => {
-      const response = await fetch('/api/agents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to create agent');
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agents'] });
-    },
-  });
-}
+export const useAgentVersions = agentVersions.useVersions;
+export const useActivateVersion = agentVersions.useActivateVersion;
 
-export function useUpdateAgent() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ id, ...data }: UpdateAgentInput & { id: string }) => {
-      const response = await fetch(`/api/agents/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to update agent');
-      }
-      return response.json();
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['agents'] });
-      queryClient.invalidateQueries({ queryKey: ['agents', variables.id] });
-    },
-  });
-}
-
+// Custom delete hook (also invalidates phone mappings)
 export function useDeleteAgent() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: string) => {
-      const response = await fetch(`/api/agents/${id}`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to delete agent');
-      }
-      return response.json();
-    },
+    mutationFn: (id: string) => apiMutate(`/api/agents/${id}`, 'DELETE'),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agents'] });
-      queryClient.invalidateQueries({ queryKey: ['phone-mappings'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.agents.all });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.phoneMappings });
     },
   });
 }
 
-// ========================================
-// Version Mutations
-// ========================================
-
+// Custom version creation hook (uses agentId parameter naming)
 export function useCreateVersion() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ agentId, ...data }: CreateVersionInput & { agentId: string }) => {
-      const response = await fetch(`/api/agents/${agentId}/versions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to create version');
-      }
-      return response.json();
-    },
+    mutationFn: async ({ agentId, ...data }: CreateVersionInput & { agentId: string }) =>
+      apiMutate(`/api/agents/${agentId}/versions`, 'POST', data),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['agents', variables.agentId, 'versions'] });
-      queryClient.invalidateQueries({ queryKey: ['agents', variables.agentId] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.agents.versions(variables.agentId) });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.agents.detail(variables.agentId) });
     },
   });
 }
 
-export function useActivateVersion() {
-  const queryClient = useQueryClient();
+// Re-export types
+export type { Agent, AgentDetail, AgentVersion };
 
-  return useMutation({
-    mutationFn: async ({ agentId, versionId }: { agentId: string; versionId: string }) => {
-      const response = await fetch(`/api/agents/${agentId}/versions/${versionId}/activate`, {
-        method: 'PUT',
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to activate version');
-      }
-      return response.json();
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['agents', variables.agentId, 'versions'] });
-      queryClient.invalidateQueries({ queryKey: ['agents', variables.agentId] });
-      queryClient.invalidateQueries({ queryKey: ['agents'] });
-    },
-  });
-}
-
-// ========================================
-// Phone Mapping Queries
-// ========================================
-
-async function fetchPhoneMappings(): Promise<PhoneMapping[]> {
-  const response = await fetch('/api/phone-mappings');
-  if (!response.ok) {
-    throw new Error('Failed to fetch phone mappings');
-  }
-  const json = await response.json();
-  return json.data;
-}
-
-export function usePhoneMappings() {
-  return useQuery({
-    queryKey: ['phone-mappings'],
-    queryFn: fetchPhoneMappings,
-    staleTime: 2 * 60 * 1000, // 2 minutes
-  });
-}
-
-// ========================================
-// Phone Mapping Mutations
-// ========================================
-
-export function useCreatePhoneMapping() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (data: CreatePhoneMappingInput) => {
-      const response = await fetch('/api/phone-mappings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to create phone mapping');
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['phone-mappings'] });
-    },
-  });
-}
-
-export function useUpdatePhoneMapping() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({
-      phoneNumber,
-      ...data
-    }: UpdatePhoneMappingInput & { phoneNumber: string }) => {
-      const response = await fetch(`/api/phone-mappings/${encodeURIComponent(phoneNumber)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to update phone mapping');
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['phone-mappings'] });
-    },
-  });
-}
-
-export function useDeletePhoneMapping() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (phoneNumber: string) => {
-      const response = await fetch(`/api/phone-mappings/${encodeURIComponent(phoneNumber)}`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to delete phone mapping');
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['phone-mappings'] });
-    },
-  });
-}
+// Re-export phone mapping hooks for backward compatibility
+export {
+  usePhoneMappings,
+  useCreatePhoneMapping,
+  useUpdatePhoneMapping,
+  useDeletePhoneMapping,
+} from './use-phone-mappings';
+export type { PhoneMapping } from './use-phone-mappings';

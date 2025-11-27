@@ -1,9 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type {
-  CreateRagConfigInput,
-  UpdateRagConfigInput,
-  CreateRagConfigVersionInput,
-} from '@/lib/validations/rag-configs';
+import {
+  createCrudHooks,
+  createVersionHooks,
+  createDropdownHook,
+  apiFetch,
+  apiMutate,
+} from './factories/create-api-hooks';
+import { QUERY_KEYS } from './constants/query-keys';
+import { STALE_TIMES } from './constants/stale-times';
+import type { CreateRagConfigVersionInput } from '@/lib/validations/rag-configs';
 
 // ========================================
 // Types
@@ -51,193 +56,64 @@ interface RagConfigDropdownItem {
 }
 
 // ========================================
-// RAG Config Queries
+// Factory-based Hooks
 // ========================================
 
-async function fetchRagConfigs(): Promise<RagConfig[]> {
-  const response = await fetch('/api/rag-configs');
-  if (!response.ok) {
-    throw new Error('Failed to fetch RAG configs');
-  }
-  const json = await response.json();
-  return json.data;
-}
+const ragConfigCrud = createCrudHooks<RagConfig[], RagConfig>({
+  endpoint: '/api/rag-configs',
+  listKey: QUERY_KEYS.ragConfigs.all,
+  detailKey: QUERY_KEYS.ragConfigs.detail,
+  listStaleTime: STALE_TIMES.CONFIG_LIST,
+  detailStaleTime: STALE_TIMES.DETAIL,
+});
 
-async function fetchRagConfig(id: string): Promise<RagConfig> {
-  const response = await fetch(`/api/rag-configs/${id}`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch RAG config');
-  }
-  const json = await response.json();
-  return json.data;
-}
-
-async function fetchRagConfigVersions(ragConfigId: string): Promise<RagConfigVersion[]> {
-  const response = await fetch(`/api/rag-configs/${ragConfigId}/versions`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch RAG config versions');
-  }
-  const json = await response.json();
-  return json.data;
-}
-
-async function fetchRagConfigsDropdown(): Promise<RagConfigDropdownItem[]> {
-  const response = await fetch('/api/rag-configs/dropdown');
-  if (!response.ok) {
-    throw new Error('Failed to fetch RAG configs for dropdown');
-  }
-  const json = await response.json();
-  return json.data;
-}
-
-export function useRagConfigs() {
-  return useQuery({
-    queryKey: ['rag-configs'],
-    queryFn: fetchRagConfigs,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-}
-
-export function useRagConfig(id: string) {
-  return useQuery({
-    queryKey: ['rag-configs', id],
-    queryFn: () => fetchRagConfig(id),
-    staleTime: 2 * 60 * 1000, // 2 minutes
-    enabled: !!id,
-  });
-}
-
-export function useRagConfigVersions(ragConfigId: string) {
-  return useQuery({
-    queryKey: ['rag-configs', ragConfigId, 'versions'],
-    queryFn: () => fetchRagConfigVersions(ragConfigId),
-    staleTime: 2 * 60 * 1000, // 2 minutes
-    enabled: !!ragConfigId,
-  });
-}
-
-export function useRagConfigsDropdown() {
-  return useQuery({
-    queryKey: ['rag-configs', 'dropdown'],
-    queryFn: fetchRagConfigsDropdown,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-}
+const ragConfigVersions = createVersionHooks<RagConfigVersion, 'ragConfigId'>({
+  endpoint: '/api/rag-configs',
+  versionsKey: QUERY_KEYS.ragConfigs.versions,
+  detailKey: QUERY_KEYS.ragConfigs.detail,
+  listKey: QUERY_KEYS.ragConfigs.all,
+  staleTime: STALE_TIMES.DETAIL,
+  idKey: 'ragConfigId',
+});
 
 // ========================================
-// RAG Config Mutations
+// Exported Hooks
 // ========================================
 
-export function useCreateRagConfig() {
-  const queryClient = useQueryClient();
+export const useRagConfigs = ragConfigCrud.useList;
+export const useRagConfig = ragConfigCrud.useDetail;
+export const useCreateRagConfig = ragConfigCrud.useCreate;
+export const useUpdateRagConfig = ragConfigCrud.useUpdate;
+export const useDeleteRagConfig = ragConfigCrud.useDelete;
 
-  return useMutation({
-    mutationFn: async (data: CreateRagConfigInput) => {
-      const response = await fetch('/api/rag-configs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to create RAG config');
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rag-configs'] });
-    },
-  });
-}
+export const useRagConfigVersions = ragConfigVersions.useVersions;
+export const useActivateRagConfigVersion = ragConfigVersions.useActivateVersion;
 
-export function useUpdateRagConfig() {
-  const queryClient = useQueryClient();
+// Dropdown hook
+export const useRagConfigsDropdown = createDropdownHook<RagConfigDropdownItem[]>(
+  '/api/rag-configs',
+  QUERY_KEYS.ragConfigs.dropdown,
+  STALE_TIMES.DROPDOWN
+);
 
-  return useMutation({
-    mutationFn: async ({ id, ...data }: UpdateRagConfigInput & { id: string }) => {
-      const response = await fetch(`/api/rag-configs/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to update RAG config');
-      }
-      return response.json();
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['rag-configs'] });
-      queryClient.invalidateQueries({ queryKey: ['rag-configs', variables.id] });
-    },
-  });
-}
-
-export function useDeleteRagConfig() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (id: string) => {
-      const response = await fetch(`/api/rag-configs/${id}`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to delete RAG config');
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rag-configs'] });
-    },
-  });
-}
-
-// ========================================
-// RAG Config Version Mutations
-// ========================================
-
+// Custom version creation hook (needs custom parameter naming)
 export function useCreateRagConfigVersion() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ ragConfigId, ...data }: CreateRagConfigVersionInput & { ragConfigId: string }) => {
-      const response = await fetch(`/api/rag-configs/${ragConfigId}/versions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to create RAG config version');
-      }
-      return response.json();
+    mutationFn: async ({
+      ragConfigId,
+      ...data
+    }: CreateRagConfigVersionInput & { ragConfigId: string }) => {
+      return apiMutate<{ id: string }>(`/api/rag-configs/${ragConfigId}/versions`, 'POST', data);
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['rag-configs', variables.ragConfigId, 'versions'] });
-      queryClient.invalidateQueries({ queryKey: ['rag-configs', variables.ragConfigId] });
-    },
-  });
-}
-
-export function useActivateRagConfigVersion() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ ragConfigId, versionId }: { ragConfigId: string; versionId: string }) => {
-      const response = await fetch(`/api/rag-configs/${ragConfigId}/versions/${versionId}/activate`, {
-        method: 'PUT',
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.ragConfigs.versions(variables.ragConfigId),
       });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to activate RAG config version');
-      }
-      return response.json();
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['rag-configs', variables.ragConfigId, 'versions'] });
-      queryClient.invalidateQueries({ queryKey: ['rag-configs', variables.ragConfigId] });
-      queryClient.invalidateQueries({ queryKey: ['rag-configs'] });
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.ragConfigs.detail(variables.ragConfigId),
+      });
     },
   });
 }

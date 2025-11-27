@@ -1,10 +1,13 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type {
-  CreateVoiceConfigInput,
-  CreateVoiceConfigSimplifiedInput,
-  UpdateVoiceConfigInput,
-  CreateVoiceConfigVersionInput,
-} from '@/lib/validations/voice-configs';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  createCrudHooks,
+  createVersionHooks,
+  createDropdownHook,
+  apiMutate,
+} from './factories/create-api-hooks';
+import { QUERY_KEYS } from './constants/query-keys';
+import { STALE_TIMES } from './constants/stale-times';
+import type { CreateVoiceConfigVersionInput } from '@/lib/validations/voice-configs';
 
 // ========================================
 // Types
@@ -49,153 +52,47 @@ interface VoiceConfigDropdownItem {
 }
 
 // ========================================
-// Voice Config Queries
+// Factory-based Hooks
 // ========================================
 
-async function fetchVoiceConfigs(): Promise<VoiceConfig[]> {
-  const response = await fetch('/api/voice-configs');
-  if (!response.ok) {
-    throw new Error('Failed to fetch Voice configs');
-  }
-  const json = await response.json();
-  return json.data;
-}
+const voiceConfigCrud = createCrudHooks<VoiceConfig[], VoiceConfig>({
+  endpoint: '/api/voice-configs',
+  listKey: QUERY_KEYS.voiceConfigs.all,
+  detailKey: QUERY_KEYS.voiceConfigs.detail,
+  listStaleTime: STALE_TIMES.CONFIG_LIST,
+  detailStaleTime: STALE_TIMES.DETAIL,
+});
 
-async function fetchVoiceConfig(id: string): Promise<VoiceConfig> {
-  const response = await fetch(`/api/voice-configs/${id}`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch Voice config');
-  }
-  const json = await response.json();
-  return json.data;
-}
-
-async function fetchVoiceConfigVersions(voiceConfigId: string): Promise<VoiceConfigVersion[]> {
-  const response = await fetch(`/api/voice-configs/${voiceConfigId}/versions`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch Voice config versions');
-  }
-  const json = await response.json();
-  return json.data;
-}
-
-async function fetchVoiceConfigsDropdown(): Promise<VoiceConfigDropdownItem[]> {
-  const response = await fetch('/api/voice-configs/dropdown');
-  if (!response.ok) {
-    throw new Error('Failed to fetch Voice configs for dropdown');
-  }
-  const json = await response.json();
-  return json.data;
-}
-
-export function useVoiceConfigs() {
-  return useQuery({
-    queryKey: ['voice-configs'],
-    queryFn: fetchVoiceConfigs,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-}
-
-export function useVoiceConfig(id: string) {
-  return useQuery({
-    queryKey: ['voice-configs', id],
-    queryFn: () => fetchVoiceConfig(id),
-    staleTime: 2 * 60 * 1000, // 2 minutes
-    enabled: !!id,
-  });
-}
-
-export function useVoiceConfigVersions(voiceConfigId: string) {
-  return useQuery({
-    queryKey: ['voice-configs', voiceConfigId, 'versions'],
-    queryFn: () => fetchVoiceConfigVersions(voiceConfigId),
-    staleTime: 2 * 60 * 1000, // 2 minutes
-    enabled: !!voiceConfigId,
-  });
-}
-
-export function useVoiceConfigsDropdown() {
-  return useQuery({
-    queryKey: ['voice-configs', 'dropdown'],
-    queryFn: fetchVoiceConfigsDropdown,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-}
+const voiceConfigVersions = createVersionHooks<VoiceConfigVersion, 'voiceConfigId'>({
+  endpoint: '/api/voice-configs',
+  versionsKey: QUERY_KEYS.voiceConfigs.versions,
+  detailKey: QUERY_KEYS.voiceConfigs.detail,
+  listKey: QUERY_KEYS.voiceConfigs.all,
+  staleTime: STALE_TIMES.DETAIL,
+  idKey: 'voiceConfigId',
+});
 
 // ========================================
-// Voice Config Mutations
+// Exported Hooks
 // ========================================
 
-export function useCreateVoiceConfig() {
-  const queryClient = useQueryClient();
+export const useVoiceConfigs = voiceConfigCrud.useList;
+export const useVoiceConfig = voiceConfigCrud.useDetail;
+export const useCreateVoiceConfig = voiceConfigCrud.useCreate;
+export const useUpdateVoiceConfig = voiceConfigCrud.useUpdate;
+export const useDeleteVoiceConfig = voiceConfigCrud.useDelete;
 
-  return useMutation({
-    // Accept simplified input (name, voiceId, description only) or full input
-    mutationFn: async (data: CreateVoiceConfigSimplifiedInput | CreateVoiceConfigInput) => {
-      const response = await fetch('/api/voice-configs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to create Voice config');
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['voice-configs'] });
-    },
-  });
-}
+export const useVoiceConfigVersions = voiceConfigVersions.useVersions;
+export const useActivateVoiceConfigVersion = voiceConfigVersions.useActivateVersion;
 
-export function useUpdateVoiceConfig() {
-  const queryClient = useQueryClient();
+// Dropdown hook
+export const useVoiceConfigsDropdown = createDropdownHook<VoiceConfigDropdownItem[]>(
+  '/api/voice-configs',
+  QUERY_KEYS.voiceConfigs.dropdown,
+  STALE_TIMES.DROPDOWN
+);
 
-  return useMutation({
-    mutationFn: async ({ id, ...data }: UpdateVoiceConfigInput & { id: string }) => {
-      const response = await fetch(`/api/voice-configs/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to update Voice config');
-      }
-      return response.json();
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['voice-configs'] });
-      queryClient.invalidateQueries({ queryKey: ['voice-configs', variables.id] });
-    },
-  });
-}
-
-export function useDeleteVoiceConfig() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (id: string) => {
-      const response = await fetch(`/api/voice-configs/${id}`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to delete Voice config');
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['voice-configs'] });
-    },
-  });
-}
-
-// ========================================
-// Voice Config Version Mutations
-// ========================================
-
+// Custom version creation hook (needs custom parameter naming)
 export function useCreateVoiceConfigVersion() {
   const queryClient = useQueryClient();
 
@@ -204,55 +101,15 @@ export function useCreateVoiceConfigVersion() {
       voiceConfigId,
       ...data
     }: CreateVoiceConfigVersionInput & { voiceConfigId: string }) => {
-      const response = await fetch(`/api/voice-configs/${voiceConfigId}/versions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to create Voice config version');
-      }
-      return response.json();
+      return apiMutate<{ id: string }>(`/api/voice-configs/${voiceConfigId}/versions`, 'POST', data);
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: ['voice-configs', variables.voiceConfigId, 'versions'],
+        queryKey: QUERY_KEYS.voiceConfigs.versions(variables.voiceConfigId),
       });
-      queryClient.invalidateQueries({ queryKey: ['voice-configs', variables.voiceConfigId] });
-    },
-  });
-}
-
-export function useActivateVoiceConfigVersion() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({
-      voiceConfigId,
-      versionId,
-    }: {
-      voiceConfigId: string;
-      versionId: string;
-    }) => {
-      const response = await fetch(
-        `/api/voice-configs/${voiceConfigId}/versions/${versionId}/activate`,
-        {
-          method: 'PUT',
-        }
-      );
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to activate Voice config version');
-      }
-      return response.json();
-    },
-    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: ['voice-configs', variables.voiceConfigId, 'versions'],
+        queryKey: QUERY_KEYS.voiceConfigs.detail(variables.voiceConfigId),
       });
-      queryClient.invalidateQueries({ queryKey: ['voice-configs', variables.voiceConfigId] });
-      queryClient.invalidateQueries({ queryKey: ['voice-configs'] });
     },
   });
 }

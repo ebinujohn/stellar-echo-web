@@ -146,3 +146,32 @@ export interface SentimentDistribution {
   neutral: number;
   negative: number;
 }
+
+// RAG Query types (shared between admin-api and hooks)
+export interface RAGChunk {
+  chunk_id: number;
+  content: string;
+  filename: string;
+  score: number | null;
+  document_id: number;
+  chunk_index: number;
+  token_count: number | null;
+  s3_key: string;
+}
+
+export interface RAGQueryMetadata {
+  search_mode: 'vector' | 'fts' | 'hybrid';
+  top_k: number;
+  processing_time_ms: number;
+  total_chunks: number;
+  rag_config_id: string | null;
+  agent_config_version: number;
+  is_active_version: boolean;
+}
+
+export interface RAGQueryResponse {
+  success: boolean;
+  query: string;
+  chunks: RAGChunk[];
+  metadata: RAGQueryMetadata;
+}

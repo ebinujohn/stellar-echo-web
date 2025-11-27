@@ -413,4 +413,39 @@ pnpm db:seed
 
 | Date | Version | Changes |
 |------|---------|---------|
+| Nov 25, 2025 | 1.0.1 | Comprehensive UI test - ALL TESTS PASSED |
 | Nov 22, 2025 | 1.0.0 | Initial baseline documentation |
+
+---
+
+## Test Results - November 25, 2025
+
+### Summary
+**Result: ALL TESTS PASSED**
+
+All 10 test sections were verified using Playwright MCP automated browser testing.
+
+### Detailed Results
+
+| Section | Status | Notes |
+|---------|--------|-------|
+| 1. Authentication Flow | PASS | Login, logout, user menu, protected routes all working |
+| 2. Dashboard Page | PASS | KPI cards (34 calls, 0:23 avg duration, 1.60s latency, 97.1% success), charts, recent calls table |
+| 3. Analytics Page | PASS | Latency by Agent chart, Token Usage Trends chart, Performance Insights |
+| 4. Calls List Page | PASS | Stats cards, filters (status/agent), pagination (34 calls, 2 pages), table columns |
+| 5. Call Detail Page | PASS | All 4 tabs working (Timeline, Metrics, Analysis, Transcript) |
+| 6. Agents List Page | PASS | 3 agents displayed, New Agent dialog functional |
+| 7. Agent Detail Page | PASS | All 5 tabs working (Overview, Workflow Editor, Versions, Settings, RAG Query) |
+| 8. Settings Pages | PASS | Main settings, RAG configs, Voice catalog (5 voices), Phone numbers (3 mapped) |
+| 9. Theme Toggle | PASS | Light/Dark/System modes working correctly |
+| 10. Navigation | PASS | Sidebar links, active states, back navigation |
+
+### Test Evidence
+Screenshots saved to `.playwright-mcp/`:
+- `dark-mode-test.png` - Dark theme verification
+- `light-mode-test.png` - Light theme verification
+
+### Environment
+- Browser: Chromium (Playwright)
+- Dev Server: localhost:3000
+- Test User: admin@example.com

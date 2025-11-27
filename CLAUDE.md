@@ -108,13 +108,16 @@ const data = await db.query.resource.findMany({
 
 ### TanStack Query Hook Pattern
 
+**Prefer factory pattern** - see Hook Factories section. For custom hooks:
+
 ```typescript
+import { apiFetch } from '@/lib/hooks/factories/create-api-hooks';
 import { STALE_TIMES, QUERY_KEYS } from '@/lib/hooks/constants';
 
 export function useResource(id: string) {
   return useQuery({
     queryKey: QUERY_KEYS.resource.detail(id),
-    queryFn: () => apiFetch(`/api/resource/${id}`),
+    queryFn: () => apiFetch<Resource>(`/api/resource/${id}`),
     staleTime: STALE_TIMES.DETAIL,
     enabled: !!id,
   });
@@ -148,19 +151,49 @@ return configs.map((c) => ({ ...c, version: versionMap.get(c.id) }));
 - `successResponse(data, status)` - Creates standard success response
 
 ### API Handlers (`src/lib/api/handlers.ts`)
-- `handleGet(queryFn)` - Generic GET handler for list endpoints
+- `handleGet(queryFn)` - Generic GET handler for list and dropdown endpoints
 - `handleGetById(id, queryFn, resourceName)` - GET handler for detail endpoints
-- `handleDropdownGet(queryFn)` - GET handler for dropdown endpoints
 
 ### Query Constants (`src/lib/hooks/constants/`)
 - `STALE_TIMES` - Centralized stale time configuration
 - `QUERY_KEYS` - Type-safe query key factory
 
 ### Hook Factories (`src/lib/hooks/factories/create-api-hooks.ts`)
-- `createCrudHooks()` - Creates standard CRUD hooks
-- `createVersionHooks()` - Creates version management hooks
-- `createDropdownHook()` - Creates dropdown hooks
-- `apiFetch()` / `apiMutate()` - Generic fetch wrappers
+- `createCrudHooks<TList, TDetail>()` - Creates useList, useDetail, useCreate, useUpdate, useDelete
+- `createVersionHooks<TVersion, TIdKey>()` - Creates useVersions, useActivateVersion with typed ID keys
+- `createDropdownHook<T>()` - Creates dropdown query hooks
+- `apiFetch<T>()` / `apiMutate<T>()` - Generic typed fetch wrappers
+
+**Using Factories (preferred pattern):**
+```typescript
+// Create typed hooks using factories
+const resourceCrud = createCrudHooks<Resource[], ResourceDetail>({
+  endpoint: '/api/resources',
+  listKey: QUERY_KEYS.resources.all,
+  detailKey: QUERY_KEYS.resources.detail,
+  listStaleTime: STALE_TIMES.CONFIG_LIST,
+  detailStaleTime: STALE_TIMES.DETAIL,
+});
+
+// For versioned resources, specify the ID key name
+const resourceVersions = createVersionHooks<ResourceVersion, 'resourceId'>({
+  endpoint: '/api/resources',
+  versionsKey: QUERY_KEYS.resources.versions,
+  detailKey: QUERY_KEYS.resources.detail,
+  listKey: QUERY_KEYS.resources.all,
+  staleTime: STALE_TIMES.DETAIL,
+  idKey: 'resourceId',
+});
+
+// Export hooks with standard naming
+export const useResources = resourceCrud.useList;
+export const useResource = resourceCrud.useDetail;
+export const useCreateResource = resourceCrud.useCreate;
+export const useUpdateResource = resourceCrud.useUpdate;
+export const useDeleteResource = resourceCrud.useDelete;
+export const useResourceVersions = resourceVersions.useVersions;
+export const useActivateResourceVersion = resourceVersions.useActivateVersion;
+```
 
 ### Formatters (`src/lib/utils/formatters.ts`)
 - `formatDateTime()`, `formatDuration()`, `formatLatency()`, `formatPhoneNumber()`
