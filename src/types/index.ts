@@ -175,3 +175,139 @@ export interface RAGQueryResponse {
   chunks: RAGChunk[];
   metadata: RAGQueryMetadata;
 }
+
+// Text Chat API types
+
+/**
+ * Request to create a new text chat session
+ */
+export interface CreateTextChatSessionRequest {
+  tenantId: string;
+  agentId: string;
+  version?: number;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Transition info when the workflow moves between nodes.
+ * Includes human-readable node names alongside IDs.
+ */
+export interface TextChatTransition {
+  fromNode: string;
+  fromNodeName: string | null;
+  toNode: string;
+  toNodeName: string | null;
+  condition: string | null;
+}
+
+/**
+ * Response from creating a text chat session.
+ * Includes initialization transitions and version info.
+ */
+export interface CreateTextChatSessionResponse {
+  sessionId: string;
+  conversationId: string;
+  status: 'active';
+  nodeId: string;
+  nodeName: string | null;
+  initialNodeId: string;
+  initialNodeName: string | null;
+  transitions: TextChatTransition[];
+  agentConfigVersion: number;
+  isActiveVersion: boolean;
+  initialMessage: string | null;
+  createdAt: string;
+}
+
+/**
+ * Request to send a message in a text chat session
+ */
+export interface SendTextChatMessageRequest {
+  content: string;
+}
+
+/**
+ * Response from sending a text chat message.
+ * Includes full transition chain and node names.
+ */
+export interface SendTextChatMessageResponse {
+  response: string;
+  nodeId: string;
+  nodeName: string | null;
+  previousNodeId: string;
+  previousNodeName: string | null;
+  transitions: TextChatTransition[];
+  /** @deprecated Use transitions array instead. Last transition for backwards compatibility. */
+  transition: TextChatTransition | null;
+  extractedVariables: Record<string, string> | null;
+  sessionEnded: boolean;
+  turnNumber: number;
+  latencyMs: number;
+}
+
+/**
+ * Response from getting text chat session status
+ */
+export interface TextChatSessionStatusResponse {
+  sessionId: string;
+  conversationId: string;
+  status: 'active' | 'completed' | 'abandoned' | 'error';
+  nodeId: string;
+  nodeName: string | null;
+  turns: number;
+  transitionCount: number;
+  collectedData: Record<string, string>;
+  createdAt: string;
+  updatedAt: string;
+  endedAt: string | null;
+}
+
+/**
+ * Response from ending a text chat session
+ */
+export interface EndTextChatSessionResponse {
+  success: boolean;
+  conversationId: string;
+  finalNodeId: string;
+  finalNodeName: string | null;
+  totalTurns: number;
+  totalTransitions: number;
+}
+
+/**
+ * Individual message in a text chat conversation
+ */
+export interface TextChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+  nodeId?: string;
+  nodeName?: string | null;
+  transitions?: TextChatTransition[];
+  extractedVariables?: Record<string, string> | null;
+  latencyMs?: number;
+  status?: 'sending' | 'sent' | 'error';
+}
+
+/**
+ * Session status for the chat UI
+ */
+export type TextChatSessionStatus = 'idle' | 'connecting' | 'active' | 'ended' | 'error';
+
+/**
+ * Complete chat session state for the UI
+ */
+export interface TextChatSessionState {
+  sessionId: string | null;
+  conversationId: string | null;
+  messages: TextChatMessage[];
+  currentNodeId: string | null;
+  currentNodeName: string | null;
+  status: TextChatSessionStatus;
+  error: string | null;
+  turnNumber: number;
+  collectedData: Record<string, string>;
+  agentConfigVersion: number | null;
+  isActiveVersion: boolean | null;
+}

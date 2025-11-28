@@ -22,6 +22,7 @@ import {
   FileCode,
   Save,
   Database,
+  MessageSquare,
 } from 'lucide-react';
 import { useAgent, useCreateVersion, useAgentVersions } from '@/lib/hooks/use-agents';
 import { useAgentPhoneConfigs } from '@/lib/hooks/use-phone-configs';
@@ -34,6 +35,8 @@ import { WorkflowEditorLayout } from './workflow-editor/workflow-editor-layout';
 import { SettingsForm } from './settings-form';
 import { VersionsTab } from './versions-tab';
 import { RagQueryTab } from './rag-query-tab';
+import { ChatTab } from './chat-tab';
+import { ChatSessionProvider } from './contexts/chat-session-context';
 import { AgentDraftProvider, useAgentDraft, useUnsavedChangesWarning } from './contexts/agent-draft-context';
 import { toast } from 'sonner';
 
@@ -656,6 +659,10 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
               RAG Query
             </TabsTrigger>
           )}
+          <TabsTrigger value="chat">
+            <MessageSquare className="mr-1.5 h-4 w-4" />
+            Chat
+          </TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
@@ -1045,6 +1052,13 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
             />
           </TabsContent>
         )}
+
+        {/* Chat Tab */}
+        <TabsContent value="chat" className="space-y-4">
+          <ChatSessionProvider agentId={agentId}>
+            <ChatTab hasActiveVersion={!!agent.activeVersion} />
+          </ChatSessionProvider>
+        </TabsContent>
       </Tabs>
 
       {/* Delete Dialog */}
