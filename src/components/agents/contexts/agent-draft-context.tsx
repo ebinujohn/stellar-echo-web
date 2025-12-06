@@ -23,6 +23,7 @@ export interface TtsDraft {
   enableSsmlParsing: boolean;
   pronunciationDictionariesEnabled: boolean;
   pronunciationDictionaryIds: string;
+  aggregateSentences: boolean;
 }
 
 /**

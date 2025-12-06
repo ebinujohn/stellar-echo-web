@@ -201,12 +201,30 @@ const endCallNodeSchema = baseNodeSchema.extend({
 });
 
 /**
+ * Agent transfer node schema
+ * Per AGENT_JSON_SCHEMA.md: Transfers to another agent (warm handoff)
+ * This is a terminal-like node - no outgoing transitions (transfer handles continuation)
+ */
+const agentTransferNodeSchemaBase = z.object({
+  id: z.string().min(1, 'Node ID is required'),
+  type: z.literal('agent_transfer'),
+  name: z.string().min(1, 'Node name is required'),
+  target_agent_id: z.string().uuid('Target agent ID must be a valid UUID'),
+  transfer_context: z.boolean().optional().default(false),
+  transfer_message: z.string().optional(),
+  actions: z.object({
+    on_entry: z.array(z.string()).optional(),
+  }).optional(),
+});
+
+/**
  * Union of all node types (using discriminatedUnion with base schemas)
  */
 const nodeSchema = z.discriminatedUnion('type', [
   standardNodeSchemaBase,
   retrieveVariableNodeSchemaBase,
   endCallNodeSchema,
+  agentTransferNodeSchemaBase,
 ]);
 
 /**
@@ -270,6 +288,7 @@ const ttsConfigSchema = z.object({
   enable_ssml_parsing: z.boolean().optional().default(false),
   pronunciation_dictionaries_enabled: z.boolean().optional().default(true),
   pronunciation_dictionary_ids: z.array(z.string()).optional(),
+  aggregate_sentences: z.boolean().optional().default(true),
 });
 
 /**
@@ -376,10 +395,13 @@ export const workflowConfigSchema = workflowConfigSchemaBase.refine(
     // Validation: all transition targets must be valid node IDs
     const nodeIds = new Set(data.workflow.nodes.map((node) => node.id));
     for (const node of data.workflow.nodes) {
-      if (node.transitions) {
-        for (const transition of node.transitions) {
-          if (!nodeIds.has(transition.target)) {
-            return false;
+      // Only standard and retrieve_variable nodes have transitions
+      if (node.type === 'standard' || node.type === 'retrieve_variable') {
+        if (node.transitions) {
+          for (const transition of node.transitions) {
+            if (!nodeIds.has(transition.target)) {
+              return false;
+            }
           }
         }
       }
@@ -460,6 +482,7 @@ export type WorkflowNode = z.infer<typeof nodeSchema>;
 export type StandardNode = z.infer<typeof standardNodeSchema>;
 export type RetrieveVariableNode = z.infer<typeof retrieveVariableNodeSchema>;
 export type EndCallNode = z.infer<typeof endCallNodeSchema>;
+export type AgentTransferNode = z.infer<typeof agentTransferNodeSchemaBase>;
 export type Transition = z.infer<typeof transitionSchema>;
 export type LlmOverride = z.infer<typeof llmOverrideSchema>;
 export type RagOverride = z.infer<typeof ragConfigSchema>;

@@ -221,6 +221,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
           .split(',')
           .map((id: string) => id.trim())
           .filter(Boolean),
+        aggregate_sentences: settingsDraft.tts.aggregateSentences,
       };
 
       configJson = {
@@ -308,6 +309,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
         .split(',')
         .map((id: string) => id.trim())
         .filter(Boolean),
+      aggregate_sentences: settingsDraft.tts.aggregateSentences,
     };
 
     const updatedConfig = {
@@ -393,6 +395,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
           .split(',')
           .map((id: string) => id.trim())
           .filter(Boolean),
+        aggregate_sentences: settingsDraft.tts.aggregateSentences,
       };
 
       configJson = {
@@ -976,6 +979,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
               key={agent.activeVersion.id}
               initialConfig={agent.activeVersion.configJson}
               onSave={handleWorkflowSave}
+              agentId={agentId}
             />
           ) : (
             <Card>

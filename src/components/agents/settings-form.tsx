@@ -166,6 +166,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
     enableSsmlParsing: false,
     pronunciationDictionariesEnabled: true,
     pronunciationDictionaryIds: '',
+    aggregateSentences: true,
   };
 
   const [ttsModel, setTtsModel] = useState(() =>
@@ -191,6 +192,9 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
   );
   const [ttsPronunciationDictionaryIds, setTtsPronunciationDictionaryIds] = useState(() =>
     getInitialValue(draftContext?.settingsDraft?.tts?.pronunciationDictionaryIds, workflowTts?.pronunciation_dictionary_ids?.join(', ') ?? defaultTts.pronunciationDictionaryIds)
+  );
+  const [ttsAggregateSentences, setTtsAggregateSentences] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.tts?.aggregateSentences, workflowTts?.aggregate_sentences ?? defaultTts.aggregateSentences)
   );
 
   // Workflow Settings
@@ -224,6 +228,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
       enableSsmlParsing: ttsEnableSsmlParsing,
       pronunciationDictionariesEnabled: ttsPronunciationEnabled,
       pronunciationDictionaryIds: ttsPronunciationDictionaryIds,
+      aggregateSentences: ttsAggregateSentences,
     },
     ragEnabled: ragEnabledState,
     ragConfigId: selectedRagConfigId || null,
@@ -241,7 +246,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
     globalPrompt, llmEnabled, llmModel, llmTemperature, llmMaxTokens,
     llmServiceTier, ttsEnabled, ttsModel, ttsStability, ttsSimilarityBoost,
     ttsStyle, ttsUseSpeakerBoost, ttsEnableSsmlParsing, ttsPronunciationEnabled,
-    ttsPronunciationDictionaryIds, ragEnabledState, selectedRagConfigId,
+    ttsPronunciationDictionaryIds, ttsAggregateSentences, ragEnabledState, selectedRagConfigId,
     ragOverrideEnabled, ragSearchMode, ragTopK, ragRrfK, ragVectorWeight, ragFtsWeight,
     selectedVoiceConfigId, autoHangupEnabled
   ]);
@@ -267,6 +272,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
         enableSsmlParsing: workflowTts?.enable_ssml_parsing ?? defaultTts.enableSsmlParsing,
         pronunciationDictionariesEnabled: workflowTts?.pronunciation_dictionaries_enabled ?? defaultTts.pronunciationDictionariesEnabled,
         pronunciationDictionaryIds: workflowTts?.pronunciation_dictionary_ids?.join(', ') ?? defaultTts.pronunciationDictionaryIds,
+        aggregateSentences: workflowTts?.aggregate_sentences ?? defaultTts.aggregateSentences,
       },
       ragEnabled: initialRagEnabled ?? false,
       ragConfigId: initialRagConfigId || null,
@@ -333,6 +339,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
           .split(',')
           .map((id: string) => id.trim())
           .filter(Boolean),
+        aggregate_sentences: ttsAggregateSentences,
       };
 
       // Build LLM config for workflow.llm section
@@ -711,6 +718,16 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
                     </p>
                   </div>
                 )}
+
+                <div className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-0.5">
+                    <Label>Aggregate Sentences</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Split text at sentence boundaries before TTS. Disable for more consistent prosody across multi-sentence utterances.
+                    </p>
+                  </div>
+                  <Switch checked={ttsAggregateSentences} onCheckedChange={setTtsAggregateSentences} />
+                </div>
               </div>
             </>
           )}
