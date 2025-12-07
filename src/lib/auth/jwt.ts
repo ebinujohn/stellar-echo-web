@@ -8,7 +8,8 @@ export interface JWTPayload {
   userId: string;
   email: string;
   role: 'admin' | 'viewer';
-  tenantId: string;
+  tenantId: string | null; // Nullable for global users
+  isGlobalUser?: boolean; // Cross-tenant access flag
   iat?: number;
   exp?: number;
 }

@@ -1,37 +1,101 @@
 import { cookies, headers } from 'next/headers';
 import { verifyToken, type JWTPayload } from './jwt';
+import { auth } from './better-auth';
 
-export async function getSession(): Promise<JWTPayload | null> {
+/**
+ * Unified session interface that works for both:
+ * - JWT auth (email/password users)
+ * - Better Auth (Google OAuth users)
+ *
+ * Note: For backward compatibility, `tenantId` is always a string.
+ * For global users, it will be an empty string - use `isGlobalUser` to check.
+ */
+export interface UnifiedSession {
+  userId: string;
+  email: string;
+  role: 'admin' | 'viewer';
+  tenantId: string; // Empty string for global users (backward compat)
+  isGlobalUser: boolean;
+}
+
+/**
+ * Get the current session from either auth system
+ *
+ * Priority:
+ * 1. Middleware-injected headers (fastest, already validated)
+ * 2. JWT cookie (email/password users)
+ * 3. Better Auth session (Google OAuth users)
+ */
+export async function getSession(): Promise<UnifiedSession | null> {
   // First check if middleware already validated and injected user info
-  // This handles the race condition where middleware refreshed the token
-  // but the cookie hasn't been updated yet in the current request
   const headerStore = await headers();
   const userId = headerStore.get('x-user-id');
   const tenantId = headerStore.get('x-tenant-id');
   const role = headerStore.get('x-user-role');
   const email = headerStore.get('x-user-email');
+  const isGlobalUser = headerStore.get('x-is-global-user');
 
-  if (userId && tenantId && role && email) {
+  if (userId && role && email) {
     return {
       userId,
-      tenantId,
+      tenantId: tenantId || '', // Empty string for global users (backward compat)
       role: role as 'admin' | 'viewer',
       email,
+      isGlobalUser: isGlobalUser === 'true',
     };
   }
 
-  // Fallback to cookie verification for non-middleware routes
+  // Fallback to JWT cookie verification (email/password users)
   const cookieStore = await cookies();
-  const token = cookieStore.get('access_token')?.value;
+  const accessToken = cookieStore.get('access_token')?.value;
 
-  if (!token) {
-    return null;
+  if (accessToken) {
+    const payload = await verifyToken(accessToken);
+    if (payload) {
+      return {
+        userId: payload.userId,
+        email: payload.email,
+        role: payload.role,
+        tenantId: payload.tenantId || '', // Empty string for global users (backward compat)
+        isGlobalUser: payload.isGlobalUser || false,
+      };
+    }
   }
 
-  return verifyToken(token);
+  // Fallback to Better Auth session (Google OAuth users)
+  try {
+    const betterAuthSession = await auth.api.getSession({
+      headers: await headers(),
+    });
+
+    if (betterAuthSession?.user) {
+      const user = betterAuthSession.user as {
+        id: string;
+        email: string;
+        role?: string;
+        tenantId?: string;
+        isGlobalUser?: boolean;
+      };
+
+      return {
+        userId: user.id,
+        email: user.email,
+        role: (user.role as 'admin' | 'viewer') || 'viewer',
+        tenantId: user.tenantId || '', // Empty string for global users (backward compat)
+        isGlobalUser: user.isGlobalUser || false,
+      };
+    }
+  } catch {
+    // Better Auth session not found or error
+  }
+
+  return null;
 }
 
-export async function requireAuth(): Promise<JWTPayload> {
+/**
+ * Require authentication - throws if no valid session
+ */
+export async function requireAuth(): Promise<UnifiedSession> {
   const session = await getSession();
 
   if (!session) {
@@ -41,9 +105,13 @@ export async function requireAuth(): Promise<JWTPayload> {
   return session;
 }
 
-export async function requireRole(role: 'admin' | 'viewer'): Promise<JWTPayload> {
+/**
+ * Require a specific role - throws if insufficient permissions
+ */
+export async function requireRole(role: 'admin' | 'viewer'): Promise<UnifiedSession> {
   const session = await requireAuth();
 
+  // Admin has all permissions
   if (session.role !== 'admin' && session.role !== role) {
     throw new Error('Forbidden');
   }
@@ -51,6 +119,9 @@ export async function requireRole(role: 'admin' | 'viewer'): Promise<JWTPayload>
   return session;
 }
 
+/**
+ * Set JWT auth cookies (for email/password login)
+ */
 export async function setAuthCookies(accessToken: string, refreshToken: string) {
   const cookieStore = await cookies();
 
@@ -71,8 +142,16 @@ export async function setAuthCookies(accessToken: string, refreshToken: string) 
   });
 }
 
+/**
+ * Clear all auth cookies (both JWT and Better Auth)
+ */
 export async function clearAuthCookies() {
   const cookieStore = await cookies();
+  // Clear JWT cookies
   cookieStore.delete('access_token');
   cookieStore.delete('refresh_token');
+  // Note: Better Auth session cookies are managed by Better Auth
 }
+
+// Re-export JWTPayload for backward compatibility
+export type { JWTPayload };

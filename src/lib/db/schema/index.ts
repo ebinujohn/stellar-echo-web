@@ -8,3 +8,8 @@ export * from './agents';
 export * from './phone-configs'; // Must be after agents (phone-configs references agents)
 export * from './calls';
 export * from './workflow-config-types'; // Reference table for UI (no FK dependencies)
+
+// Better Auth tables
+export * from './auth-sessions';
+export * from './auth-accounts';
+export * from './auth-verifications';
