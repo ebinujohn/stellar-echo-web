@@ -40,3 +40,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# drizzle migrations (schema managed by orchestrator backend)
+/drizzle/
+
+# playwright MCP screenshots
+/.playwright-mcp/
