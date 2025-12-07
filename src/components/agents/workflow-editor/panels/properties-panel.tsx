@@ -9,6 +9,7 @@ import type { WorkflowNodeData } from '../utils/json-converter';
 import { StandardNodeForm } from './node-property-forms/standard-node-form';
 import { RetrieveVariableNodeForm } from './node-property-forms/retrieve-variable-node-form';
 import { EndCallNodeForm } from './node-property-forms/end-call-node-form';
+import { AgentTransferNodeForm } from './node-property-forms/agent-transfer-node-form';
 
 interface PropertiesPanelProps {
   selectedNode: Node<WorkflowNodeData> | null;
@@ -16,6 +17,7 @@ interface PropertiesPanelProps {
   onClose: () => void;
   onUpdateNode: (nodeId: string, updates: Partial<WorkflowNodeData>) => void;
   onDeleteNode: (nodeId: string) => void;
+  currentAgentId?: string;
 }
 
 export function PropertiesPanel({
@@ -24,6 +26,7 @@ export function PropertiesPanel({
   onClose,
   onUpdateNode,
   onDeleteNode,
+  currentAgentId,
 }: PropertiesPanelProps) {
   // Memoize the update handler to prevent infinite loops
   const handleUpdate = useCallback(
@@ -92,6 +95,15 @@ export function PropertiesPanel({
         );
       case 'end_call':
         return <EndCallNodeForm key={selectedNode.id} nodeData={selectedNode.data} onUpdate={handleUpdate} />;
+      case 'agent_transfer':
+        return (
+          <AgentTransferNodeForm
+            key={selectedNode.id}
+            nodeData={selectedNode.data}
+            onUpdate={handleUpdate}
+            currentAgentId={currentAgentId}
+          />
+        );
       default:
         return (
           <div className="p-4 text-sm text-muted-foreground">

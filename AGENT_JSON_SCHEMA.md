@@ -20,6 +20,7 @@ This document provides a comprehensive specification of the JSON schema used for
    - [Standard Node](#standard-node)
    - [Retrieve Variable Node](#retrieve-variable-node)
    - [End Call Node](#end-call-node)
+   - [Agent Transfer Node](#agent-transfer-node)
 6. [Variable Substitution](#variable-substitution)
 7. [Transition Conditions](#transition-conditions)
 8. [Actions](#actions)
@@ -68,14 +69,12 @@ All agents **must** use node-based workflows. Traditional single-prompt mode has
 > **Agent JSON (`workflow` section):**
 > - **LLM**: `workflow.llm` section with model_name, temperature, max_tokens (model_name resolved via `llm_models` table)
 > - **TTS Tuning**: `workflow.tts` section with stability, similarity_boost, etc. (voice selection via `voice_config_id` FK in database)
-> - **RAG Tuning**: `workflow.rag` section with search_mode, top_k, rrf_k, weights (base config via `rag_config_id` FK in database)
 >
 > **Database:**
 > - **Voice Selection**: `agent_config_versions.voice_config_id` FK links to `voice_configs` table
-> - **RAG Config Selection**: `agent_config_versions.rag_config_id` FK links to `rag_configs` table
 >
 > **Database-backed:**
-> - **RAG Base Config**: `rag_configs` and `rag_config_versions` tables (agent JSON `workflow.rag` can override search params)
+> - **RAG**: `rag_configs` and `rag_config_versions` tables
 > - **Voice Catalog**: `voice_configs` table (system-level, maps voice_name → voice_id)
 > - **LLM Model Catalog**: `llm_models` table (system-level, maps model_name → actual_model_id)
 > - **Phone Numbers**: `phone_configs` table (phone number pool) + `phone_mappings` table
@@ -312,11 +311,12 @@ If transitions exceed 50, call forces end.
 
 ## Node Types
 
-Nodes represent distinct conversation phases. Three node types are supported:
+Nodes represent distinct conversation phases. Four node types are supported:
 
 1. **`standard`** - Regular conversation node with LLM
 2. **`retrieve_variable`** - Extract structured data from conversation
 3. **`end_call`** - Terminate call
+4. **`agent_transfer`** - Transfer to another agent (warm handoff)
 
 ### Standard Node
 
@@ -905,6 +905,117 @@ If `max_transitions` exceeded with no `end_call` node configured:
 
 ---
 
+### Agent Transfer Node
+
+Transfers control to another agent within the same call or text chat session. This is a "warm transfer" - the same connection is maintained while the internal workflow configuration is swapped.
+
+#### Schema
+
+```json
+{
+  "id": "string",
+  "type": "agent_transfer",
+  "name": "string",
+  "target_agent_id": "string",
+  "transfer_context": false,
+  "transfer_message": "string",
+  "actions": { ... }
+}
+```
+
+#### Fields
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `id` | string | ✅ Yes | - | Unique node identifier |
+| `type` | string | ✅ Yes | - | Must be exactly `"agent_transfer"` |
+| `name` | string | ✅ Yes | - | Human-readable name |
+| `target_agent_id` | string | ✅ Yes | - | UUID of agent to transfer to (same tenant) |
+| `transfer_context` | boolean | ❌ No | `false` | Whether to pass conversation history to new agent |
+| `transfer_message` | string | ❌ No | `null` | Optional message spoken during handoff |
+| `actions` | object | ❌ No | `{}` | Actions to execute on entry |
+
+**Not Supported:**
+- `system_prompt` - No LLM processing
+- `static_text` - Use `transfer_message` instead
+- `transitions` - Transfer handles its own continuation
+- `rag` - No knowledge base access
+
+#### Behavior
+
+1. **Variables Always Transfer**: `collected_data` persists across transfers
+2. **Context Optional**: Set `transfer_context: true` to pass conversation history
+3. **Loop Prevention**: Max 3 transfers per call/session (prevents A→B→A loops)
+4. **Same Tenant**: Target agent must be in the same tenant
+5. **RAG Reconfiguration**: New agent's RAG config is loaded (if enabled)
+
+#### Transfer Flow
+
+1. Transfer message is spoken (if configured)
+2. New agent config is loaded from database
+3. Conversation history is optionally cleared
+4. New agent's initial node is activated
+5. Session continues with new agent's workflow
+
+#### Example
+
+```json
+{
+  "id": "transfer_to_specialist",
+  "type": "agent_transfer",
+  "name": "Transfer to Specialist",
+  "target_agent_id": "b2c3d4e5-f6a7-4901-bcde-f23456789012",
+  "transfer_context": true,
+  "transfer_message": "Please hold while I connect you with our specialist.",
+  "actions": {
+    "on_entry": [
+      {"type": "log", "params": {"message": "Transferring to specialist"}}
+    ]
+  }
+}
+```
+
+#### Intent-Based Transfer
+
+Combine with intent detection for user-driven transfers:
+
+```json
+{
+  "id": "listen_for_intent",
+  "type": "standard",
+  "name": "Listen for Intent",
+  "system_prompt": "Help the user. If they ask to speak to someone else, acknowledge warmly.",
+  "intents": {
+    "wants_transfer": {
+      "description": "User wants to be transferred to another agent",
+      "examples": [
+        "Transfer me to someone else",
+        "Can I speak to another agent?",
+        "Connect me with support"
+      ]
+    }
+  },
+  "transitions": [
+    {
+      "condition": "intent:wants_transfer",
+      "target": "transfer_to_specialist",
+      "priority": 1
+    }
+  ]
+}
+```
+
+#### Error Handling
+
+| Scenario | Behavior |
+|----------|----------|
+| Target agent not found | Log error, treat as `end_call` |
+| Config load failure | Log error, treat as `end_call` |
+| Transfer limit exceeded (3) | Log warning, treat as `end_call` |
+| Cross-tenant attempt | Blocked (config won't load) |
+
+---
+
 ## Transition Conditions
 
 Transitions move between nodes based on conditions. Conditions are evaluated in priority order (lower number = higher priority, like "1st priority", "2nd priority").
@@ -1453,7 +1564,8 @@ This allows:
       "use_speaker_boost": true,
       "enable_ssml_parsing": false,
       "pronunciation_dictionaries_enabled": true,
-      "pronunciation_dictionary_ids": []
+      "pronunciation_dictionary_ids": [],
+      "aggregate_sentences": true
     },
     "nodes": [...]
   }
@@ -1475,6 +1587,7 @@ This allows:
 | `enable_ssml_parsing` | boolean | ❌ No | `false` | Parse SSML tags |
 | `pronunciation_dictionaries_enabled` | boolean | ❌ No | `true` | Use pronunciation dictionaries |
 | `pronunciation_dictionary_ids` | array | ❌ No | `[]` | Dictionary IDs from ElevenLabs |
+| `aggregate_sentences` | boolean | ❌ No | `true` | Split text at sentence boundaries before TTS. Set to `false` for more consistent voice prosody across multi-sentence utterances |
 
 ### Database Schema
 
@@ -1499,9 +1612,11 @@ agent_config_versions:
 |------------|----------|----------|-------------|
 | `george` | elevenlabs | JBFqnCBsd6RMkjVDRZzb | Warm resonance that instantly captivates listener |
 | `rachel` | elevenlabs | 21m00Tcm4TlvDq8ikWAM | Matter of fact, personable woman |
-| `jonathan` | elevenlabs | PIGsltMj3gFMR34aFDI3 | Jonathan Livingstone - A calm, trustworthy, confident voice |
 | `rajeev` | elevenlabs | bQlVotXwlI4K7o8gDQWq | Rajeev - CEO of Higgs Boson Inc |
 | `melissa` | elevenlabs | XJIwaspdTAhv8Z6ijr8x | Melissa - Senior Implementation Manager, Higgs Boson Inc |
+| `beth` | elevenlabs | 8N2ng9i2uiUWqstgmWlH | Beth - Gentle and nurturing |
+| `pete` | elevenlabs | ChO6kqkVouUn0s7HMunx | Pete - Natural conversations |
+| `eric` | elevenlabs | egTToTzW6GojvddLj0zd | Eric - Calm and youthful |
 
 > **Note**: Administrators can add new voices to `voice_configs` table. They become immediately available for use in agent configurations.
 
@@ -1562,7 +1677,8 @@ To change an agent's voice:
       "use_speaker_boost": true,
       "enable_ssml_parsing": false,
       "pronunciation_dictionaries_enabled": true,
-      "pronunciation_dictionary_ids": []
+      "pronunciation_dictionary_ids": [],
+      "aggregate_sentences": true
     },
     "nodes": [...]
   }
@@ -1614,13 +1730,11 @@ Retrieval-Augmented Generation (RAG) provides knowledge base integration for age
 
 ### Database-Based Configuration
 
-> **Important:** Base RAG configuration (file paths, bedrock settings, relevance_filter) is stored in the **database**. This allows:
+> **Important:** RAG configuration is stored in the **database**, NOT in the agent JSON file. This allows:
 > - Shared RAG configs across multiple agents
 > - Independent versioning of RAG settings
 > - Easier RAG config management and updates
->
-> **Agent-level overrides:** `workflow.rag` section can override search tuning parameters (search_mode, top_k, rrf_k, weights)
-> **Node-level overrides:** Each node's `rag` field can override parameters for that specific node
+> - Node-level overrides remain in the agent JSON
 
 ### Database Tables
 
@@ -1661,48 +1775,6 @@ The `agent_config_versions` table has two columns for RAG:
 2. Create a version in `rag_config_versions` with settings
 3. Link agent to RAG config via `agent_config_versions.rag_config_id`
 4. Enable RAG with `agent_config_versions.rag_enabled = true`
-
-### Agent-Level RAG Tuning Overrides (Agent JSON)
-
-Similar to how TTS tuning is in `workflow.tts`, agents can override RAG search parameters at the agent level via `workflow.rag`. This allows customizing search behavior without modifying the shared database RAG config.
-
-```json
-{
-  "workflow": {
-    "rag": {
-      "override_enabled": true,
-      "search_mode": "hybrid",
-      "top_k": 8,
-      "rrf_k": 70,
-      "vector_weight": 0.7,
-      "fts_weight": 0.3
-    },
-    "nodes": [...]
-  }
-}
-```
-
-#### Agent-Level RAG Fields
-
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| `override_enabled` | boolean | ❌ No | `false` | Enable agent-level RAG overrides (if false, uses database config only) |
-| `search_mode` | string | ❌ No | from DB | Search mode: `"vector"`, `"fts"`, `"hybrid"` |
-| `top_k` | integer | ❌ No | from DB | Number of chunks to retrieve (1-50) |
-| `rrf_k` | integer | ❌ No | from DB | RRF fusion constant (1-200) |
-| `vector_weight` | decimal | ❌ No | from DB | Vector search weight (0.0-1.0) |
-| `fts_weight` | decimal | ❌ No | from DB | FTS weight (0.0-1.0) |
-
-**How it works:**
-- If `override_enabled` is `false` or `workflow.rag` is omitted, database RAG config is used as-is
-- If `override_enabled` is `true`, specified fields override the database config defaults
-- Node-level `rag` overrides take precedence over both database and `workflow.rag` settings
-- Only search tuning parameters can be overridden (not file paths, bedrock settings, etc.)
-
-**Override Hierarchy:**
-```
-Database RAG Config (base) → workflow.rag (agent-level) → node.rag (node-level)
-```
 
 ### RAG Config Parameters
 

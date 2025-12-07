@@ -22,22 +22,22 @@ export function getLayoutedNodes(
     direction = 'TB',
     nodeWidth = 280,
     nodeHeight = 180,
-    ranksep = 180,  // Increased from 100 for better vertical spacing
-    nodesep = 150,  // Increased from 80 for better horizontal spacing
+    ranksep = 280,  // Increased for better vertical spacing between ranks
+    nodesep = 220,  // Increased for better horizontal spacing between nodes
   } = options;
 
   // Create a new directed graph
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
 
-  // Set graph configuration with better spacing
+  // Set graph configuration with generous spacing for readability
   dagreGraph.setGraph({
     rankdir: direction,
     ranksep,
     nodesep,
-    edgesep: 100,   // Add edge separation
-    marginx: 100,   // Increased margin
-    marginy: 100,   // Increased margin
+    edgesep: 120,   // Edge separation for cleaner routing
+    marginx: 120,   // Canvas margin
+    marginy: 120,   // Canvas margin
   });
 
   // Add nodes to dagre graph with proper dimensions per node type

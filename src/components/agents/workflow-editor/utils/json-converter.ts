@@ -7,7 +7,7 @@ import type { WorkflowConfig, WorkflowNode as ConfigNode } from '@/lib/validatio
  */
 export interface WorkflowNodeData {
   id: string;
-  type: 'standard' | 'retrieve_variable' | 'end_call';
+  type: 'standard' | 'retrieve_variable' | 'end_call' | 'agent_transfer';
   name: string;
   system_prompt?: string;
   static_text?: string;
@@ -53,6 +53,10 @@ export interface WorkflowNodeData {
     context_scope?: 'node' | 'conversation';
     context_messages?: number;
   };
+  // Agent transfer fields (for agent_transfer nodes)
+  target_agent_id?: string;
+  transfer_context?: boolean;
+  transfer_message?: string;
 }
 
 /**
@@ -91,6 +95,10 @@ export function workflowToNodes(config: WorkflowConfig): {
         llm_override: (node as any).llm_override,
         intents: (node as any).intents,
         intent_config: (node as any).intent_config,
+        // Agent transfer fields
+        target_agent_id: (node as any).target_agent_id,
+        transfer_context: (node as any).transfer_context,
+        transfer_message: (node as any).transfer_message,
       },
     };
 
@@ -189,6 +197,17 @@ export function nodesToWorkflow(
         type: 'end_call',
         name: data.name,
       };
+    } else if (data.type === 'agent_transfer') {
+      // Agent transfer nodes - transfer to another agent
+      configNode = {
+        id: data.id,
+        type: 'agent_transfer',
+        name: data.name,
+        target_agent_id: data.target_agent_id,
+        ...(data.transfer_context && { transfer_context: data.transfer_context }),
+        ...(data.transfer_message && { transfer_message: data.transfer_message }),
+        ...(data.actions?.on_entry?.length && { actions: { on_entry: data.actions.on_entry } }),
+      };
     }
 
     configNodes.push(configNode);
@@ -266,6 +285,8 @@ function getReactFlowNodeType(type: string): string {
       return 'retrieveVariableNode';
     case 'end_call':
       return 'endCallNode';
+    case 'agent_transfer':
+      return 'agentTransferNode';
     default:
       return 'standardNode';
   }
@@ -326,6 +347,15 @@ export function validateWorkflowGraph(
         errors.push(
           `Node "${node.id}" must have either variables array or variable_name + extraction_prompt`
         );
+      }
+    }
+  });
+
+  // Check that agent_transfer nodes have target_agent_id
+  nodes.forEach((node) => {
+    if (node.data.type === 'agent_transfer') {
+      if (!node.data.target_agent_id) {
+        errors.push(`Agent transfer node "${node.id}" must have a target agent selected`);
       }
     }
   });

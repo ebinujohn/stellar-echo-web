@@ -40,6 +40,9 @@ import {
   MessageSquare,
   Database,
   PhoneOff,
+  ArrowDownToLine,
+  ArrowRightToLine,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -55,6 +58,7 @@ import { useAgentDraft } from '../contexts/agent-draft-context';
 interface WorkflowEditorLayoutProps {
   initialConfig?: WorkflowConfig;
   onSave?: (config: Partial<WorkflowConfig>) => void | Promise<void>;
+  agentId?: string;
 }
 
 // Safe hook to get draft context (returns null if not in provider)
@@ -66,7 +70,7 @@ function useOptionalAgentDraft() {
   }
 }
 
-function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutProps) {
+function WorkflowEditorContent({ initialConfig, onSave, agentId }: WorkflowEditorLayoutProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNodeData>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedNode, setSelectedNode] = useState<Node<WorkflowNodeData> | null>(null);
@@ -79,6 +83,7 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
   } | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [isInteractive, setIsInteractive] = useState(true);
+  const [layoutDirection, setLayoutDirection] = useState<'TB' | 'LR'>('TB');
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition } = useReactFlow();
 
@@ -100,7 +105,7 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
         const draftConfig = draftContext.workflowDraft.config as WorkflowConfig;
         const { nodes: draftNodes, edges: draftEdges } = workflowToNodes(draftConfig);
         const layoutedNodes = getLayoutedNodes(draftNodes, draftEdges, {
-          direction: 'TB',
+          direction: layoutDirection,
           nodeWidth: 280,
           nodeHeight: 180,
         });
@@ -118,7 +123,7 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
 
         // Apply auto-layout immediately for better initial presentation
         const layoutedNodes = getLayoutedNodes(initialNodes, initialEdges, {
-          direction: 'TB',
+          direction: layoutDirection,
           nodeWidth: 280,
           nodeHeight: 180,
         });
@@ -275,15 +280,23 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
   }, [nodes, edges]);
 
   // Handle auto-layout
-  const handleAutoLayout = useCallback(() => {
+  const handleAutoLayout = useCallback((direction?: 'TB' | 'LR') => {
+    const dir = direction ?? layoutDirection;
     const layoutedNodes = getLayoutedNodes(nodes, edges, {
-      direction: 'TB',
+      direction: dir,
       nodeWidth: 280,
       nodeHeight: 180,
     });
     setNodes(layoutedNodes);
-    toast.success('Layout applied');
-  }, [nodes, edges, setNodes]);
+    toast.success(`${dir === 'TB' ? 'Vertical' : 'Horizontal'} layout applied`);
+  }, [nodes, edges, setNodes, layoutDirection]);
+
+  // Toggle layout direction and re-apply layout
+  const handleToggleDirection = useCallback(() => {
+    const newDirection = layoutDirection === 'TB' ? 'LR' : 'TB';
+    setLayoutDirection(newDirection);
+    handleAutoLayout(newDirection);
+  }, [layoutDirection, handleAutoLayout]);
 
   // Generate unique node ID
   const generateNodeId = useCallback((type: string) => {
@@ -484,6 +497,13 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
 
       // Note: Ctrl+S removed - use "Save All Changes" button in page header
 
+      // Toggle layout direction (Ctrl/Cmd + Shift + L)
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'l') {
+        event.preventDefault();
+        handleToggleDirection();
+        return;
+      }
+
       // Auto layout (Ctrl/Cmd + L)
       if ((event.ctrlKey || event.metaKey) && event.key === 'l') {
         event.preventDefault();
@@ -505,7 +525,7 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedNode, selectedEdge, shortcutsOpen, handleDeleteNode, handleAutoLayout, setEdges]);
+  }, [selectedNode, selectedEdge, shortcutsOpen, handleDeleteNode, handleAutoLayout, handleToggleDirection, setEdges]);
 
   return (
     <div className="flex flex-col h-[calc(100vh-12rem)]">
@@ -513,9 +533,22 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
       <div className="border-b bg-card/50 backdrop-blur supports-[backdrop-filter]:bg-card/80">
         <div className="flex items-center justify-between px-4 py-2">
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={handleAutoLayout}>
+            <Button variant="outline" size="sm" onClick={() => handleAutoLayout()}>
               <Wand2 className="mr-2 h-4 w-4" />
               Auto Layout
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleToggleDirection}
+              title={`Switch to ${layoutDirection === 'TB' ? 'horizontal' : 'vertical'} layout`}
+            >
+              {layoutDirection === 'TB' ? (
+                <ArrowRightToLine className="mr-2 h-4 w-4" />
+              ) : (
+                <ArrowDownToLine className="mr-2 h-4 w-4" />
+              )}
+              {layoutDirection === 'TB' ? 'Horizontal' : 'Vertical'}
             </Button>
             <Button variant="outline" size="sm" onClick={handleValidate}>
               <CheckCircle2 className="mr-2 h-4 w-4" />
@@ -539,6 +572,9 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div className="font-medium">Auto Layout</div>
                     <div className="text-muted-foreground font-mono">Ctrl/⌘ + L</div>
+
+                    <div className="font-medium">Toggle Layout Direction</div>
+                    <div className="text-muted-foreground font-mono">Ctrl/⌘ + Shift + L</div>
 
                     <div className="font-medium">Delete Node/Connection</div>
                     <div className="text-muted-foreground font-mono">Delete / Backspace</div>
@@ -632,6 +668,12 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
                     label="End Call"
                     description="Terminate the call"
                   />
+                  <NodePaletteItem
+                    type="agent_transfer"
+                    icon={<ArrowRightLeft className="h-5 w-5 text-cyan-500" />}
+                    label="Agent Transfer"
+                    description="Transfer to another agent"
+                  />
                 </div>
               </div>
             </div>
@@ -673,6 +715,7 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
                 if (node.type === 'standardNode') return '#a855f7';
                 if (node.type === 'retrieveVariableNode') return '#f59e0b';
                 if (node.type === 'endCallNode') return '#ef4444';
+                if (node.type === 'agentTransferNode') return '#06b6d4';
                 return '#64748b';
               }}
             />
@@ -694,6 +737,7 @@ function WorkflowEditorContent({ initialConfig, onSave }: WorkflowEditorLayoutPr
               onClose={() => setRightPanelOpen(false)}
               onUpdateNode={handleUpdateNode}
               onDeleteNode={handleDeleteNode}
+              currentAgentId={agentId}
             />
           </div>
         ) : (
@@ -780,6 +824,8 @@ function getReactFlowNodeType(type: string): string {
       return 'retrieveVariableNode';
     case 'end_call':
       return 'endCallNode';
+    case 'agent_transfer':
+      return 'agentTransferNode';
     default:
       return 'standardNode';
   }
@@ -808,6 +854,15 @@ function getDefaultNodeData(id: string, type: string): WorkflowNodeData {
         id,
         type: 'end_call',
         name: 'End Call',
+      };
+    case 'agent_transfer':
+      return {
+        id,
+        type: 'agent_transfer',
+        name: 'Transfer to Agent',
+        target_agent_id: '',
+        transfer_context: false,
+        transfer_message: '',
       };
     default:
       return {
