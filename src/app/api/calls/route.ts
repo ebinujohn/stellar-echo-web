@@ -7,6 +7,7 @@ const querySchema = z.object({
   page: z.coerce.number().min(1).default(1),
   pageSize: z.coerce.number().min(1).max(100).default(20),
   status: z.string().optional(),
+  direction: z.enum(['inbound', 'outbound']).optional(),
   agentId: z.string().uuid().optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
@@ -24,6 +25,7 @@ export async function GET(request: NextRequest) {
 
     const filters = {
       status: params.status,
+      direction: params.direction,
       agentId: params.agentId,
       startDate: params.startDate ? new Date(params.startDate) : undefined,
       endDate: params.endDate ? new Date(params.endDate) : undefined,

@@ -31,6 +31,9 @@ export async function getCallsList(
   if (filters.toNumber) {
     conditions.push(ilike(calls.toNumber, `%${filters.toNumber}%`));
   }
+  if (filters.direction) {
+    conditions.push(eq(calls.direction, filters.direction));
+  }
   if (filters.search) {
     const searchCondition = or(
       ilike(calls.callId, `%${filters.search}%`),
@@ -54,6 +57,7 @@ export async function getCallsList(
       fromNumber: calls.fromNumber,
       toNumber: calls.toNumber,
       status: calls.status,
+      direction: calls.direction,
       startedAt: calls.startedAt,
       endedAt: calls.endedAt,
       durationSeconds: calls.durationSeconds,

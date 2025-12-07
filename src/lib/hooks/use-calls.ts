@@ -15,6 +15,7 @@ export function useCalls(params: CallsQueryParams = {}) {
       if (params.page) searchParams.set('page', params.page.toString());
       if (params.pageSize) searchParams.set('pageSize', params.pageSize.toString());
       if (params.status) searchParams.set('status', params.status);
+      if (params.direction) searchParams.set('direction', params.direction);
       if (params.agentId) searchParams.set('agentId', params.agentId);
       if (params.startDate) searchParams.set('startDate', params.startDate.toISOString());
       if (params.endDate) searchParams.set('endDate', params.endDate.toISOString());

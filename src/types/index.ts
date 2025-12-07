@@ -13,6 +13,7 @@ export type {
   CallRagRetrieval,
   CallExtractedVariable,
   CallUserInterruption,
+  CallDirection,
   User,
 } from '@/lib/db/schema';
 
@@ -39,6 +40,7 @@ export interface CallFilters {
   tenantId?: string;
   agentId?: string;
   status?: string;
+  direction?: 'inbound' | 'outbound';
   startDate?: Date;
   endDate?: Date;
   fromNumber?: string;
@@ -122,6 +124,7 @@ export interface CallListItem {
   fromNumber: string | null;
   toNumber: string | null;
   status: string;
+  direction: 'inbound' | 'outbound' | null;
   startedAt: Date;
   endedAt: Date | null;
   durationSeconds: number | null;

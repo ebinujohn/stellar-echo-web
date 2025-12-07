@@ -32,7 +32,7 @@ export function CallFilters({ onFiltersChange, currentFilters }: CallFiltersProp
   return (
     <Card>
       <CardContent className="pt-6">
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
           {/* Search */}
           <div className="space-y-2">
             <label className="text-sm font-medium">Search</label>
@@ -60,6 +60,20 @@ export function CallFilters({ onFiltersChange, currentFilters }: CallFiltersProp
               <option value="ongoing">Ongoing</option>
               <option value="ended">Ended</option>
               <option value="failed">Failed</option>
+            </select>
+          </div>
+
+          {/* Direction */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Direction</label>
+            <select
+              value={localFilters.direction || ''}
+              onChange={(e) => setLocalFilters({ ...localFilters, direction: (e.target.value || undefined) as 'inbound' | 'outbound' | undefined })}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <option value="">All directions</option>
+              <option value="inbound">Inbound</option>
+              <option value="outbound">Outbound</option>
             </select>
           </div>
 

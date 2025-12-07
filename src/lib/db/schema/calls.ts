@@ -1,7 +1,10 @@
-import { pgTable, uuid, varchar, timestamp, integer, boolean, text, jsonb, index, decimal } from 'drizzle-orm/pg-core';
+import { pgTable, pgEnum, uuid, varchar, timestamp, integer, boolean, text, jsonb, index, decimal } from 'drizzle-orm/pg-core';
 import { tenants } from './tenants';
 import { agents, agentConfigVersions } from './agents';
 import { relations } from 'drizzle-orm';
+
+// Call direction enum - 'inbound' for calls received, 'outbound' for calls initiated
+export const callDirectionEnum = pgEnum('call_direction_enum', ['inbound', 'outbound']);
 
 export const calls = pgTable('calls', {
   callId: uuid('call_id').primaryKey().defaultRandom(),
@@ -14,6 +17,7 @@ export const calls = pgTable('calls', {
   fromNumber: varchar('from_number', { length: 20 }),
   toNumber: varchar('to_number', { length: 20 }),
   status: varchar('status', { length: 50 }).notNull(),
+  direction: callDirectionEnum('direction').default('inbound'),
   startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
   endedAt: timestamp('ended_at', { withTimezone: true }),
   durationSeconds: integer('duration_seconds'),
@@ -34,6 +38,7 @@ export const calls = pgTable('calls', {
   agentIdx: index('calls_agent_idx').on(table.agentId),
   startedAtIdx: index('calls_started_at_idx').on(table.startedAt),
   statusIdx: index('calls_status_idx').on(table.status),
+  directionIdx: index('calls_direction_idx').on(table.direction),
 }));
 
 export const callMessages = pgTable('call_messages', {
@@ -230,3 +235,4 @@ export type CallAnalysis = typeof callAnalysis.$inferSelect;
 export type CallRagRetrieval = typeof callRagRetrievals.$inferSelect;
 export type CallExtractedVariable = typeof callExtractedVariables.$inferSelect;
 export type CallUserInterruption = typeof callUserInterruptions.$inferSelect;
+export type CallDirection = (typeof callDirectionEnum.enumValues)[number];

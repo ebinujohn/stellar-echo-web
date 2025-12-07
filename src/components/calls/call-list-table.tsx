@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink, PhoneIncoming, PhoneOutgoing } from 'lucide-react';
 import { useCalls } from '@/lib/hooks/use-calls';
 import { formatDateTime, formatDurationShort, formatPhoneNumber, getStatusVariant } from '@/lib/utils/formatters';
 import type { CallFilters } from '@/types';
@@ -96,6 +96,7 @@ export function CallListTable({ filters, page, pageSize, onPageChange }: CallLis
               <TableRow>
                 <TableHead>Call ID</TableHead>
                 <TableHead>Date/Time</TableHead>
+                <TableHead>Direction</TableHead>
                 <TableHead>Duration</TableHead>
                 <TableHead>From</TableHead>
                 <TableHead>To</TableHead>
@@ -113,6 +114,19 @@ export function CallListTable({ filters, page, pageSize, onPageChange }: CallLis
                   </TableCell>
                   <TableCell className="text-sm">
                     {formatDateTime(call.startedAt)}
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={call.direction === 'outbound' ? 'secondary' : 'outline'}
+                      className="flex items-center gap-1 w-fit"
+                    >
+                      {call.direction === 'outbound' ? (
+                        <PhoneOutgoing className="h-3 w-3" />
+                      ) : (
+                        <PhoneIncoming className="h-3 w-3" />
+                      )}
+                      {call.direction === 'outbound' ? 'Outbound' : 'Inbound'}
+                    </Badge>
                   </TableCell>
                   <TableCell className="text-sm">
                     {formatDurationShort(call.durationSeconds)}
