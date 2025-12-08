@@ -14,7 +14,8 @@ export async function middleware(request: NextRequest) {
   // Public routes - no auth required
   if (
     pathname.startsWith('/login') ||
-    pathname.startsWith('/api/auth') // All auth routes (login, logout, Better Auth callbacks)
+    pathname.startsWith('/api/auth') || // All auth routes (login, logout, Better Auth callbacks)
+    pathname.startsWith('/monitoring-tunnel') // Sentry tunnel route
   ) {
     return NextResponse.next();
   }

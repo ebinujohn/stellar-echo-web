@@ -41,6 +41,8 @@ Required in `.env.local`:
 - `NODE_ENV` - development/production
 - Optional: `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` - S3 for recordings
 - Optional: `ADMIN_API_BASE_URL`, `ADMIN_API_KEY` - Orchestrator cache management
+- Optional: `NEXT_PUBLIC_SENTRY_DSN` - Sentry error tracking DSN
+- Optional: `NEXT_PUBLIC_SENTRY_ENABLED`, `SENTRY_ENABLED` - Enable Sentry in development
 
 ## Architecture
 
@@ -70,6 +72,15 @@ Required in `.env.local`:
 - **Feature components**: `src/components/[feature]/` (calls, dashboard, analytics, agents, settings)
 - **UI primitives**: `src/components/ui/` (shadcn/ui)
 - **Layout**: `src/components/layout/` (sidebar, navbar)
+- **Providers**: `src/components/providers/` (theme, query, sentry)
+
+### Error Tracking (Sentry)
+- **Config files**: `sentry.client.config.ts`, `sentry.server.config.ts`, `sentry.edge.config.ts`
+- **Instrumentation**: `src/instrumentation.ts` - Loads server/edge SDK
+- **Client provider**: `src/components/providers/sentry-provider.tsx` - Browser initialization
+- **Error boundaries**: `src/app/global-error.tsx`, `src/app/(dashboard)/dashboard/error.tsx`
+- **Tunnel route**: `/monitoring-tunnel` - Bypasses ad blockers (excluded from auth in middleware)
+- **Features**: Error tracking, Session Replay, Feedback Widget, Performance Monitoring
 
 ## Key Patterns
 
