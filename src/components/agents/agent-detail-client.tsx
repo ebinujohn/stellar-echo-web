@@ -14,6 +14,7 @@ import {
   Settings,
   Activity,
   Phone,
+  PhoneOutgoing,
   History,
   Edit,
   Trash2,
@@ -29,6 +30,7 @@ import { useAgentPhoneConfigs } from '@/lib/hooks/use-phone-configs';
 import { useVoiceConfig } from '@/lib/hooks/use-voice-configs';
 import { formatDateTime, formatPhoneNumber } from '@/lib/utils/formatters';
 import { DeleteAgentDialog } from './dialogs/delete-agent-dialog';
+import { InitiateCallDialog } from './dialogs/initiate-call-dialog';
 import { UnsavedChangesDialog, UnsavedChangesAction } from './dialogs/unsaved-changes-dialog';
 import { SaveVersionDialog } from './dialogs/save-version-dialog';
 import { WorkflowEditorLayout } from './workflow-editor/workflow-editor-layout';
@@ -58,6 +60,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
   const { data: versions } = useAgentVersions(agentId);
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [initiateCallDialogOpen, setInitiateCallDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const createVersion = useCreateVersion();
 
@@ -569,6 +572,16 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
               {createVersion.isPending ? 'Saving...' : 'Save All Changes'}
             </Button>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setInitiateCallDialogOpen(true)}
+            disabled={!agent.activeVersion}
+            title={!agent.activeVersion ? 'Activate a version first to make calls' : 'Start an outbound call'}
+          >
+            <PhoneOutgoing className="mr-2 h-4 w-4" />
+            Initiate Call
+          </Button>
           <Button
             variant="destructive"
             size="sm"
@@ -1090,6 +1103,14 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
         }}
         onSave={handleSaveWithNotes}
         isSaving={createVersion.isPending}
+      />
+
+      {/* Initiate Call Dialog */}
+      <InitiateCallDialog
+        open={initiateCallDialogOpen}
+        onOpenChange={setInitiateCallDialogOpen}
+        agent={{ id: agent.id, name: agent.name }}
+        phoneConfigs={phoneConfigs || []}
       />
     </div>
   );

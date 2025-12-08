@@ -1,4 +1,4 @@
-import { createHash, createHmac } from 'crypto';
+import { createHash, createHmac, randomBytes } from 'crypto';
 import type { RAGChunk, RAGQueryMetadata, RAGQueryResponse } from '@/types';
 
 /**
@@ -37,16 +37,26 @@ export interface RAGQueryParams {
 export type { RAGChunk, RAGQueryMetadata, RAGQueryResponse };
 
 /**
+ * Generates a cryptographically secure random nonce.
+ * Per ADMIN_API.md: minimum 16 characters, URL-safe.
+ * Uses 24 random bytes encoded as base64url (32 characters).
+ */
+function generateNonce(): string {
+  return randomBytes(24).toString('base64url');
+}
+
+/**
  * Computes HMAC-SHA256 signature for Admin API requests.
  *
- * Signature computation:
+ * Signature computation (per ADMIN_API.md):
  * 1. body_hash = SHA256(request_body)
- * 2. message = timestamp + method + path + body_hash
+ * 2. message = timestamp + nonce + method + path + body_hash
  * 3. signature = HMAC-SHA256(api_key, message)
  */
 function computeSignature(
   apiKey: string,
   timestamp: string,
+  nonce: string,
   method: string,
   path: string,
   body: string
@@ -54,8 +64,8 @@ function computeSignature(
   // Compute SHA256 hash of the request body
   const bodyHash = createHash('sha256').update(body).digest('hex');
 
-  // Build the message to sign
-  const message = `${timestamp}${method.toUpperCase()}${path}${bodyHash}`;
+  // Build the message to sign (includes nonce for replay attack protection)
+  const message = `${timestamp}${nonce}${method.toUpperCase()}${path}${bodyHash}`;
 
   // Compute HMAC-SHA256 signature
   return createHmac('sha256', apiKey).update(message).digest('hex');
@@ -63,6 +73,7 @@ function computeSignature(
 
 /**
  * Makes a signed request to the Admin API.
+ * Includes HMAC-SHA256 signature with nonce for replay attack protection.
  */
 async function makeAdminApiRequest(
   method: string,
@@ -78,14 +89,16 @@ async function makeAdminApiRequest(
   }
 
   const timestamp = Math.floor(Date.now() / 1000).toString();
+  const nonce = generateNonce();
   const bodyStr = JSON.stringify(body);
-  const signature = computeSignature(ADMIN_API_KEY, timestamp, method, path, bodyStr);
+  const signature = computeSignature(ADMIN_API_KEY, timestamp, nonce, method, path, bodyStr);
 
   const response = await fetch(`${ADMIN_API_BASE_URL}${path}`, {
     method,
     headers: {
       'Content-Type': 'application/json',
       'X-Timestamp': timestamp,
+      'X-Nonce': nonce,
       'X-Signature': signature,
     },
     body: method !== 'GET' ? bodyStr : undefined,
@@ -182,15 +195,17 @@ export async function queryRAG(params: RAGQueryParams): Promise<RAGQueryResponse
   }
 
   const timestamp = Math.floor(Date.now() / 1000).toString();
+  const nonce = generateNonce();
   const path = '/admin/rag/query';
   const bodyStr = JSON.stringify(requestBody);
-  const signature = computeSignature(ADMIN_API_KEY, timestamp, 'POST', path, bodyStr);
+  const signature = computeSignature(ADMIN_API_KEY, timestamp, nonce, 'POST', path, bodyStr);
 
   const response = await fetch(`${ADMIN_API_BASE_URL}${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-Timestamp': timestamp,
+      'X-Nonce': nonce,
       'X-Signature': signature,
     },
     body: bodyStr,
@@ -203,4 +218,149 @@ export async function queryRAG(params: RAGQueryParams): Promise<RAGQueryResponse
   }
 
   return response.json() as Promise<RAGQueryResponse>;
+}
+
+// ============================================================================
+// Outbound Call API
+// ============================================================================
+
+/**
+ * Parameters for initiating an outbound call.
+ */
+export interface InitiateOutboundCallParams {
+  tenantId: string;
+  agentId: string;
+  toNumber: string;
+  fromNumber?: string;
+  version?: number;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Response from initiating an outbound call.
+ */
+export interface OutboundCallResponse {
+  call_id: string;
+  twilio_call_sid: string;
+  status: string;
+  direction: 'outbound';
+  from_number: string;
+  to_number: string;
+  agent_id: string;
+  agent_name: string;
+  agent_config_version: number;
+  created_at: string;
+}
+
+/**
+ * Response from getting call status.
+ */
+export interface CallStatusResponse {
+  call_id: string;
+  twilio_call_sid: string;
+  status: string;
+  direction: 'inbound' | 'outbound';
+  from_number: string;
+  to_number: string;
+  agent_id: string;
+  agent_name: string;
+  started_at: string;
+  connected_at: string | null;
+  ended_at: string | null;
+  duration_seconds: number | null;
+  error_message: string | null;
+}
+
+/**
+ * Initiates an outbound call using the specified agent.
+ *
+ * @param params - The outbound call parameters
+ * @returns The outbound call response with call_id and status
+ * @throws Error if Admin API is not configured or call initiation fails
+ */
+export async function initiateOutboundCall(
+  params: InitiateOutboundCallParams
+): Promise<OutboundCallResponse> {
+  if (!ADMIN_API_BASE_URL || !ADMIN_API_KEY) {
+    throw new Error('Admin API is not configured. Set ADMIN_API_BASE_URL and ADMIN_API_KEY.');
+  }
+
+  const requestBody: Record<string, unknown> = {
+    tenant_id: params.tenantId,
+    agent_id: params.agentId,
+    to_number: params.toNumber,
+  };
+
+  // Add optional parameters only if provided
+  if (params.fromNumber) {
+    requestBody.from_number = params.fromNumber;
+  }
+  if (params.version !== undefined) {
+    requestBody.version = params.version;
+  }
+  if (params.metadata) {
+    requestBody.metadata = params.metadata;
+  }
+
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const nonce = generateNonce();
+  const path = '/admin/calls/outbound';
+  const bodyStr = JSON.stringify(requestBody);
+  const signature = computeSignature(ADMIN_API_KEY, timestamp, nonce, 'POST', path, bodyStr);
+
+  const response = await fetch(`${ADMIN_API_BASE_URL}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Timestamp': timestamp,
+      'X-Nonce': nonce,
+      'X-Signature': signature,
+    },
+    body: bodyStr,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+    const errorMessage = errorData.detail || `Admin API error: ${response.status}`;
+    throw new Error(errorMessage);
+  }
+
+  return response.json() as Promise<OutboundCallResponse>;
+}
+
+/**
+ * Gets the status of a call.
+ *
+ * @param callId - The call UUID
+ * @returns The call status response
+ * @throws Error if Admin API is not configured or status fetch fails
+ */
+export async function getCallStatus(callId: string): Promise<CallStatusResponse> {
+  if (!ADMIN_API_BASE_URL || !ADMIN_API_KEY) {
+    throw new Error('Admin API is not configured. Set ADMIN_API_BASE_URL and ADMIN_API_KEY.');
+  }
+
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const nonce = generateNonce();
+  const path = `/admin/calls/${callId}/status`;
+  const bodyStr = '{}';
+  const signature = computeSignature(ADMIN_API_KEY, timestamp, nonce, 'GET', path, bodyStr);
+
+  const response = await fetch(`${ADMIN_API_BASE_URL}${path}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Timestamp': timestamp,
+      'X-Nonce': nonce,
+      'X-Signature': signature,
+    },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+    const errorMessage = errorData.detail || `Admin API error: ${response.status}`;
+    throw new Error(errorMessage);
+  }
+
+  return response.json() as Promise<CallStatusResponse>;
 }

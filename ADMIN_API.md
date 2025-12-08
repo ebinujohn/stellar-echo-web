@@ -1,42 +1,53 @@
 # Admin API Documentation
 
-The Admin API provides cache management and RAG query endpoints for the orchestrator service. These endpoints are designed for machine-to-machine (M2M) communication, allowing external applications to trigger cache refresh operations and query knowledge bases.
+The Admin API provides cache management, RAG query, and outbound call endpoints for the orchestrator service. These endpoints are designed for machine-to-machine (M2M) communication, allowing external applications to trigger cache refresh operations, query knowledge bases, and initiate outbound calls.
 
 ## Authentication
 
-All Admin API endpoints require **HMAC-SHA256 request signing**. This provides protection against replay attacks - even if a request is intercepted, it cannot be reused.
+All Admin API endpoints require **HMAC-SHA256 request signing with nonce**. This provides comprehensive protection against replay attacks - each request requires a unique nonce that can only be used once.
 
 ### How HMAC Signing Works
 
-1. Each request includes a **timestamp** and **signature**
-2. The signature is computed from: `timestamp + method + path + body_hash`
-3. Server rejects requests older than **5 minutes** (replay protection)
-4. Signatures are compared using constant-time comparison (timing attack protection)
+1. Each request includes a **timestamp**, **nonce**, and **signature**
+2. The signature is computed from: `timestamp + nonce + method + path + body_hash`
+3. Server rejects requests older than **5 minutes** (timestamp-based protection)
+4. Server rejects any request with a previously used nonce (nonce-based protection)
+5. Used nonces are stored in Redis with automatic TTL expiration
+6. Signatures are compared using constant-time comparison (timing attack protection)
 
 ### Required Headers
 
 | Header | Description |
 |--------|-------------|
 | `X-Timestamp` | Unix timestamp in seconds (e.g., `1700000000`) |
+| `X-Nonce` | Unique random string, min 16 characters (e.g., `a1b2c3d4e5f6g7h8i9j0k1l2`) |
 | `X-Signature` | HMAC-SHA256 signature (hex-encoded) |
 | `Content-Type` | `application/json` |
+
+### Nonce Requirements
+
+- **Minimum length**: 16 characters
+- **Uniqueness**: Each nonce can only be used once within the timestamp window
+- **Recommended format**: URL-safe random string (e.g., `secrets.token_urlsafe(24)`)
+- **TTL**: Used nonces are stored for 6 minutes (timestamp window + 1 minute buffer)
 
 ### Signature Computation
 
 ```
 body_hash = SHA256(request_body)
-message = timestamp + method + path + body_hash
+message = timestamp + nonce + method + path + body_hash
 signature = HMAC-SHA256(api_key, message)
 ```
 
 **Example:**
 ```
 timestamp = "1700000000"
+nonce = "xK9mN2pQ5rS8tU1vW4xY7zA0bC3dE6fG"
 method = "POST"
 path = "/admin/cache/refresh/all"
 body = "{}"
 body_hash = SHA256("{}") = "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
-message = "1700000000POST/admin/cache/refresh/all44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+message = "1700000000xK9mN2pQ5rS8tU1vW4xY7zA0bC3dE6fGPOST/admin/cache/refresh/all44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
 signature = HMAC-SHA256(api_key, message)
 ```
 
@@ -361,7 +372,7 @@ POST /admin/rag/query
     "top_k": 5,
     "processing_time_ms": 127.45,
     "total_chunks": 2,
-    "rag_config_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "rag_config_id": "a1b2c3d4-e5f6-4890-abcd-ef1234567890",
     "agent_config_version": 2,
     "is_active_version": false
   }
@@ -482,6 +493,7 @@ All endpoints return appropriate HTTP status codes:
 import hashlib
 import hmac
 import json
+import secrets
 import time
 
 import httpx
@@ -490,19 +502,26 @@ API_KEY = "your_api_key_here"
 BASE_URL = "http://localhost:8000"
 
 
-def compute_signature(api_key: str, timestamp: str, method: str, path: str, body: bytes) -> str:
+def generate_nonce() -> str:
+    """Generate a cryptographically secure random nonce."""
+    return secrets.token_urlsafe(24)  # 32 characters, URL-safe
+
+
+def compute_signature(api_key: str, timestamp: str, nonce: str, method: str, path: str, body: bytes) -> str:
     body_hash = hashlib.sha256(body).hexdigest()
-    message = f"{timestamp}{method.upper()}{path}{body_hash}"
+    message = f"{timestamp}{nonce}{method.upper()}{path}{body_hash}"
     return hmac.new(api_key.encode(), message.encode(), hashlib.sha256).hexdigest()
 
 
 def make_request(method: str, path: str, body: dict | None = None) -> dict:
     timestamp = str(int(time.time()))
+    nonce = generate_nonce()
     body_bytes = json.dumps(body or {}).encode()
-    signature = compute_signature(API_KEY, timestamp, method, path, body_bytes)
+    signature = compute_signature(API_KEY, timestamp, nonce, method, path, body_bytes)
 
     headers = {
         "X-Timestamp": timestamp,
+        "X-Nonce": nonce,
         "X-Signature": signature,
         "Content-Type": "application/json",
     }
@@ -558,21 +577,28 @@ const crypto = require("crypto");
 const API_KEY = "your_api_key_here";
 const BASE_URL = "http://localhost:8000";
 
-function computeSignature(apiKey, timestamp, method, path, body) {
+function generateNonce() {
+  // Generate 24 random bytes, encode as base64url (32 characters)
+  return crypto.randomBytes(24).toString("base64url");
+}
+
+function computeSignature(apiKey, timestamp, nonce, method, path, body) {
   const bodyHash = crypto.createHash("sha256").update(body).digest("hex");
-  const message = `${timestamp}${method.toUpperCase()}${path}${bodyHash}`;
+  const message = `${timestamp}${nonce}${method.toUpperCase()}${path}${bodyHash}`;
   return crypto.createHmac("sha256", apiKey).update(message).digest("hex");
 }
 
 async function makeRequest(method, path, body = null) {
   const timestamp = Math.floor(Date.now() / 1000).toString();
+  const nonce = generateNonce();
   const bodyStr = body ? JSON.stringify(body) : "{}";
-  const signature = computeSignature(API_KEY, timestamp, method, path, bodyStr);
+  const signature = computeSignature(API_KEY, timestamp, nonce, method, path, bodyStr);
 
   const response = await fetch(`${BASE_URL}${path}`, {
     method,
     headers: {
       "X-Timestamp": timestamp,
+      "X-Nonce": nonce,
       "X-Signature": signature,
       "Content-Type": "application/json",
     },
@@ -613,12 +639,14 @@ METHOD="POST"
 BODY="{}"
 
 TIMESTAMP=$(date +%s)
+NONCE=$(openssl rand -base64 24 | tr -d '/+=' | head -c 32)
 BODY_HASH=$(echo -n "$BODY" | sha256sum | cut -d' ' -f1)
-MESSAGE="${TIMESTAMP}${METHOD}${PATH_}${BODY_HASH}"
+MESSAGE="${TIMESTAMP}${NONCE}${METHOD}${PATH_}${BODY_HASH}"
 SIGNATURE=$(echo -n "$MESSAGE" | openssl dgst -sha256 -hmac "$API_KEY" | cut -d' ' -f2)
 
 curl -X POST "${BASE_URL}${PATH_}" \
   -H "X-Timestamp: $TIMESTAMP" \
+  -H "X-Nonce: $NONCE" \
   -H "X-Signature: $SIGNATURE" \
   -H "Content-Type: application/json" \
   -d "$BODY"
@@ -635,12 +663,14 @@ METHOD="POST"
 BODY='{"tenant_id":"your-tenant-uuid","agent_id":"your-agent-uuid","query":"What are the symptoms?"}'
 
 TIMESTAMP=$(date +%s)
+NONCE=$(openssl rand -base64 24 | tr -d '/+=' | head -c 32)
 BODY_HASH=$(echo -n "$BODY" | sha256sum | cut -d' ' -f1)
-MESSAGE="${TIMESTAMP}${METHOD}${PATH_}${BODY_HASH}"
+MESSAGE="${TIMESTAMP}${NONCE}${METHOD}${PATH_}${BODY_HASH}"
 SIGNATURE=$(echo -n "$MESSAGE" | openssl dgst -sha256 -hmac "$API_KEY" | cut -d' ' -f2)
 
 curl -X POST "${BASE_URL}${PATH_}" \
   -H "X-Timestamp: $TIMESTAMP" \
+  -H "X-Nonce: $NONCE" \
   -H "X-Signature: $SIGNATURE" \
   -H "Content-Type: application/json" \
   -d "$BODY"
@@ -671,19 +701,167 @@ curl -X POST "${BASE_URL}${PATH_}" \
 
 ## Replay Attack Protection
 
-The HMAC authentication provides protection against replay attacks:
+The HMAC authentication with nonce provides comprehensive protection against replay attacks:
 
-1. **Timestamp Validation**: Requests older than 5 minutes are rejected
-2. **Request Binding**: Signature includes method, path, and body - cannot be used for different requests
-3. **Time Window**: Even if captured, requests expire quickly
+1. **Nonce Uniqueness**: Each request requires a unique nonce - cannot be reused
+2. **Nonce Storage**: Used nonces are stored in Redis with 6-minute TTL
+3. **Timestamp Validation**: Requests older than 5 minutes are rejected
+4. **Request Binding**: Signature includes method, path, and body - cannot be used for different requests
 
 **Attack Scenario Prevention:**
 | Attack | Protection |
 |--------|------------|
-| Replay same request | Timestamp expires after 5 minutes |
+| Replay same request immediately | Nonce is already used - rejected |
+| Replay same request after cache expires | Timestamp expires after 5 minutes - rejected |
 | Modify request body | Signature includes body hash - will fail |
 | Use signature for different endpoint | Signature includes path - will fail |
 | Timing attack on signature | Constant-time comparison used |
+| Nonce collision attack | 192-bit random nonce has negligible collision probability |
+
+**Why Both Timestamp AND Nonce?**
+- **Timestamp alone**: Vulnerable within the 5-minute window - same request can be replayed multiple times
+- **Nonce alone**: Requires permanent storage - impractical at scale
+- **Both together**: Nonces only need to be stored for the timestamp window duration (auto-cleanup via TTL)
+
+---
+
+## Outbound Call Endpoints
+
+The outbound call API allows initiating calls programmatically using a specified agent.
+
+### Initiate Outbound Call
+
+Start an outbound call to a phone number using the specified agent.
+
+```
+POST /admin/calls/outbound
+```
+
+**Request Body:**
+```json
+{
+  "tenant_id": "550e8400-e29b-41d4-a716-446655440000",
+  "agent_id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+  "to_number": "+15551234567",
+  "from_number": "+15559876543",
+  "version": 2,
+  "metadata": {"campaign_id": "spring-2025"}
+}
+```
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `tenant_id` | string | **Yes** | Tenant UUID |
+| `agent_id` | string | **Yes** | Agent UUID |
+| `to_number` | string | **Yes** | Destination phone number (E.164 format) |
+| `from_number` | string | No | Caller ID (must belong to tenant). If not provided, uses the phone number mapped to the agent. |
+| `version` | integer | No | Agent config version (1+). If not provided, uses active version. |
+| `metadata` | object | No | Optional call metadata (campaign_id, external_id, etc.) |
+
+**Response (202 Accepted):**
+```json
+{
+  "call_id": "1ef88a12-3456-7890-abcd-ef1234567890",
+  "twilio_call_sid": "CAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "status": "queued",
+  "direction": "outbound",
+  "from_number": "+15559876543",
+  "to_number": "+15551234567",
+  "agent_id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+  "agent_name": "Sales Agent",
+  "agent_config_version": 2,
+  "created_at": "2025-01-15T10:30:00Z"
+}
+```
+
+**Error Responses:**
+
+| Status Code | Scenario | Detail |
+|-------------|----------|--------|
+| 400 Bad Request | Invalid phone format | `"Invalid phone number format"` |
+| 403 Forbidden | Phone not authorized | `"Phone number +15551234567 does not belong to tenant"` |
+| 404 Not Found | Agent not found | `"Agent <agent_id> not found for tenant <tenant_id>"` |
+| 404 Not Found | No phone mapped | `"No phone number mapped to agent <agent_id>"` |
+| 500 Internal Server Error | Twilio error | `"Failed to initiate call: <error>"` |
+| 503 Service Unavailable | Not configured | `"Outbound calls require RECORDING_WEBHOOK_BASE_URL to be set"` |
+
+---
+
+### Get Call Status
+
+Poll for call status updates. Works for both inbound and outbound calls.
+
+```
+GET /admin/calls/{call_id}/status
+```
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `call_id` | string | Call UUID |
+
+**Response:**
+```json
+{
+  "call_id": "1ef88a12-3456-7890-abcd-ef1234567890",
+  "twilio_call_sid": "CAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "status": "in-progress",
+  "direction": "outbound",
+  "from_number": "+15559876543",
+  "to_number": "+15551234567",
+  "agent_id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+  "agent_name": "Sales Agent",
+  "started_at": "2025-01-15T10:30:00Z",
+  "connected_at": "2025-01-15T10:30:15Z",
+  "ended_at": null,
+  "duration_seconds": null,
+  "error_message": null
+}
+```
+
+**Call Status Values:**
+- `initiating` - Call is being set up
+- `queued` - Call is queued at Twilio
+- `ringing` - Recipient phone is ringing
+- `in-progress` - Call is connected and active
+- `completed` - Call ended normally
+- `busy` - Recipient line was busy
+- `no-answer` - Recipient didn't answer
+- `failed` - Call failed (check error_message)
+- `canceled` - Call was canceled
+
+---
+
+### Outbound Call CLI Tool
+
+A Python CLI tool is provided for easy outbound call initiation.
+
+**Usage:**
+
+```bash
+# Basic call (uses agent's mapped phone as caller ID)
+uv run python scripts/outbound_call_cli.py \
+    --tenant <tenant_id> --agent <agent_id> --to +15551234567
+
+# With explicit caller ID
+uv run python scripts/outbound_call_cli.py \
+    --tenant <tenant_id> --agent <agent_id> --to +15551234567 --from +15559876543
+
+# Initiate only (no polling)
+uv run python scripts/outbound_call_cli.py \
+    --tenant <tenant_id> --agent <agent_id> --to +15551234567 --no-poll
+
+# Custom poll interval
+uv run python scripts/outbound_call_cli.py \
+    --tenant <tenant_id> --agent <agent_id> --to +15551234567 --poll-interval 5
+```
+
+**Environment Variables:**
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ADMIN_API_KEY` | Yes | Shared secret for HMAC signing |
 
 ---
 
