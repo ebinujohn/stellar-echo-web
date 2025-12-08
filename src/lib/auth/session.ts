@@ -69,20 +69,26 @@ export async function getSession(): Promise<UnifiedSession | null> {
     });
 
     if (betterAuthSession?.user) {
+      // Better Auth returns user with additional fields from the schema
+      // The fields use the JS property names (camelCase) as defined in the schema
       const user = betterAuthSession.user as {
         id: string;
         email: string;
         role?: string;
-        tenantId?: string;
+        tenantId?: string | null;
         isGlobalUser?: boolean;
       };
+
+      // For Better Auth users, check if they're global users
+      // This handles both explicit isGlobalUser flag and null tenantId
+      const isGlobalUser = user.isGlobalUser === true || user.tenantId === null || user.tenantId === undefined;
 
       return {
         userId: user.id,
         email: user.email,
         role: (user.role as 'admin' | 'viewer') || 'viewer',
         tenantId: user.tenantId || '', // Empty string for global users (backward compat)
-        isGlobalUser: user.isGlobalUser || false,
+        isGlobalUser,
       };
     }
   } catch {

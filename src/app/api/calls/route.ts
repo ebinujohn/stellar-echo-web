@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
       filters,
       params.page,
       params.pageSize,
-      session.tenantId
+      { tenantId: session.tenantId, isGlobalUser: session.isGlobalUser }
     );
 
     return NextResponse.json({

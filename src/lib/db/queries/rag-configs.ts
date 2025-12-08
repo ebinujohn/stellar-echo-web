@@ -6,13 +6,18 @@ import {
   type RagConfigVersion,
 } from '@/lib/db/schema/rag-configs';
 import { eq, and, desc, count, inArray, sql } from 'drizzle-orm';
+import { tenantFilter, type QueryContext } from './utils';
 
 /**
  * Get all RAG configs for a tenant (optimized to avoid N+1 queries)
  */
-export async function getRagConfigs(tenantId: string) {
+export async function getRagConfigs(ctx: QueryContext) {
+  const tenantCondition = tenantFilter(ragConfigs.tenantId, ctx);
+  const conditions = [eq(ragConfigs.isActive, true)];
+  if (tenantCondition) conditions.push(tenantCondition);
+
   const configs = await db.query.ragConfigs.findMany({
-    where: and(eq(ragConfigs.tenantId, tenantId), eq(ragConfigs.isActive, true)),
+    where: and(...conditions),
     orderBy: [desc(ragConfigs.createdAt)],
   });
 
@@ -55,9 +60,13 @@ export async function getRagConfigs(tenantId: string) {
 /**
  * Get a single RAG config with its active version
  */
-export async function getRagConfigDetail(ragConfigId: string, tenantId: string) {
+export async function getRagConfigDetail(ragConfigId: string, ctx: QueryContext) {
+  const conditions = [eq(ragConfigs.id, ragConfigId)];
+  const tenantCondition = tenantFilter(ragConfigs.tenantId, ctx);
+  if (tenantCondition) conditions.push(tenantCondition);
+
   const config = await db.query.ragConfigs.findFirst({
-    where: and(eq(ragConfigs.id, ragConfigId), eq(ragConfigs.tenantId, tenantId)),
+    where: and(...conditions),
   });
 
   if (!config) {
@@ -106,7 +115,7 @@ export async function createRagConfig(
     faissMappingPath?: string;
     sqliteDbPath?: string;
   },
-  tenantId: string,
+  ctx: QueryContext,
   userId: string
 ) {
   return await db.transaction(async (tx) => {
@@ -116,7 +125,7 @@ export async function createRagConfig(
       .values({
         name: data.name,
         description: data.description || null,
-        tenantId,
+        tenantId: ctx.tenantId,
       })
       .returning();
 
@@ -125,7 +134,7 @@ export async function createRagConfig(
       .insert(ragConfigVersions)
       .values({
         ragConfigId: newConfig.id,
-        tenantId,
+        tenantId: ctx.tenantId,
         version: 1,
         searchMode: data.searchMode || 'hybrid',
         topK: data.topK ?? 5,
@@ -159,15 +168,19 @@ export async function createRagConfig(
 export async function updateRagConfig(
   ragConfigId: string,
   data: { name?: string; description?: string },
-  tenantId: string
+  ctx: QueryContext
 ) {
+  const conditions = [eq(ragConfigs.id, ragConfigId)];
+  const tenantCondition = tenantFilter(ragConfigs.tenantId, ctx);
+  if (tenantCondition) conditions.push(tenantCondition);
+
   const [updatedConfig] = await db
     .update(ragConfigs)
     .set({
       ...data,
       updatedAt: new Date(),
     })
-    .where(and(eq(ragConfigs.id, ragConfigId), eq(ragConfigs.tenantId, tenantId)))
+    .where(and(...conditions))
     .returning();
 
   return updatedConfig;
@@ -176,14 +189,18 @@ export async function updateRagConfig(
 /**
  * Soft delete a RAG config (set isActive = false)
  */
-export async function deleteRagConfig(ragConfigId: string, tenantId: string) {
+export async function deleteRagConfig(ragConfigId: string, ctx: QueryContext) {
+  const conditions = [eq(ragConfigs.id, ragConfigId)];
+  const tenantCondition = tenantFilter(ragConfigs.tenantId, ctx);
+  if (tenantCondition) conditions.push(tenantCondition);
+
   const [deletedConfig] = await db
     .update(ragConfigs)
     .set({
       isActive: false,
       updatedAt: new Date(),
     })
-    .where(and(eq(ragConfigs.id, ragConfigId), eq(ragConfigs.tenantId, tenantId)))
+    .where(and(...conditions))
     .returning();
 
   return deletedConfig;
@@ -192,12 +209,13 @@ export async function deleteRagConfig(ragConfigId: string, tenantId: string) {
 /**
  * Get all versions for a RAG config
  */
-export async function getRagConfigVersions(ragConfigId: string, tenantId: string) {
+export async function getRagConfigVersions(ragConfigId: string, ctx: QueryContext) {
+  const conditions = [eq(ragConfigVersions.ragConfigId, ragConfigId)];
+  const tenantCondition = tenantFilter(ragConfigVersions.tenantId, ctx);
+  if (tenantCondition) conditions.push(tenantCondition);
+
   const versions = await db.query.ragConfigVersions.findMany({
-    where: and(
-      eq(ragConfigVersions.ragConfigId, ragConfigId),
-      eq(ragConfigVersions.tenantId, tenantId)
-    ),
+    where: and(...conditions),
     orderBy: [desc(ragConfigVersions.version)],
   });
 
@@ -207,12 +225,13 @@ export async function getRagConfigVersions(ragConfigId: string, tenantId: string
 /**
  * Get a specific version
  */
-export async function getRagConfigVersion(versionId: string, tenantId: string) {
+export async function getRagConfigVersion(versionId: string, ctx: QueryContext) {
+  const conditions = [eq(ragConfigVersions.id, versionId)];
+  const tenantCondition = tenantFilter(ragConfigVersions.tenantId, ctx);
+  if (tenantCondition) conditions.push(tenantCondition);
+
   const version = await db.query.ragConfigVersions.findFirst({
-    where: and(
-      eq(ragConfigVersions.id, versionId),
-      eq(ragConfigVersions.tenantId, tenantId)
-    ),
+    where: and(...conditions),
   });
 
   return version;
@@ -238,7 +257,7 @@ export async function createRagConfigVersion(
     sqliteDbPath?: string;
     notes?: string;
   },
-  tenantId: string,
+  ctx: QueryContext,
   userId: string
 ) {
   // Get the highest version number
@@ -253,7 +272,7 @@ export async function createRagConfigVersion(
     .insert(ragConfigVersions)
     .values({
       ragConfigId,
-      tenantId,
+      tenantId: ctx.tenantId,
       version: newVersionNumber,
       searchMode: data.searchMode || latestVersion?.searchMode || 'hybrid',
       topK: data.topK ?? latestVersion?.topK ?? 5,
@@ -282,8 +301,10 @@ export async function createRagConfigVersion(
 export async function activateRagConfigVersion(
   versionId: string,
   ragConfigId: string,
-  tenantId: string
+  ctx: QueryContext
 ) {
+  const tenantCondition = tenantFilter(ragConfigVersions.tenantId, ctx);
+
   return await db.transaction(async (tx) => {
     // Deactivate all versions for this config
     await tx
@@ -292,15 +313,13 @@ export async function activateRagConfigVersion(
       .where(eq(ragConfigVersions.ragConfigId, ragConfigId));
 
     // Activate the specified version
+    const conditions = [eq(ragConfigVersions.id, versionId)];
+    if (tenantCondition) conditions.push(tenantCondition);
+
     const [activatedVersion] = await tx
       .update(ragConfigVersions)
       .set({ isActive: true })
-      .where(
-        and(
-          eq(ragConfigVersions.id, versionId),
-          eq(ragConfigVersions.tenantId, tenantId)
-        )
-      )
+      .where(and(...conditions))
       .returning();
 
     return activatedVersion;
@@ -310,9 +329,13 @@ export async function activateRagConfigVersion(
 /**
  * Get RAG configs for dropdown (simplified list)
  */
-export async function getRagConfigsForDropdown(tenantId: string) {
+export async function getRagConfigsForDropdown(ctx: QueryContext) {
+  const tenantCondition = tenantFilter(ragConfigs.tenantId, ctx);
+  const conditions = [eq(ragConfigs.isActive, true)];
+  if (tenantCondition) conditions.push(tenantCondition);
+
   const configs = await db.query.ragConfigs.findMany({
-    where: and(eq(ragConfigs.tenantId, tenantId), eq(ragConfigs.isActive, true)),
+    where: and(...conditions),
     orderBy: [ragConfigs.name],
   });
 

@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const params = querySchema.parse(Object.fromEntries(searchParams));
 
-    const data = await getTokenUsageTimeSeries(session.tenantId, params.days);
+    const data = await getTokenUsageTimeSeries({ tenantId: session.tenantId, isGlobalUser: session.isGlobalUser }, params.days);
 
     return NextResponse.json({
       success: true,

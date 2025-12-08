@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
       endDate: params.endDate ? new Date(params.endDate) : undefined,
     };
 
-    const stats = await getCallsStats(session.tenantId, filters);
+    const stats = await getCallsStats({ tenantId: session.tenantId, isGlobalUser: session.isGlobalUser }, filters);
 
     return NextResponse.json({
       success: true,

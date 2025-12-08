@@ -17,7 +17,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const session = await requireAuth();
     const { id } = await params;
 
-    const config = await getRagConfigDetail(id, session.tenantId);
+    const ctx = { tenantId: session.tenantId, isGlobalUser: session.isGlobalUser };
+    const config = await getRagConfigDetail(id, ctx);
 
     if (!config) {
       return NextResponse.json(
@@ -59,8 +60,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     // Validate input
     const data = updateRagConfigSchema.parse(body);
 
+    const ctx = { tenantId: session.tenantId, isGlobalUser: session.isGlobalUser };
+
     // Check if config exists
-    const existingConfig = await getRagConfigDetail(id, session.tenantId);
+    const existingConfig = await getRagConfigDetail(id, ctx);
     if (!existingConfig) {
       return NextResponse.json(
         { success: false, error: 'RAG config not found' },
@@ -69,7 +72,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     // Update the config
-    const updatedConfig = await updateRagConfig(id, data, session.tenantId);
+    const updatedConfig = await updateRagConfig(id, data, ctx);
 
     return NextResponse.json({
       success: true,
@@ -120,8 +123,10 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const session = await requireAuth();
     const { id } = await params;
 
+    const ctx = { tenantId: session.tenantId, isGlobalUser: session.isGlobalUser };
+
     // Check if config exists
-    const existingConfig = await getRagConfigDetail(id, session.tenantId);
+    const existingConfig = await getRagConfigDetail(id, ctx);
     if (!existingConfig) {
       return NextResponse.json(
         { success: false, error: 'RAG config not found' },
@@ -130,7 +135,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     }
 
     // Soft delete the config
-    const deletedConfig = await deleteRagConfig(id, session.tenantId);
+    const deletedConfig = await deleteRagConfig(id, ctx);
 
     return NextResponse.json({
       success: true,

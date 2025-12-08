@@ -13,7 +13,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     const { id: agentId, versionId } = await context.params;
 
     // Activate the version in the database
-    const activatedVersion = await activateVersion(versionId, agentId, session.tenantId);
+    const activatedVersion = await activateVersion(versionId, agentId, { tenantId: session.tenantId, isGlobalUser: session.isGlobalUser });
 
     if (!activatedVersion) {
       return NextResponse.json({ success: false, error: 'Version not found' }, { status: 404 });

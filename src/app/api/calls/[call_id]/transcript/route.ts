@@ -10,7 +10,7 @@ export async function GET(
     const session = await requireAuth();
     const { call_id: callId } = await params;
 
-    const transcript = await getCallTranscript(callId, session.tenantId);
+    const transcript = await getCallTranscript(callId, { tenantId: session.tenantId, isGlobalUser: session.isGlobalUser });
 
     return NextResponse.json({
       success: true,

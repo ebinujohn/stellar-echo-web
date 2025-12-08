@@ -6,7 +6,7 @@ export async function GET() {
   try {
     const session = await requireAuth();
 
-    const data = await getLatencyByAgent(session.tenantId);
+    const data = await getLatencyByAgent({ tenantId: session.tenantId, isGlobalUser: session.isGlobalUser });
 
     return NextResponse.json({
       success: true,

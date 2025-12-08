@@ -2,6 +2,7 @@ import { db } from '@/lib/db';
 import { phoneConfigs, phoneConfigMappings } from '@/lib/db/schema/phone-configs';
 import { agents } from '@/lib/db/schema/agents';
 import { eq, and, desc, isNull } from 'drizzle-orm';
+import { tenantFilter, type QueryContext } from './utils';
 
 /**
  * Get all phone configs for a tenant with their agent mappings
@@ -225,9 +226,13 @@ export async function isPhoneNumberExists(
 /**
  * Get phone configs for dropdown (simplified list)
  */
-export async function getPhoneConfigsForDropdown(tenantId: string) {
+export async function getPhoneConfigsForDropdown(ctx: QueryContext) {
+  const tenantCondition = tenantFilter(phoneConfigs.tenantId, ctx);
+  const conditions = [eq(phoneConfigs.isActive, true)];
+  if (tenantCondition) conditions.push(tenantCondition);
+
   const configs = await db.query.phoneConfigs.findMany({
-    where: and(eq(phoneConfigs.tenantId, tenantId), eq(phoneConfigs.isActive, true)),
+    where: and(...conditions),
     orderBy: [phoneConfigs.phoneNumber],
   });
 
@@ -241,7 +246,14 @@ export async function getPhoneConfigsForDropdown(tenantId: string) {
 /**
  * Get phone configs mapped to a specific agent
  */
-export async function getAgentPhoneConfigs(agentId: string, tenantId: string) {
+export async function getAgentPhoneConfigs(agentId: string, ctx: QueryContext) {
+  const tenantCondition = tenantFilter(phoneConfigs.tenantId, ctx);
+  const conditions = [
+    eq(phoneConfigMappings.agentId, agentId),
+    eq(phoneConfigs.isActive, true),
+  ];
+  if (tenantCondition) conditions.push(tenantCondition);
+
   const results = await db
     .select({
       id: phoneConfigs.id,
@@ -250,13 +262,7 @@ export async function getAgentPhoneConfigs(agentId: string, tenantId: string) {
     })
     .from(phoneConfigs)
     .innerJoin(phoneConfigMappings, eq(phoneConfigs.id, phoneConfigMappings.phoneConfigId))
-    .where(
-      and(
-        eq(phoneConfigMappings.agentId, agentId),
-        eq(phoneConfigs.tenantId, tenantId),
-        eq(phoneConfigs.isActive, true)
-      )
-    )
+    .where(and(...conditions))
     .orderBy(phoneConfigs.phoneNumber);
 
   return results;

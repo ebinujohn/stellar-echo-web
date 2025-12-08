@@ -21,7 +21,7 @@ export async function GET(
     const session = await requireAuth();
     const { id } = await context.params;
 
-    const versions = await getAgentVersions(id, session.tenantId);
+    const versions = await getAgentVersions(id, { tenantId: session.tenantId, isGlobalUser: session.isGlobalUser });
 
     return NextResponse.json({
       success: true,
@@ -95,7 +95,7 @@ export async function POST(
     // Auto-activate the new version if requested
     let cacheRefreshed = false;
     if (data.autoActivate) {
-      newVersion = await activateVersion(newVersion.id, agentId, session.tenantId);
+      newVersion = await activateVersion(newVersion.id, agentId, { tenantId: session.tenantId, isGlobalUser: session.isGlobalUser });
 
       // Refresh the agent config cache in the orchestrator
       // This ensures the orchestrator picks up the new active configuration

@@ -6,7 +6,7 @@ export async function GET() {
   try {
     const session = await requireAuth();
 
-    const data = await getSentimentDistribution(session.tenantId);
+    const data = await getSentimentDistribution({ tenantId: session.tenantId, isGlobalUser: session.isGlobalUser });
 
     return NextResponse.json({
       success: true,

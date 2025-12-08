@@ -12,7 +12,7 @@ export async function GET() {
   try {
     const session = await requireAuth();
 
-    const mappings = await getPhoneMappings(session.tenantId);
+    const mappings = await getPhoneMappings({ tenantId: session.tenantId, isGlobalUser: session.isGlobalUser });
 
     return NextResponse.json({
       success: true,

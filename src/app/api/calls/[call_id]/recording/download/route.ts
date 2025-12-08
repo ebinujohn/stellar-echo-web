@@ -17,7 +17,7 @@ export async function GET(
     const { call_id: callId } = await params;
 
     // Get the call details to ensure it belongs to the tenant and has a recording
-    const call = await getCallDetail(callId, session.tenantId);
+    const call = await getCallDetail(callId, { tenantId: session.tenantId, isGlobalUser: session.isGlobalUser });
 
     if (!call) {
       return NextResponse.json(

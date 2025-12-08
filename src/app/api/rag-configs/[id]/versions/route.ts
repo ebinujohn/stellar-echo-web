@@ -21,8 +21,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const session = await requireAuth();
     const { id } = await params;
 
+    const ctx = { tenantId: session.tenantId, isGlobalUser: session.isGlobalUser };
+
     // Check if config exists
-    const config = await getRagConfigDetail(id, session.tenantId);
+    const config = await getRagConfigDetail(id, ctx);
     if (!config) {
       return NextResponse.json(
         { success: false, error: 'RAG config not found' },
@@ -30,7 +32,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const versions = await getRagConfigVersions(id, session.tenantId);
+    const versions = await getRagConfigVersions(id, ctx);
 
     return NextResponse.json({
       success: true,
@@ -65,8 +67,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // Validate input
     const data = createRagConfigVersionSchema.parse(body);
 
+    const ctx = { tenantId: session.tenantId, isGlobalUser: session.isGlobalUser };
+
     // Check if config exists
-    const config = await getRagConfigDetail(id, session.tenantId);
+    const config = await getRagConfigDetail(id, ctx);
     if (!config) {
       return NextResponse.json(
         { success: false, error: 'RAG config not found' },
@@ -78,7 +82,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const newVersion = await createRagConfigVersion(
       id,
       data,
-      session.tenantId,
+      ctx,
       session.userId
     );
 

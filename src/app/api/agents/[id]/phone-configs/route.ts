@@ -15,7 +15,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const session = await requireAuth();
     const { id: agentId } = await params;
 
-    const phoneConfigs = await getAgentPhoneConfigs(agentId, session.tenantId);
+    const phoneConfigs = await getAgentPhoneConfigs(agentId, { tenantId: session.tenantId, isGlobalUser: session.isGlobalUser });
 
     return NextResponse.json({
       success: true,

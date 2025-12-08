@@ -19,8 +19,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const session = await requireAuth();
     const { id, versionId } = await params;
 
+    const ctx = { tenantId: session.tenantId, isGlobalUser: session.isGlobalUser };
+
     // Check if config exists
-    const config = await getRagConfigDetail(id, session.tenantId);
+    const config = await getRagConfigDetail(id, ctx);
     if (!config) {
       return NextResponse.json(
         { success: false, error: 'RAG config not found' },
@@ -29,7 +31,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     // Check if version exists
-    const version = await getRagConfigVersion(versionId, session.tenantId);
+    const version = await getRagConfigVersion(versionId, ctx);
     if (!version) {
       return NextResponse.json(
         { success: false, error: 'Version not found' },
@@ -46,7 +48,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     // Activate the version
-    const activatedVersion = await activateRagConfigVersion(versionId, id, session.tenantId);
+    const activatedVersion = await activateRagConfigVersion(versionId, id, ctx);
 
     return NextResponse.json({
       success: true,

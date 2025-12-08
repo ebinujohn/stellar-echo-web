@@ -2,16 +2,19 @@ import { db } from '../index';
 import { calls, callMessages, callTransitions, callMetricsSummary, callAnalysis, agents, agentConfigVersions } from '../schema';
 import { eq, and, gte, lte, desc, count, sql, ilike, or } from 'drizzle-orm';
 import type { CallFilters } from '@/types';
+import { tenantFilter, type QueryContext } from './utils';
 
 export async function getCallsList(
   filters: CallFilters,
   page = 1,
   pageSize = 20,
-  tenantId: string
+  ctx: QueryContext
 ) {
   const offset = (page - 1) * pageSize;
 
-  const conditions = [eq(calls.tenantId, tenantId)];
+  const conditions = [];
+  const tenantCondition = tenantFilter(calls.tenantId, ctx);
+  if (tenantCondition) conditions.push(tenantCondition);
 
   if (filters.agentId) {
     conditions.push(eq(calls.agentId, filters.agentId));
@@ -46,7 +49,7 @@ export async function getCallsList(
     }
   }
 
-  const whereClause = and(...conditions);
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
   const [data, totalCount] = await Promise.all([
     db.select({
@@ -88,12 +91,13 @@ export async function getCallsList(
   };
 }
 
-export async function getCallDetail(callId: string, tenantId: string) {
+export async function getCallDetail(callId: string, ctx: QueryContext) {
+  const conditions = [eq(calls.callId, callId)];
+  const tenantCondition = tenantFilter(calls.tenantId, ctx);
+  if (tenantCondition) conditions.push(tenantCondition);
+
   const call = await db.query.calls.findFirst({
-    where: and(
-      eq(calls.callId, callId),
-      eq(calls.tenantId, tenantId)
-    ),
+    where: and(...conditions),
     with: {
       agent: true,
       metrics: true,
@@ -105,13 +109,14 @@ export async function getCallDetail(callId: string, tenantId: string) {
   return call;
 }
 
-export async function getCallMessages(callId: string, tenantId: string) {
-  // First verify the call belongs to this tenant
+export async function getCallMessages(callId: string, ctx: QueryContext) {
+  // First verify the call belongs to this tenant (or is accessible by global user)
+  const conditions = [eq(calls.callId, callId)];
+  const tenantCondition = tenantFilter(calls.tenantId, ctx);
+  if (tenantCondition) conditions.push(tenantCondition);
+
   const call = await db.query.calls.findFirst({
-    where: and(
-      eq(calls.callId, callId),
-      eq(calls.tenantId, tenantId)
-    ),
+    where: and(...conditions),
   });
 
   if (!call) {
@@ -124,12 +129,13 @@ export async function getCallMessages(callId: string, tenantId: string) {
   });
 }
 
-export async function getCallTransitions(callId: string, tenantId: string) {
+export async function getCallTransitions(callId: string, ctx: QueryContext) {
+  const conditions = [eq(calls.callId, callId)];
+  const tenantCondition = tenantFilter(calls.tenantId, ctx);
+  if (tenantCondition) conditions.push(tenantCondition);
+
   const call = await db.query.calls.findFirst({
-    where: and(
-      eq(calls.callId, callId),
-      eq(calls.tenantId, tenantId)
-    ),
+    where: and(...conditions),
   });
 
   if (!call) {
@@ -142,8 +148,10 @@ export async function getCallTransitions(callId: string, tenantId: string) {
   });
 }
 
-export async function getCallsStats(tenantId: string, filters?: CallFilters) {
-  const conditions = [eq(calls.tenantId, tenantId)];
+export async function getCallsStats(ctx: QueryContext, filters?: CallFilters) {
+  const conditions = [];
+  const tenantCondition = tenantFilter(calls.tenantId, ctx);
+  if (tenantCondition) conditions.push(tenantCondition);
 
   if (filters?.startDate) {
     conditions.push(gte(calls.startedAt, filters.startDate));
@@ -152,7 +160,7 @@ export async function getCallsStats(tenantId: string, filters?: CallFilters) {
     conditions.push(lte(calls.startedAt, filters.endDate));
   }
 
-  const whereClause = and(...conditions);
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
   const stats = await db
     .select({
@@ -185,24 +193,25 @@ export async function getCallsStats(tenantId: string, filters?: CallFilters) {
   };
 }
 
-export async function getAgentsList(tenantId: string) {
+export async function getAgentsList(ctx: QueryContext) {
+  const tenantCondition = tenantFilter(agents.tenantId, ctx);
+
   const agentData = await db.query.agents.findMany({
-    where: eq(agents.tenantId, tenantId),
+    where: tenantCondition,
     orderBy: [agents.name],
   });
 
   // Get call counts for each agent
   const agentsWithStats = await Promise.all(
     agentData.map(async (agent) => {
+      const callConditions = [eq(calls.agentId, agent.id)];
+      const callTenantCondition = tenantFilter(calls.tenantId, ctx);
+      if (callTenantCondition) callConditions.push(callTenantCondition);
+
       const callCount = await db
         .select({ count: count() })
         .from(calls)
-        .where(
-          and(
-            eq(calls.agentId, agent.id),
-            eq(calls.tenantId, tenantId)
-          )
-        )
+        .where(and(...callConditions))
         .then(result => result[0]?.count || 0);
 
       // Get active version
@@ -227,10 +236,14 @@ export async function getAgentsList(tenantId: string) {
 /**
  * Get call volume grouped by date for the last N days
  */
-export async function getCallVolumeTimeSeries(tenantId: string, days = 7) {
+export async function getCallVolumeTimeSeries(ctx: QueryContext, days = 7) {
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
   startDate.setHours(0, 0, 0, 0);
+
+  const conditions = [gte(calls.startedAt, startDate)];
+  const tenantCondition = tenantFilter(calls.tenantId, ctx);
+  if (tenantCondition) conditions.push(tenantCondition);
 
   const results = await db
     .select({
@@ -238,12 +251,7 @@ export async function getCallVolumeTimeSeries(tenantId: string, days = 7) {
       count: count(),
     })
     .from(calls)
-    .where(
-      and(
-        eq(calls.tenantId, tenantId),
-        gte(calls.startedAt, startDate)
-      )
-    )
+    .where(and(...conditions))
     .groupBy(sql`DATE(${calls.startedAt})`)
     .orderBy(sql`DATE(${calls.startedAt})`);
 
@@ -253,7 +261,9 @@ export async function getCallVolumeTimeSeries(tenantId: string, days = 7) {
 /**
  * Get sentiment distribution across all calls
  */
-export async function getSentimentDistribution(tenantId: string) {
+export async function getSentimentDistribution(ctx: QueryContext) {
+  const tenantCondition = tenantFilter(calls.tenantId, ctx);
+
   const results = await db
     .select({
       sentiment: callAnalysis.sentiment,
@@ -261,7 +271,7 @@ export async function getSentimentDistribution(tenantId: string) {
     })
     .from(callAnalysis)
     .innerJoin(calls, eq(calls.callId, callAnalysis.callId))
-    .where(eq(calls.tenantId, tenantId))
+    .where(tenantCondition)
     .groupBy(callAnalysis.sentiment)
     .orderBy(count());
 
@@ -271,7 +281,9 @@ export async function getSentimentDistribution(tenantId: string) {
 /**
  * Get average latency grouped by agent (using User→Bot Latency - most important UX metric)
  */
-export async function getLatencyByAgent(tenantId: string) {
+export async function getLatencyByAgent(ctx: QueryContext) {
+  const tenantCondition = tenantFilter(calls.tenantId, ctx);
+
   const results = await db
     .select({
       agentId: calls.agentId,
@@ -281,7 +293,7 @@ export async function getLatencyByAgent(tenantId: string) {
     })
     .from(calls)
     .innerJoin(callMetricsSummary, eq(calls.callId, callMetricsSummary.callId))
-    .where(eq(calls.tenantId, tenantId))
+    .where(tenantCondition)
     .groupBy(calls.agentId, calls.agentName)
     .having(sql`COUNT(*) > 0`)
     .orderBy(desc(count()));
@@ -292,10 +304,14 @@ export async function getLatencyByAgent(tenantId: string) {
 /**
  * Get token usage time series (aggregated by date)
  */
-export async function getTokenUsageTimeSeries(tenantId: string, days = 30) {
+export async function getTokenUsageTimeSeries(ctx: QueryContext, days = 30) {
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
   startDate.setHours(0, 0, 0, 0);
+
+  const conditions = [gte(calls.startedAt, startDate)];
+  const tenantCondition = tenantFilter(calls.tenantId, ctx);
+  if (tenantCondition) conditions.push(tenantCondition);
 
   const results = await db
     .select({
@@ -306,12 +322,7 @@ export async function getTokenUsageTimeSeries(tenantId: string, days = 30) {
     })
     .from(calls)
     .innerJoin(callMetricsSummary, eq(calls.callId, callMetricsSummary.callId))
-    .where(
-      and(
-        eq(calls.tenantId, tenantId),
-        gte(calls.startedAt, startDate)
-      )
-    )
+    .where(and(...conditions))
     .groupBy(sql`DATE(${calls.startedAt})`)
     .orderBy(sql`DATE(${calls.startedAt})`);
 

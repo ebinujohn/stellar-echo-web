@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { voiceConfigs } from '@/lib/db/schema/voice-configs';
 import { eq, desc } from 'drizzle-orm';
+import type { QueryContext } from './types';
 
 /**
  * Get all Voice configs (system-level, no tenant filtering)
@@ -115,7 +116,9 @@ export async function deleteVoiceConfig(voiceConfigId: string, _tenantId: string
 /**
  * Get Voice configs for dropdown (simplified list)
  */
-export async function getVoiceConfigsForDropdown(_tenantId: string) {
+export async function getVoiceConfigsForDropdown(_ctx: QueryContext) {
+  // Voice configs are system-level (shared across all tenants)
+  // QueryContext parameter kept for API consistency
   const configs = await db.query.voiceConfigs.findMany({
     where: eq(voiceConfigs.isActive, true),
     orderBy: [voiceConfigs.name],

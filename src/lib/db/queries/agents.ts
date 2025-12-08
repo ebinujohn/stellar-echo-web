@@ -12,13 +12,18 @@ import {
 } from '@/lib/db/schema/agents';
 import { calls } from '@/lib/db/schema/calls';
 import { eq, and, desc, count, sql } from 'drizzle-orm';
+import { tenantFilter, type QueryContext } from './utils';
 
 /**
  * Get single agent with active version details
  */
-export async function getAgentDetail(agentId: string, tenantId: string) {
+export async function getAgentDetail(agentId: string, ctx: QueryContext) {
+  const tenantCondition = tenantFilter(agents.tenantId, ctx);
+  const conditions = [eq(agents.id, agentId)];
+  if (tenantCondition) conditions.push(tenantCondition);
+
   const agent = await db.query.agents.findFirst({
-    where: and(eq(agents.id, agentId), eq(agents.tenantId, tenantId)),
+    where: and(...conditions),
   });
 
   if (!agent) {
@@ -34,19 +39,25 @@ export async function getAgentDetail(agentId: string, tenantId: string) {
   });
 
   // Get call count
+  const callConditions = [eq(calls.agentId, agentId)];
+  const callTenantCondition = tenantFilter(calls.tenantId, ctx);
+  if (callTenantCondition) callConditions.push(callTenantCondition);
+
   const callCount = await db
     .select({ count: count() })
     .from(calls)
-    .where(and(eq(calls.agentId, agentId), eq(calls.tenantId, tenantId)))
+    .where(and(...callConditions))
     .then((result) => result[0]?.count || 0);
 
   // Get phone mapping count
+  const mappingConditions = [eq(phoneMappings.agentId, agentId)];
+  const mappingTenantCondition = tenantFilter(phoneMappings.tenantId, ctx);
+  if (mappingTenantCondition) mappingConditions.push(mappingTenantCondition);
+
   const phoneMappingCount = await db
     .select({ count: count() })
     .from(phoneMappings)
-    .where(
-      and(eq(phoneMappings.agentId, agentId), eq(phoneMappings.tenantId, tenantId))
-    )
+    .where(and(...mappingConditions))
     .then((result) => result[0]?.count || 0);
 
   // Get total version count
@@ -178,12 +189,13 @@ export async function deleteAgent(agentId: string, tenantId: string) {
 /**
  * Get all config versions for an agent
  */
-export async function getAgentVersions(agentId: string, tenantId: string) {
+export async function getAgentVersions(agentId: string, ctx: QueryContext) {
+  const tenantCondition = tenantFilter(agentConfigVersions.tenantId, ctx);
+  const conditions = [eq(agentConfigVersions.agentId, agentId)];
+  if (tenantCondition) conditions.push(tenantCondition);
+
   const versions = await db.query.agentConfigVersions.findMany({
-    where: and(
-      eq(agentConfigVersions.agentId, agentId),
-      eq(agentConfigVersions.tenantId, tenantId)
-    ),
+    where: and(...conditions),
     orderBy: [desc(agentConfigVersions.version)],
   });
 
@@ -193,12 +205,13 @@ export async function getAgentVersions(agentId: string, tenantId: string) {
 /**
  * Get a specific config version
  */
-export async function getAgentVersion(versionId: string, tenantId: string) {
+export async function getAgentVersion(versionId: string, ctx: QueryContext) {
+  const tenantCondition = tenantFilter(agentConfigVersions.tenantId, ctx);
+  const conditions = [eq(agentConfigVersions.id, versionId)];
+  if (tenantCondition) conditions.push(tenantCondition);
+
   const version = await db.query.agentConfigVersions.findFirst({
-    where: and(
-      eq(agentConfigVersions.id, versionId),
-      eq(agentConfigVersions.tenantId, tenantId)
-    ),
+    where: and(...conditions),
   });
 
   return version;
@@ -255,7 +268,7 @@ export async function createAgentVersion(
 export async function activateVersion(
   versionId: string,
   agentId: string,
-  tenantId: string
+  ctx: QueryContext
 ) {
   return await db.transaction(async (tx) => {
     // Set all versions for this agent as inactive
@@ -265,15 +278,14 @@ export async function activateVersion(
       .where(eq(agentConfigVersions.agentId, agentId));
 
     // Set the specified version as active
+    const tenantCondition = tenantFilter(agentConfigVersions.tenantId, ctx);
+    const conditions = [eq(agentConfigVersions.id, versionId)];
+    if (tenantCondition) conditions.push(tenantCondition);
+
     const [activatedVersion] = await tx
       .update(agentConfigVersions)
       .set({ isActive: true })
-      .where(
-        and(
-          eq(agentConfigVersions.id, versionId),
-          eq(agentConfigVersions.tenantId, tenantId)
-        )
-      )
+      .where(and(...conditions))
       .returning();
 
     return activatedVersion;
@@ -283,7 +295,9 @@ export async function activateVersion(
 /**
  * Get all phone mappings for a tenant
  */
-export async function getPhoneMappings(tenantId: string) {
+export async function getPhoneMappings(ctx: QueryContext) {
+  const tenantCondition = tenantFilter(phoneMappings.tenantId, ctx);
+
   const mappings = await db
     .select({
       phoneNumber: phoneMappings.phoneNumber,
@@ -294,7 +308,7 @@ export async function getPhoneMappings(tenantId: string) {
     })
     .from(phoneMappings)
     .leftJoin(agents, eq(phoneMappings.agentId, agents.id))
-    .where(eq(phoneMappings.tenantId, tenantId))
+    .where(tenantCondition)
     .orderBy(phoneMappings.phoneNumber);
 
   return mappings;
@@ -303,12 +317,13 @@ export async function getPhoneMappings(tenantId: string) {
 /**
  * Get phone mappings for a specific agent
  */
-export async function getAgentPhoneMappings(agentId: string, tenantId: string) {
+export async function getAgentPhoneMappings(agentId: string, ctx: QueryContext) {
+  const tenantCondition = tenantFilter(phoneMappings.tenantId, ctx);
+  const conditions = [eq(phoneMappings.agentId, agentId)];
+  if (tenantCondition) conditions.push(tenantCondition);
+
   const mappings = await db.query.phoneMappings.findMany({
-    where: and(
-      eq(phoneMappings.agentId, agentId),
-      eq(phoneMappings.tenantId, tenantId)
-    ),
+    where: and(...conditions),
     orderBy: [phoneMappings.phoneNumber],
   });
 

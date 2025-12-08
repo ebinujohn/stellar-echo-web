@@ -9,7 +9,7 @@ export async function GET() {
   try {
     const session = await requireAuth();
 
-    const agents = await getAgentsList(session.tenantId);
+    const agents = await getAgentsList({ tenantId: session.tenantId, isGlobalUser: session.isGlobalUser });
 
     return NextResponse.json({
       success: true,

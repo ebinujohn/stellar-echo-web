@@ -10,7 +10,7 @@ export async function GET(
     const session = await requireAuth();
     const { call_id: callId } = await params;
 
-    const metrics = await getCallMetrics(callId, session.tenantId);
+    const metrics = await getCallMetrics(callId, { tenantId: session.tenantId, isGlobalUser: session.isGlobalUser });
 
     if (!metrics) {
       return NextResponse.json(

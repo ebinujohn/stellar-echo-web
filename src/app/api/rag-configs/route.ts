@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     const session = await requireAuth();
     const body = await request.json();
     const data = createRagConfigSchema.parse(body);
-    const newConfig = await createRagConfig(data, session.tenantId, session.userId);
+    const newConfig = await createRagConfig(data, { tenantId: session.tenantId, isGlobalUser: session.isGlobalUser }, session.userId);
     return successResponse(newConfig, 201);
   } catch (error) {
     return handleApiError(error, { resourceName: 'RAG config', fieldName: 'name' });

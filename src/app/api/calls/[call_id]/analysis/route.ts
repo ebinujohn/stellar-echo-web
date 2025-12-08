@@ -10,7 +10,7 @@ export async function GET(
     const session = await requireAuth();
     const { call_id: callId } = await params;
 
-    const analysis = await getCallAnalysis(callId, session.tenantId);
+    const analysis = await getCallAnalysis(callId, { tenantId: session.tenantId, isGlobalUser: session.isGlobalUser });
 
     if (!analysis) {
       return NextResponse.json(

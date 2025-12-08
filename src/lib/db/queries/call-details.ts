@@ -7,7 +7,8 @@ import {
   callMetricsSummary,
   callAnalysis
 } from '@/lib/db/schema';
-import { eq, and, desc, asc } from 'drizzle-orm';
+import { eq, and, asc } from 'drizzle-orm';
+import { tenantFilter, type QueryContext } from './utils';
 
 export interface CallDetail {
   callId: string;
@@ -142,12 +143,13 @@ export interface TranscriptData {
 /**
  * Get call basic details
  */
-export async function getCallDetail(callId: string, tenantId: string): Promise<CallDetail | null> {
+export async function getCallDetail(callId: string, ctx: QueryContext): Promise<CallDetail | null> {
+  const conditions = [eq(calls.callId, callId)];
+  const tenantCondition = tenantFilter(calls.tenantId, ctx);
+  if (tenantCondition) conditions.push(tenantCondition);
+
   const result = await db.query.calls.findFirst({
-    where: and(
-      eq(calls.callId, callId),
-      eq(calls.tenantId, tenantId)
-    ),
+    where: and(...conditions),
   });
 
   if (!result) return null;
@@ -170,13 +172,14 @@ export async function getCallDetail(callId: string, tenantId: string): Promise<C
 /**
  * Get all messages for a call
  */
-export async function getCallMessages(callId: string, tenantId: string): Promise<CallMessage[]> {
-  // Verify call belongs to tenant
+export async function getCallMessages(callId: string, ctx: QueryContext): Promise<CallMessage[]> {
+  // Verify call belongs to tenant (or is accessible by global user)
+  const conditions = [eq(calls.callId, callId)];
+  const tenantCondition = tenantFilter(calls.tenantId, ctx);
+  if (tenantCondition) conditions.push(tenantCondition);
+
   const call = await db.query.calls.findFirst({
-    where: and(
-      eq(calls.callId, callId),
-      eq(calls.tenantId, tenantId)
-    ),
+    where: and(...conditions),
   });
 
   if (!call) return [];
@@ -199,13 +202,14 @@ export async function getCallMessages(callId: string, tenantId: string): Promise
 /**
  * Get all state transitions for a call
  */
-export async function getCallTransitions(callId: string, tenantId: string): Promise<CallTransition[]> {
-  // Verify call belongs to tenant
+export async function getCallTransitions(callId: string, ctx: QueryContext): Promise<CallTransition[]> {
+  // Verify call belongs to tenant (or is accessible by global user)
+  const conditions = [eq(calls.callId, callId)];
+  const tenantCondition = tenantFilter(calls.tenantId, ctx);
+  if (tenantCondition) conditions.push(tenantCondition);
+
   const call = await db.query.calls.findFirst({
-    where: and(
-      eq(calls.callId, callId),
-      eq(calls.tenantId, tenantId)
-    ),
+    where: and(...conditions),
   });
 
   if (!call) return [];
@@ -227,13 +231,14 @@ export async function getCallTransitions(callId: string, tenantId: string): Prom
 /**
  * Get metrics summary for a call
  */
-export async function getCallMetrics(callId: string, tenantId: string): Promise<CallMetrics | null> {
-  // Verify call belongs to tenant
+export async function getCallMetrics(callId: string, ctx: QueryContext): Promise<CallMetrics | null> {
+  // Verify call belongs to tenant (or is accessible by global user)
+  const conditions = [eq(calls.callId, callId)];
+  const tenantCondition = tenantFilter(calls.tenantId, ctx);
+  if (tenantCondition) conditions.push(tenantCondition);
+
   const call = await db.query.calls.findFirst({
-    where: and(
-      eq(calls.callId, callId),
-      eq(calls.tenantId, tenantId)
-    ),
+    where: and(...conditions),
   });
 
   if (!call) return null;
@@ -319,13 +324,14 @@ export async function getCallMetrics(callId: string, tenantId: string): Promise<
 /**
  * Get analysis data for a call
  */
-export async function getCallAnalysis(callId: string, tenantId: string): Promise<CallAnalysisData | null> {
-  // Verify call belongs to tenant
+export async function getCallAnalysis(callId: string, ctx: QueryContext): Promise<CallAnalysisData | null> {
+  // Verify call belongs to tenant (or is accessible by global user)
+  const conditions = [eq(calls.callId, callId)];
+  const tenantCondition = tenantFilter(calls.tenantId, ctx);
+  if (tenantCondition) conditions.push(tenantCondition);
+
   const call = await db.query.calls.findFirst({
-    where: and(
-      eq(calls.callId, callId),
-      eq(calls.tenantId, tenantId)
-    ),
+    where: and(...conditions),
   });
 
   if (!call) return null;
@@ -350,13 +356,14 @@ export async function getCallAnalysis(callId: string, tenantId: string): Promise
 /**
  * Get transcript entries for a call
  */
-export async function getCallTranscript(callId: string, tenantId: string): Promise<TranscriptEntry[]> {
-  // Verify call belongs to tenant
+export async function getCallTranscript(callId: string, ctx: QueryContext): Promise<TranscriptEntry[]> {
+  // Verify call belongs to tenant (or is accessible by global user)
+  const conditions = [eq(calls.callId, callId)];
+  const tenantCondition = tenantFilter(calls.tenantId, ctx);
+  if (tenantCondition) conditions.push(tenantCondition);
+
   const call = await db.query.calls.findFirst({
-    where: and(
-      eq(calls.callId, callId),
-      eq(calls.tenantId, tenantId)
-    ),
+    where: and(...conditions),
   });
 
   if (!call) return [];
@@ -434,7 +441,7 @@ export async function getCallTranscript(callId: string, tenantId: string): Promi
     const speakerPattern = /^(?:\[)?([^:\]\-]+)(?:\])?[\:\-]\s*(.+)$/;
 
     const parsedEntries: TranscriptEntry[] = [];
-    let currentSpeaker = 'System';
+    const currentSpeaker = 'System';
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
@@ -488,21 +495,22 @@ export interface TimelineEvent {
   data: any;
 }
 
-export async function getCallTimeline(callId: string, tenantId: string): Promise<TimelineEvent[]> {
-  // Verify call belongs to tenant
+export async function getCallTimeline(callId: string, ctx: QueryContext): Promise<TimelineEvent[]> {
+  // Verify call belongs to tenant (or is accessible by global user)
+  const conditions = [eq(calls.callId, callId)];
+  const tenantCondition = tenantFilter(calls.tenantId, ctx);
+  if (tenantCondition) conditions.push(tenantCondition);
+
   const call = await db.query.calls.findFirst({
-    where: and(
-      eq(calls.callId, callId),
-      eq(calls.tenantId, tenantId)
-    ),
+    where: and(...conditions),
   });
 
   if (!call) return [];
 
   const [messages, transitions, transcript] = await Promise.all([
-    getCallMessages(callId, tenantId),
-    getCallTransitions(callId, tenantId),
-    getCallTranscript(callId, tenantId),
+    getCallMessages(callId, ctx),
+    getCallTransitions(callId, ctx),
+    getCallTranscript(callId, ctx),
   ]);
 
   const timeline: TimelineEvent[] = [];

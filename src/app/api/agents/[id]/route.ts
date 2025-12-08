@@ -20,7 +20,7 @@ export async function GET(
     const session = await requireAuth();
     const { id } = await context.params;
 
-    const agent = await getAgentDetail(id, session.tenantId);
+    const agent = await getAgentDetail(id, { tenantId: session.tenantId, isGlobalUser: session.isGlobalUser });
 
     if (!agent) {
       return NextResponse.json(
