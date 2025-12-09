@@ -1,9 +1,10 @@
 # Stellar Echo - UI Test Baseline Documentation
 
-**Date:** November 22, 2025
+**Date:** November 22, 2025 (Updated: December 8, 2025)
 **Application Version:** v1.0.0
 **Test Environment:** localhost:3000
 **Test Credentials:** admin@example.com / password123
+**Last Test Status:** ALL TESTS PASSED (December 8, 2025)
 
 ---
 
@@ -94,12 +95,13 @@ All screenshots are stored in:
 | 4.2 | Stats cards | Check top cards | Total Calls, Avg Duration, Avg Latency, Success Rate |
 | 4.3 | Search filter | Locate search box | Text input with placeholder "Call ID, phone..." |
 | 4.4 | Status filter | Click Status dropdown | Options: All statuses, Started, Ongoing, Ended, Failed |
-| 4.5 | Agent filter | Click Agent dropdown | Shows list of agents |
-| 4.6 | Apply filters | Select "Ended" status, click Apply | Table filters to show only ended calls |
-| 4.7 | Clear filters | Click clear button (X) | Filters reset |
-| 4.8 | Calls table | Check table columns | Call ID, Date/Time, Duration, From, To, Agent, Status, Messages |
-| 4.9 | Pagination | Check pagination controls | Previous/Next buttons, page indicator |
-| 4.10 | View call detail | Click arrow button on row | Navigate to `/calls/[call_id]` |
+| 4.5 | Direction filter | Click Direction dropdown | Options: All directions, Inbound, Outbound |
+| 4.6 | Agent filter | Click Agent dropdown | Shows list of agents |
+| 4.7 | Apply filters | Select "Ended" status, click Apply | Table filters to show only ended calls |
+| 4.8 | Clear filters | Click clear button (X) | Filters reset |
+| 4.9 | Calls table | Check table columns | Call ID, Date/Time, Direction, Duration, From, To, Agent, Status, Messages |
+| 4.10 | Pagination | Check pagination controls | Previous/Next buttons, page indicator |
+| 4.11 | View call detail | Click View button on row | Navigate to `/calls/[call_id]` |
 
 **Evidence:** `06-calls-page.png`
 
@@ -189,9 +191,9 @@ All screenshots are stored in:
 | # | Test Case | Steps | Expected Result |
 |---|-----------|-------|-----------------|
 | 7.1 | Page load | Click on agent card | Page loads with agent details |
-| 7.2 | Header | Check header | Agent name, Active badge, description, Delete Agent button |
+| 7.2 | Header | Check header | Agent name, Active badge, description, Initiate Call button, Delete Agent button |
 | 7.3 | Stats cards | Check cards | Active Version, Total Calls, Phone Mappings, Last Updated |
-| 7.4 | Tab navigation | Check tabs | Overview, Workflow Editor, Versions, Settings |
+| 7.4 | Tab navigation | Check tabs | Overview, Workflow Editor, Versions, Settings, RAG Query, Chat |
 
 **Evidence:** `13-agent-detail-overview.png`
 
@@ -212,8 +214,8 @@ All screenshots are stored in:
 | # | Test Case | Steps | Expected Result |
 |---|-----------|-------|-----------------|
 | 7.14 | Canvas display | Click Workflow Editor tab | React Flow canvas with nodes |
-| 7.15 | Node Palette | Check left panel | Standard Node, Extract Variables, End Call options |
-| 7.16 | Toolbar | Check top toolbar | Auto Layout, Validate, Shortcuts, Save Workflow buttons |
+| 7.15 | Node Palette | Check left panel | Standard Node, Extract Variables, End Call, Agent Transfer options |
+| 7.16 | Toolbar | Check top toolbar | Auto Layout, Horizontal, Validate, Shortcuts buttons |
 | 7.17 | Nodes on canvas | Check canvas | Workflow nodes (Standard, End Call, Extract Variable types) |
 | 7.18 | Connections | Check edges | Lines connecting nodes with transition labels |
 | 7.19 | Properties panel | Check right panel | "Select a node to view and edit its properties" |
@@ -240,12 +242,22 @@ All screenshots are stored in:
 | 7.28 | Save button | Check top right | "Save Settings" button |
 | 7.29 | Global Prompt | Check first section | Textarea with system prompt |
 | 7.30 | LLM Configuration | Check form | Enable toggle, Model dropdown, Service Tier, Temperature, Max Tokens |
-| 7.31 | Voice/TTS Config | Check form | Enable toggle, Voice Configuration dropdown |
-| 7.32 | RAG Configuration | Check form | Enable toggle |
+| 7.31 | Voice/TTS Config | Check form | Enable toggle, Voice dropdown, TTS Model dropdown, Voice Quality sliders, Features toggles |
+| 7.32 | RAG Configuration | Check form | Enable toggle, RAG Configuration dropdown, Override settings toggle |
 | 7.33 | Auto Hangup | Check form | Enable toggle |
 | 7.34 | Phone Numbers | Check read-only section | List of mapped phone numbers |
 
 **Evidence:** `16-agent-settings.png`
+
+#### RAG Query Tab (New)
+| # | Test Case | Steps | Expected Result |
+|---|-----------|-------|-----------------|
+| 7.35 | RAG Query display | Click RAG Query tab | Interface to test RAG queries |
+
+#### Chat Tab (New)
+| # | Test Case | Steps | Expected Result |
+|---|-----------|-------|-----------------|
+| 7.36 | Chat display | Click Chat tab | Interface to test agent conversations |
 
 ---
 
@@ -275,10 +287,10 @@ All screenshots are stored in:
 #### Voice Configurations (`/settings/voice`)
 | # | Test Case | Steps | Expected Result |
 |---|-----------|-------|-----------------|
-| 8.10 | Page load | Navigate to `/settings/voice` | Voice configurations list |
-| 8.11 | Config cards | Check display | Cards with name, description, settings preview |
-| 8.12 | Settings preview | Check badges | Model, Stability percentage, version count |
-| 8.13 | New button | Check header | "New Configuration" button |
+| 8.10 | Page load | Navigate to `/settings/voice` | Voice catalog list with header "Voice Catalog" |
+| 8.11 | Voice cards | Check display | Cards with voice name, description, voice ID preview |
+| 8.12 | Edit button | Check card actions | Edit (more options) button on each card |
+| 8.13 | Add button | Check header | "Add Voice" button |
 
 **Evidence:** `19-settings-voice.png`
 
@@ -355,11 +367,11 @@ pnpm test:e2e:ui
 
 For accurate testing, ensure the database contains:
 - At least 1 user (admin@example.com)
-- At least 1 agent with workflow configuration
-- At least 1 call with metrics and analysis
-- At least 1 RAG configuration
-- At least 1 Voice configuration
-- At least 1-3 phone numbers (some mapped, some unmapped)
+- At least 1 agent with workflow configuration (currently 3 agents: MRI Assistant, Simple Greeter, Transfer Demo)
+- At least 1 call with metrics and analysis (currently 3 calls)
+- At least 1 RAG configuration (currently 1: default with hybrid search)
+- At least 1 Voice configuration (currently 7 voices in catalog)
+- At least 1-3 phone numbers (currently 3: 2 mapped, 1 unmapped)
 
 ---
 
@@ -413,6 +425,7 @@ pnpm db:seed
 
 | Date | Version | Changes |
 |------|---------|---------|
+| Dec 8, 2025 | 1.0.2 | Comprehensive UI retest - ALL TESTS PASSED. Added Direction filter, Agent Transfer node, Initiate Call button, RAG Query and Chat tabs |
 | Nov 25, 2025 | 1.0.1 | Comprehensive UI test - ALL TESTS PASSED |
 | Nov 22, 2025 | 1.0.0 | Initial baseline documentation |
 
@@ -449,3 +462,57 @@ Screenshots saved to `.playwright-mcp/`:
 - Browser: Chromium (Playwright)
 - Dev Server: localhost:3000
 - Test User: admin@example.com
+
+---
+
+## Test Results - December 8, 2025
+
+### Summary
+**Result: ALL TESTS PASSED**
+
+All 10 test sections were verified using Playwright MCP automated browser testing.
+
+### Detailed Results
+
+| Section | Status | Notes |
+|---------|--------|-------|
+| 1. Authentication Flow | PASS | Login, logout, user menu, protected routes all working |
+| 2. Dashboard Page | PASS | KPI cards (3 calls, 0:57 avg duration, 1.21s latency, 33.3% success), charts, recent calls table |
+| 3. Analytics Page | PASS | Latency by Agent chart, Token Usage Trends chart, Performance Insights |
+| 4. Calls List Page | PASS | Stats cards, filters (status/direction/agent), pagination (3 calls, 1 page), table columns with Direction |
+| 5. Call Detail Page | PASS | All 4 tabs working (Timeline with 19 events, Metrics, Analysis, Transcript with 6 entries) |
+| 6. Agents List Page | PASS | 3 agents displayed (MRI Assistant - Nancy, Simple Greeter, Transfer Demo Agent), New Agent dialog functional |
+| 7. Agent Detail Page | PASS | All 6 tabs working (Overview, Workflow Editor with 10 nodes/27 connections, Versions, Settings, RAG Query, Chat) |
+| 8. Settings Pages | PASS | Main settings, RAG configs (1 default with hybrid search), Voice catalog (7 voices), Phone numbers (3: 2 mapped, 1 unmapped) |
+| 9. Theme Toggle | PASS | Light/Dark/System modes working correctly |
+| 10. Navigation | PASS | Sidebar links, active states, logo navigation, back buttons |
+
+### New Features Verified
+- **Direction Filter** in Calls List (Inbound/Outbound)
+- **Agent Transfer** node type in Workflow Editor
+- **Initiate Call** button on Agent Detail page
+- **RAG Query** tab for testing RAG queries
+- **Chat** tab for testing agent conversations
+- **Horizontal Layout** button in Workflow Editor toolbar
+- **Voice Quality sliders** (Stability, Similarity Boost, Style) in Agent Settings
+
+### Test Data Snapshot
+- Total Calls: 3
+- Avg Duration: 0:57
+- Avg Response Time: 1.21s
+- Success Rate: 33.3%
+- Agents: 3 (MRI Assistant - Nancy with 3 calls, Simple Greeter with 0 calls, Transfer Demo Agent with 0 calls)
+- Voice Configs: 7 (george, rachel, rajeev, melissa, beth, pete, eric)
+- Phone Numbers: 3 ((770) 830-4765 → MRI Assistant, (508) 715-3379 → Simple Greeter, (720) 790-7599 → Unmapped)
+- RAG Configs: 1 (default with hybrid search, Top K: 5, 60% Vector / 40% FTS)
+
+### Test Evidence
+Screenshots saved to `.playwright-mcp/`:
+- `dark-mode-test.png` - Dark theme verification
+- `light-mode-test.png` - Light theme verification
+
+### Environment
+- Browser: Chromium (Playwright MCP)
+- Dev Server: localhost:3000
+- Test User: admin@example.com
+- Test Date: December 8, 2025
