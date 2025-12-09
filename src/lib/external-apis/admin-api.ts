@@ -343,7 +343,8 @@ export async function getCallStatus(callId: string): Promise<CallStatusResponse>
   const timestamp = Math.floor(Date.now() / 1000).toString();
   const nonce = generateNonce();
   const path = `/admin/calls/${callId}/status`;
-  const bodyStr = '{}';
+  // For GET requests, use empty string for body hash (no request body)
+  const bodyStr = '';
   const signature = computeSignature(ADMIN_API_KEY, timestamp, nonce, 'GET', path, bodyStr);
 
   const response = await fetch(`${ADMIN_API_BASE_URL}${path}`, {

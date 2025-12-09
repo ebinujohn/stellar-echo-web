@@ -39,7 +39,14 @@ message = timestamp + nonce + method + path + body_hash
 signature = HMAC-SHA256(api_key, message)
 ```
 
-**Example:**
+**Important:** For **GET requests**, use an empty string (`""` or `b""`) as the request body when computing the hash.
+
+| Request Type | Body for Hash Computation | Body Hash |
+|--------------|---------------------------|-----------|
+| GET | `""` (empty string) | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` |
+| POST | JSON body (e.g., `"{}"`) | SHA256 of the JSON string |
+
+**Example (POST request):**
 ```
 timestamp = "1700000000"
 nonce = "xK9mN2pQ5rS8tU1vW4xY7zA0bC3dE6fG"
@@ -48,6 +55,18 @@ path = "/admin/cache/refresh/all"
 body = "{}"
 body_hash = SHA256("{}") = "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
 message = "1700000000xK9mN2pQ5rS8tU1vW4xY7zA0bC3dE6fGPOST/admin/cache/refresh/all44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+signature = HMAC-SHA256(api_key, message)
+```
+
+**Example (GET request):**
+```
+timestamp = "1700000000"
+nonce = "xK9mN2pQ5rS8tU1vW4xY7zA0bC3dE6fG"
+method = "GET"
+path = "/admin/calls/550e8400-e29b-41d4-a716-446655440000/status"
+body = ""  # Empty string for GET requests
+body_hash = SHA256("") = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+message = "1700000000xK9mN2pQ5rS8tU1vW4xY7zA0bC3dE6fGGET/admin/calls/550e8400-e29b-41d4-a716-446655440000/statuse3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 signature = HMAC-SHA256(api_key, message)
 ```
 
@@ -516,7 +535,9 @@ def compute_signature(api_key: str, timestamp: str, nonce: str, method: str, pat
 def make_request(method: str, path: str, body: dict | None = None) -> dict:
     timestamp = str(int(time.time()))
     nonce = generate_nonce()
-    body_bytes = json.dumps(body or {}).encode()
+    # IMPORTANT: For GET requests, use empty bytes b"" for the body hash
+    # For POST requests, serialize the body dict to JSON bytes
+    body_bytes = json.dumps(body).encode() if body else b""
     signature = compute_signature(API_KEY, timestamp, nonce, method, path, body_bytes)
 
     headers = {
@@ -535,8 +556,12 @@ def make_request(method: str, path: str, body: dict | None = None) -> dict:
     return response.json()
 
 
-# Health check
+# Health check (GET - no body)
 print(make_request("GET", "/admin/health"))
+
+# Get call status (GET with path parameter - no body)
+call_id = "550e8400-e29b-41d4-a716-446655440000"
+print(make_request("GET", f"/admin/calls/{call_id}/status"))
 
 # Refresh all caches
 print(make_request("POST", "/admin/cache/refresh/all", {}))
@@ -591,7 +616,9 @@ function computeSignature(apiKey, timestamp, nonce, method, path, body) {
 async function makeRequest(method, path, body = null) {
   const timestamp = Math.floor(Date.now() / 1000).toString();
   const nonce = generateNonce();
-  const bodyStr = body ? JSON.stringify(body) : "{}";
+  // IMPORTANT: For GET requests, use empty string "" for the body hash
+  // For POST requests, serialize the body object to JSON
+  const bodyStr = body ? JSON.stringify(body) : "";
   const signature = computeSignature(API_KEY, timestamp, nonce, method, path, bodyStr);
 
   const response = await fetch(`${BASE_URL}${path}`, {
@@ -608,10 +635,14 @@ async function makeRequest(method, path, body = null) {
   return response.json();
 }
 
-// Health check
+// Health check (GET - no body)
 makeRequest("GET", "/admin/health").then(console.log);
 
-// Refresh all caches
+// Get call status (GET with path parameter - no body)
+const callId = "550e8400-e29b-41d4-a716-446655440000";
+makeRequest("GET", `/admin/calls/${callId}/status`).then(console.log);
+
+// Refresh all caches (POST with empty object body)
 makeRequest("POST", "/admin/cache/refresh/all", {}).then(console.log);
 
 // Query RAG knowledge base
@@ -629,6 +660,30 @@ makeRequest("POST", "/admin/rag/query", {
 
 ### cURL (with bash signature generation)
 
+**GET Request Example (Call Status):**
+```bash
+#!/bin/bash
+
+API_KEY="your_api_key_here"
+BASE_URL="http://localhost:8000"
+CALL_ID="550e8400-e29b-41d4-a716-446655440000"
+PATH_="/admin/calls/${CALL_ID}/status"
+METHOD="GET"
+BODY=""  # Empty string for GET requests
+
+TIMESTAMP=$(date +%s)
+NONCE=$(openssl rand -base64 24 | tr -d '/+=' | head -c 32)
+BODY_HASH=$(echo -n "$BODY" | sha256sum | cut -d' ' -f1)
+MESSAGE="${TIMESTAMP}${NONCE}${METHOD}${PATH_}${BODY_HASH}"
+SIGNATURE=$(echo -n "$MESSAGE" | openssl dgst -sha256 -hmac "$API_KEY" | cut -d' ' -f2)
+
+curl -X GET "${BASE_URL}${PATH_}" \
+  -H "X-Timestamp: $TIMESTAMP" \
+  -H "X-Nonce: $NONCE" \
+  -H "X-Signature: $SIGNATURE"
+```
+
+**POST Request Example (Refresh Cache):**
 ```bash
 #!/bin/bash
 

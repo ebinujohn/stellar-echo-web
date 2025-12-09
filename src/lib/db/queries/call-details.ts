@@ -229,7 +229,34 @@ export async function getCallTransitions(callId: string, ctx: QueryContext): Pro
 }
 
 /**
+ * Helper to extract metric values from JSONB metrics_data
+ * The orchestrator stores metrics in format: { metric_name: { avg, min, max, num, values } }
+ */
+interface MetricValue {
+  avg?: number;
+  min?: number;
+  max?: number;
+  num?: number;
+  values?: number[];
+}
+
+function extractMetric(metricsData: Record<string, MetricValue> | null, key: string): { avg: number | null; min: number | null; max: number | null } {
+  if (!metricsData || !metricsData[key]) {
+    return { avg: null, min: null, max: null };
+  }
+  const metric = metricsData[key];
+  return {
+    avg: metric.avg ?? null,
+    min: metric.min ?? null,
+    max: metric.max ?? null,
+  };
+}
+
+/**
  * Get metrics summary for a call
+ * Note: Most metrics are extracted from the metrics_data JSONB column since
+ * the database only has a few denormalized avg columns. The orchestrator stores
+ * complete metrics in JSONB format.
  */
 export async function getCallMetrics(callId: string, ctx: QueryContext): Promise<CallMetrics | null> {
   // Verify call belongs to tenant (or is accessible by global user)
@@ -249,73 +276,92 @@ export async function getCallMetrics(callId: string, ctx: QueryContext): Promise
 
   if (!metrics) return null;
 
-  // Parse metricsData JSONB field to get per-turn metrics
-  // Note: The metricsData field stores aggregated metric values, not per-turn data
-  // Per-turn data would need to come from call_messages or a separate structure
-  let parsedMetricsData: TurnMetrics[] | null = null;
-  if (metrics.metricsData && Array.isArray(metrics.metricsData)) {
-    parsedMetricsData = metrics.metricsData as TurnMetrics[];
+  // Parse metricsData JSONB field - contains complete metrics from orchestrator
+  // Structure: { metric_name: { avg, min, max, num, values: [...] } }
+  const metricsData = metrics.metricsData as Record<string, MetricValue> | null;
+
+  // Extract per-turn metrics array if available (for timeline/chart display)
+  let parsedTurnData: TurnMetrics[] | null = null;
+  if (metricsData && Array.isArray(metricsData)) {
+    parsedTurnData = metricsData as unknown as TurnMetrics[];
   }
 
   // Get actual turn count and interruptions from call data
   const totalTurns = call.totalTurns || 0;
   const totalInterruptions = call.totalUserInterruptions || 0;
 
+  // Extract metrics from JSONB - using orchestrator's key naming convention
+  // Keys: stt_delay, user_to_bot_latency, llm_processing, llm_ttfb, pipeline_total,
+  //       transcript_llm_gap, llm_to_tts_gap, rag_processing_time, variable_extraction_time,
+  //       stt_ttfb, stt_processing_time, tts_ttfb
+  const sttDelay = extractMetric(metricsData, 'stt_delay');
+  const userToBotLatency = extractMetric(metricsData, 'user_to_bot_latency');
+  const llmProcessing = extractMetric(metricsData, 'llm_processing');
+  const llmTtfb = extractMetric(metricsData, 'llm_ttfb');
+  const pipelineTotal = extractMetric(metricsData, 'pipeline_total');
+  const transcriptLlmGap = extractMetric(metricsData, 'transcript_llm_gap');
+  const llmToTtsGap = extractMetric(metricsData, 'llm_to_tts_gap');
+  const ragProcessing = extractMetric(metricsData, 'rag_processing_time');
+  const variableExtraction = extractMetric(metricsData, 'variable_extraction_time');
+  const sttTtfb = extractMetric(metricsData, 'stt_ttfb');
+  const sttProcessing = extractMetric(metricsData, 'stt_processing_time');
+  const ttsTtfb = extractMetric(metricsData, 'tts_ttfb');
+
   return {
     callId: metrics.callId,
-    // LLM TTFB
-    avgLlmTtfbMs: metrics.avgLlmTtfbMs ? Number(metrics.avgLlmTtfbMs) : null,
-    minLlmTtfbMs: metrics.minLlmTtfbMs ? Number(metrics.minLlmTtfbMs) : null,
-    maxLlmTtfbMs: metrics.maxLlmTtfbMs ? Number(metrics.maxLlmTtfbMs) : null,
-    // Pipeline Total
-    avgPipelineTotalMs: metrics.avgPipelineTotalMs ? Number(metrics.avgPipelineTotalMs) : null,
-    minPipelineTotalMs: metrics.minPipelineTotalMs ? Number(metrics.minPipelineTotalMs) : null,
-    maxPipelineTotalMs: metrics.maxPipelineTotalMs ? Number(metrics.maxPipelineTotalMs) : null,
-    // STT Delay
-    avgSttDelayMs: metrics.avgSttDelayMs ? Number(metrics.avgSttDelayMs) : null,
-    minSttDelayMs: metrics.minSttDelayMs ? Number(metrics.minSttDelayMs) : null,
-    maxSttDelayMs: metrics.maxSttDelayMs ? Number(metrics.maxSttDelayMs) : null,
-    // STT TTFB
-    avgSttTtfbMs: metrics.avgSttTtfbMs ? Number(metrics.avgSttTtfbMs) : null,
-    minSttTtfbMs: metrics.minSttTtfbMs ? Number(metrics.minSttTtfbMs) : null,
-    maxSttTtfbMs: metrics.maxSttTtfbMs ? Number(metrics.maxSttTtfbMs) : null,
-    // STT Processing
-    avgSttProcessingMs: metrics.avgSttProcessingMs ? Number(metrics.avgSttProcessingMs) : null,
-    minSttProcessingMs: metrics.minSttProcessingMs ? Number(metrics.minSttProcessingMs) : null,
-    maxSttProcessingMs: metrics.maxSttProcessingMs ? Number(metrics.maxSttProcessingMs) : null,
-    // LLM Processing
-    avgLlmProcessingMs: metrics.avgLlmProcessingMs ? Number(metrics.avgLlmProcessingMs) : null,
-    minLlmProcessingMs: metrics.minLlmProcessingMs ? Number(metrics.minLlmProcessingMs) : null,
-    maxLlmProcessingMs: metrics.maxLlmProcessingMs ? Number(metrics.maxLlmProcessingMs) : null,
-    // User to Bot Latency
-    avgUserToBotLatencyMs: metrics.avgUserToBotLatencyMs ? Number(metrics.avgUserToBotLatencyMs) : null,
-    minUserToBotLatencyMs: metrics.minUserToBotLatencyMs ? Number(metrics.minUserToBotLatencyMs) : null,
-    maxUserToBotLatencyMs: metrics.maxUserToBotLatencyMs ? Number(metrics.maxUserToBotLatencyMs) : null,
-    // Transcript to LLM Gap
-    avgTranscriptLlmGapMs: metrics.avgTranscriptLlmGapMs ? Number(metrics.avgTranscriptLlmGapMs) : null,
-    minTranscriptLlmGapMs: metrics.minTranscriptLlmGapMs ? Number(metrics.minTranscriptLlmGapMs) : null,
-    maxTranscriptLlmGapMs: metrics.maxTranscriptLlmGapMs ? Number(metrics.maxTranscriptLlmGapMs) : null,
-    // LLM to TTS Gap
-    avgLlmToTtsGapMs: metrics.avgLlmToTtsGapMs ? Number(metrics.avgLlmToTtsGapMs) : null,
-    minLlmToTtsGapMs: metrics.minLlmToTtsGapMs ? Number(metrics.minLlmToTtsGapMs) : null,
-    maxLlmToTtsGapMs: metrics.maxLlmToTtsGapMs ? Number(metrics.maxLlmToTtsGapMs) : null,
-    // TTS TTFB
-    avgTtsTtfbMs: metrics.avgTtsTtfbMs ? Number(metrics.avgTtsTtfbMs) : null,
-    minTtsTtfbMs: metrics.minTtsTtfbMs ? Number(metrics.minTtsTtfbMs) : null,
-    maxTtsTtfbMs: metrics.maxTtsTtfbMs ? Number(metrics.maxTtsTtfbMs) : null,
-    // RAG Processing
-    avgRagProcessingMs: metrics.avgRagProcessingMs ? Number(metrics.avgRagProcessingMs) : null,
-    minRagProcessingMs: metrics.minRagProcessingMs ? Number(metrics.minRagProcessingMs) : null,
-    maxRagProcessingMs: metrics.maxRagProcessingMs ? Number(metrics.maxRagProcessingMs) : null,
-    // Variable Extraction
-    avgVariableExtractionMs: metrics.avgVariableExtractionMs ? Number(metrics.avgVariableExtractionMs) : null,
-    minVariableExtractionMs: metrics.minVariableExtractionMs ? Number(metrics.minVariableExtractionMs) : null,
-    maxVariableExtractionMs: metrics.maxVariableExtractionMs ? Number(metrics.maxVariableExtractionMs) : null,
-    // Tokens and Characters
+    // LLM TTFB - prefer JSONB, fallback to denormalized column
+    avgLlmTtfbMs: llmTtfb.avg ?? (metrics.avgLlmTtfbMs ? Number(metrics.avgLlmTtfbMs) : null),
+    minLlmTtfbMs: llmTtfb.min,
+    maxLlmTtfbMs: llmTtfb.max,
+    // Pipeline Total - prefer JSONB, fallback to denormalized column
+    avgPipelineTotalMs: pipelineTotal.avg ?? (metrics.avgPipelineTotalMs ? Number(metrics.avgPipelineTotalMs) : null),
+    minPipelineTotalMs: pipelineTotal.min,
+    maxPipelineTotalMs: pipelineTotal.max,
+    // STT Delay - prefer JSONB, fallback to denormalized column
+    avgSttDelayMs: sttDelay.avg ?? (metrics.avgSttDelayMs ? Number(metrics.avgSttDelayMs) : null),
+    minSttDelayMs: sttDelay.min,
+    maxSttDelayMs: sttDelay.max,
+    // STT TTFB (from JSONB only - often empty for Deepgram Flux)
+    avgSttTtfbMs: sttTtfb.avg,
+    minSttTtfbMs: sttTtfb.min,
+    maxSttTtfbMs: sttTtfb.max,
+    // STT Processing (from JSONB only)
+    avgSttProcessingMs: sttProcessing.avg,
+    minSttProcessingMs: sttProcessing.min,
+    maxSttProcessingMs: sttProcessing.max,
+    // LLM Processing (from JSONB only)
+    avgLlmProcessingMs: llmProcessing.avg,
+    minLlmProcessingMs: llmProcessing.min,
+    maxLlmProcessingMs: llmProcessing.max,
+    // User to Bot Latency - prefer JSONB, fallback to denormalized column
+    avgUserToBotLatencyMs: userToBotLatency.avg ?? (metrics.avgUserToBotLatencyMs ? Number(metrics.avgUserToBotLatencyMs) : null),
+    minUserToBotLatencyMs: userToBotLatency.min,
+    maxUserToBotLatencyMs: userToBotLatency.max,
+    // Transcript to LLM Gap (from JSONB only)
+    avgTranscriptLlmGapMs: transcriptLlmGap.avg,
+    minTranscriptLlmGapMs: transcriptLlmGap.min,
+    maxTranscriptLlmGapMs: transcriptLlmGap.max,
+    // LLM to TTS Gap (from JSONB only)
+    avgLlmToTtsGapMs: llmToTtsGap.avg,
+    minLlmToTtsGapMs: llmToTtsGap.min,
+    maxLlmToTtsGapMs: llmToTtsGap.max,
+    // TTS TTFB (from JSONB only - often empty for ElevenLabs WebSocket)
+    avgTtsTtfbMs: ttsTtfb.avg,
+    minTtsTtfbMs: ttsTtfb.min,
+    maxTtsTtfbMs: ttsTtfb.max,
+    // RAG Processing (from JSONB only)
+    avgRagProcessingMs: ragProcessing.avg,
+    minRagProcessingMs: ragProcessing.min,
+    maxRagProcessingMs: ragProcessing.max,
+    // Variable Extraction (from JSONB only)
+    avgVariableExtractionMs: variableExtraction.avg,
+    minVariableExtractionMs: variableExtraction.min,
+    maxVariableExtractionMs: variableExtraction.max,
+    // Tokens and Characters (from denormalized columns)
     totalLlmTokens: metrics.totalLlmTokens,
     totalTtsCharacters: metrics.totalTtsCharacters,
     // Turn data
-    metricsData: parsedMetricsData,
+    metricsData: parsedTurnData,
     totalTurns,
     totalInterruptions,
   };

@@ -81,50 +81,23 @@ export const callTranscripts = pgTable('call_transcripts', {
   transcriptData: jsonb('transcript_data'),
 });
 
+// Note: This schema must match the actual database managed by the orchestrator.
+// Additional metrics (min/max, other avg columns) are stored in metrics_data JSONB.
 export const callMetricsSummary = pgTable('call_metrics_summary', {
   id: uuid('id').primaryKey().defaultRandom(),
   callId: uuid('call_id').notNull().references(() => calls.callId, { onDelete: 'cascade' }),
   metricsData: jsonb('metrics_data'),
-  avgSttDelayMs: decimal('avg_stt_delay_ms'),
-  minSttDelayMs: decimal('min_stt_delay_ms'),
-  maxSttDelayMs: decimal('max_stt_delay_ms'),
-  avgUserToBotLatencyMs: decimal('avg_user_to_bot_latency_ms'),
-  minUserToBotLatencyMs: decimal('min_user_to_bot_latency_ms'),
-  maxUserToBotLatencyMs: decimal('max_user_to_bot_latency_ms'),
-  avgTranscriptLlmGapMs: decimal('avg_transcript_llm_gap_ms'),
-  minTranscriptLlmGapMs: decimal('min_transcript_llm_gap_ms'),
-  maxTranscriptLlmGapMs: decimal('max_transcript_llm_gap_ms'),
-  avgLlmProcessingMs: decimal('avg_llm_processing_ms'),
-  minLlmProcessingMs: decimal('min_llm_processing_ms'),
-  maxLlmProcessingMs: decimal('max_llm_processing_ms'),
-  avgLlmToTtsGapMs: decimal('avg_llm_to_tts_gap_ms'),
-  minLlmToTtsGapMs: decimal('min_llm_to_tts_gap_ms'),
-  maxLlmToTtsGapMs: decimal('max_llm_to_tts_gap_ms'),
-  avgPipelineTotalMs: decimal('avg_pipeline_total_ms'),
-  minPipelineTotalMs: decimal('min_pipeline_total_ms'),
-  maxPipelineTotalMs: decimal('max_pipeline_total_ms'),
-  avgRagProcessingMs: decimal('avg_rag_processing_ms'),
-  minRagProcessingMs: decimal('min_rag_processing_ms'),
-  maxRagProcessingMs: decimal('max_rag_processing_ms'),
-  avgVariableExtractionMs: decimal('avg_variable_extraction_ms'),
-  minVariableExtractionMs: decimal('min_variable_extraction_ms'),
-  maxVariableExtractionMs: decimal('max_variable_extraction_ms'),
-  avgLlmTtfbMs: decimal('avg_llm_ttfb_ms'),
-  minLlmTtfbMs: decimal('min_llm_ttfb_ms'),
-  maxLlmTtfbMs: decimal('max_llm_ttfb_ms'),
-  avgSttTtfbMs: decimal('avg_stt_ttfb_ms'),
-  minSttTtfbMs: decimal('min_stt_ttfb_ms'),
-  maxSttTtfbMs: decimal('max_stt_ttfb_ms'),
-  avgSttProcessingMs: decimal('avg_stt_processing_ms'),
-  minSttProcessingMs: decimal('min_stt_processing_ms'),
-  maxSttProcessingMs: decimal('max_stt_processing_ms'),
-  avgTtsTtfbMs: decimal('avg_tts_ttfb_ms'),
-  minTtsTtfbMs: decimal('min_tts_ttfb_ms'),
-  maxTtsTtfbMs: decimal('max_tts_ttfb_ms'),
+  // Denormalized avg columns (actual DB columns)
+  avgSttDelayMs: decimal('avg_stt_delay_ms', { precision: 10, scale: 2 }),
+  avgUserToBotLatencyMs: decimal('avg_user_to_bot_latency_ms', { precision: 10, scale: 2 }),
+  avgPipelineTotalMs: decimal('avg_pipeline_total_ms', { precision: 10, scale: 2 }),
+  avgLlmTtfbMs: decimal('avg_llm_ttfb_ms', { precision: 10, scale: 2 }),
+  // Totals
   totalLlmTokens: integer('total_llm_tokens'),
   totalTtsCharacters: integer('total_tts_characters'),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  // Timestamps
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }),
 });
 
 export const callAnalysis = pgTable('call_analysis', {

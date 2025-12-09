@@ -2,7 +2,7 @@
 
 Comprehensive reference for all latency, performance, and cost metrics tracked by the orchestrator.
 
-**Last Updated:** 2025-11-20
+**Last Updated:** 2025-11-25
 
 ---
 
@@ -37,14 +37,14 @@ All metrics are stored in the `call_metrics_summary` table with both:
 | Metric | Source | Unit | Database Column | Description |
 |--------|--------|------|-----------------|-------------|
 | **STT Delay** | LatencyTracker | milliseconds | `avg_stt_delay_ms` | User stopped speaking → transcript received |
-| **STT TTFB** | Pipecat | milliseconds | `avg_stt_ttfb_ms` | Deepgram API call → first response |
+| **STT TTFB** | Pipecat | milliseconds | `avg_stt_ttfb_ms` | ⚠️ **Always empty** for Deepgram Flux (see below) |
 | **STT Processing** | Pipecat | milliseconds | `avg_stt_processing_ms` | Total Deepgram processing time |
 
 ### Text-to-Speech (TTS) Metrics
 
 | Metric | Source | Unit | Database Column | Description |
 |--------|--------|------|-----------------|-------------|
-| **TTS TTFB** | Pipecat | milliseconds | `avg_tts_ttfb_ms` | ElevenLabs API call → first audio chunk |
+| **TTS TTFB** | Pipecat | milliseconds | `avg_tts_ttfb_ms` | ⚠️ **Always empty** for ElevenLabs (see below) |
 
 ### LLM Metrics
 
@@ -193,13 +193,29 @@ This results in **high sample counts** in the Pipecat summary (e.g., 215 samples
 - **Use Case:** End-to-end user perspective timing
 - **⚠️ Note:** Shows 0ms for Deepgram Flux - use STT Processing instead
 
-#### STT TTFB (Pipecat)
+#### STT TTFB (Pipecat) ⚠️ **Always Empty for Deepgram Flux**
 - **Column:** `avg_stt_ttfb_ms`, `min_stt_ttfb_ms`, `max_stt_ttfb_ms`
 - **Unit:** Milliseconds
 - **Formula:** Deepgram API call start → first response received
-- **Expected Value:** **N/A for Deepgram Flux** (disabled), 50-200ms for standard Deepgram
-- **Use Case:** API latency monitoring
-- **⚠️ Note:** Disabled for Deepgram Flux (Pipecat limitation)
+- **Expected Value:** **Always empty** for Deepgram Flux, 50-200ms for standard Deepgram
+- **Use Case:** API latency monitoring (not applicable for streaming STT)
+
+**Why STT TTFB is disabled for Deepgram Flux:**
+
+From Pipecat's `DeepgramFluxSTTService` source code:
+```python
+async def start_metrics(self):
+    # TTFB metrics are currently disabled for Deepgram Flux.
+    # Deepgram Flux delivers both the "user started speaking" event
+    # and the first transcript simultaneously, making this timing
+    # measurement meaningless in this context.
+    # await self.start_ttfb_metrics()  <-- COMMENTED OUT
+    await self.start_processing_metrics()
+```
+
+**Technical explanation:** TTFB measures time from request → first response. For streaming STT like Deepgram Flux, audio streams continuously and transcripts arrive in real-time. The "user started speaking" detection and first transcript arrive simultaneously, resulting in TTFB ≈ 0ms, which isn't meaningful.
+
+**Recommendation:** Use **STT Processing** metric instead for Deepgram Flux performance monitoring.
 
 #### STT Processing (Pipecat) ⭐ **Recommended for Deepgram Flux**
 - **Column:** `avg_stt_processing_ms`, `min_stt_processing_ms`, `max_stt_processing_ms`
@@ -211,13 +227,26 @@ This results in **high sample counts** in the Pipecat summary (e.g., 215 samples
 
 ### TTS Metrics
 
-#### TTS TTFB (Pipecat)
+#### TTS TTFB (Pipecat) ⚠️ **Always Empty for ElevenLabs**
 - **Column:** `avg_tts_ttfb_ms`, `min_tts_ttfb_ms`, `max_tts_ttfb_ms`
 - **Unit:** Milliseconds
 - **Formula:** ElevenLabs API call → first audio chunk received
-- **Expected Value:** 200-500ms
-- **Use Case:** TTS API latency monitoring
-- **Implementation:** Automatic via Pipecat's `start_ttfb_metrics()` / `stop_ttfb_metrics()`
+- **Expected Value:** **Always empty** for ElevenLabs WebSocket TTS
+- **Use Case:** TTS API latency monitoring (not applicable for WebSocket streaming)
+
+**Why TTS TTFB is not emitted by ElevenLabs:**
+
+ElevenLabs TTS uses a **persistent WebSocket connection** for streaming audio. Unlike request/response APIs where TTFB measures time from request → first byte:
+
+1. **Connection is persistent** - No per-request "start" time
+2. **Audio streams continuously** - Chunks arrive as they're generated
+3. **No clear timing boundary** - Can't measure "request sent → first chunk received"
+
+Pipecat's `ElevenLabsTTSService` has `can_generate_metrics() -> True`, but **does not call** `start_ttfb_metrics()` / `stop_ttfb_metrics()` in its implementation because the WebSocket streaming model doesn't have a meaningful TTFB concept.
+
+**What metrics ARE available for TTS:**
+- **TTS Characters** (`total_tts_characters`) - Character count for cost tracking
+- **LLM→TTS Gap** (LatencyTracker) - Time from LLM complete → TTS audio ready
 
 #### TTS Characters (Pipecat)
 - **Column:** `total_tts_characters`
@@ -319,7 +348,9 @@ This results in **high sample counts** in the Pipecat summary (e.g., 215 samples
 1. **User→Bot Latency** (`avg_user_to_bot_latency_ms`) - Most important UX metric
 2. **STT Processing** (`avg_stt_processing_ms`) - STT performance (especially for Deepgram Flux)
 3. **LLM Processing** (`avg_llm_processing_ms`) - LLM latency
-4. **TTS TTFB** (`avg_tts_ttfb_ms`) - TTS responsiveness
+4. **LLM TTFB** (`avg_llm_ttfb_ms`) - LLM API responsiveness (first token time)
+
+> **Note:** STT TTFB and TTS TTFB are not available with Deepgram Flux + ElevenLabs (see detailed explanations above).
 
 ### For Cost Tracking
 
@@ -334,10 +365,10 @@ This results in **high sample counts** in the Pipecat summary (e.g., 215 samples
 2. Break down by component:
    - **STT Processing** - Is STT slow?
    - **LLM Processing** - Is LLM slow?
-   - **TTS TTFB** - Is TTS slow?
+   - **LLM TTFB** - Is LLM API slow to respond?
 3. Check gaps:
    - **Transcript→LLM Gap** - Framework overhead?
-   - **LLM→TTS Gap** - Framework overhead?
+   - **LLM→TTS Gap** - Framework overhead? (also reflects TTS latency)
 4. Check additional processing:
    - **RAG Processing** - Is knowledge retrieval slow?
    - **Variable Extraction** - Is extraction adding latency?
@@ -468,18 +499,38 @@ STT TTFB:               No data
 STT Processing:         avg=156ms | min=120ms | max=203ms | samples=15
 LLM TTFB:               avg=245ms | min=180ms | max=320ms | samples=12
 LLM Processing:         avg=580ms | min=483ms | max=682ms | samples=12
-TTS TTFB:               avg=342ms | min=280ms | max=410ms | samples=12
+TTS TTFB:               No data
 ============================================================
 Note: These metrics are automatically captured by Pipecat.
-STT TTFB may show 'No data' for Deepgram Flux (see docs).
+STT TTFB and TTS TTFB show 'No data' - this is expected
+(see "Why STT/TTS TTFB are empty" sections above).
 ============================================================
 ```
+
+### Why Some Metrics Show "No data"
+
+| Metric | Status | Reason |
+|--------|--------|--------|
+| **STT TTFB** | Always empty | Deepgram Flux delivers speech detection + transcript simultaneously |
+| **TTS TTFB** | Always empty | ElevenLabs WebSocket streaming has no request/response boundary |
+| **LLM TTFB** | ✅ Works | OpenAI has clear request → first token timing |
+| **STT Processing** | ✅ Works | Deepgram emits processing time metrics |
+| **LLM Processing** | ✅ Works | OpenAI emits processing time metrics |
+
+This is a **Pipecat framework limitation**, not a bug in our implementation. Streaming services (Deepgram Flux, ElevenLabs WebSocket) don't have the request/response timing boundaries that TTFB requires.
 
 ---
 
 ## Changelog
 
-### 2025-11-20 (Latest)
+### 2025-11-25 (Latest)
+- **Documented:** Why STT TTFB is always empty for Deepgram Flux (Pipecat disables it by design)
+- **Documented:** Why TTS TTFB is always empty for ElevenLabs (WebSocket streaming has no TTFB concept)
+- **Added:** "Why Some Metrics Show 'No data'" summary table
+- **Updated:** Usage guidelines to remove TTS TTFB from primary metrics
+- **Added:** STTMuteFilter integration for intelligent speech muting (see PIPELINE_STRUCTURE.md)
+
+### 2025-11-20
 - **Fixed:** Added filtering for zero/near-zero metrics (< 1ms) in AnalyticsObserver
 - **Documented:** Streaming granularity behavior (high sample counts are correct)
 - **Added:** "Interpreting Metrics" section explaining sample count differences
