@@ -230,6 +230,7 @@ const nodeSchema = z.discriminatedUnion('type', [
 /**
  * Standard node schema with refinements (for exports)
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const standardNodeSchema = standardNodeSchemaBase.refine(
   (data) => {
     // Must have either system_prompt OR static_text, but not both
@@ -245,6 +246,7 @@ const standardNodeSchema = standardNodeSchemaBase.refine(
 /**
  * Retrieve variable node schema with refinements (for exports)
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const retrieveVariableNodeSchema = retrieveVariableNodeSchemaBase.refine(
   (data) => {
     // Must have either variables array OR variable_name + extraction_prompt
@@ -325,6 +327,7 @@ const workflowSchema = z.object({
 /**
  * STT configuration schema
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const sttConfigSchema = z.object({
   model: z.string().optional().default('flux-general-en'),
   sample_rate: z.number().int().optional().default(8000),

@@ -3,13 +3,16 @@ import { db } from './index';
 import { users } from './schema';
 import bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
+import { loggers } from '@/lib/logger';
+
+const log = loggers.db;
 
 async function resetPassword() {
   try {
     const email = process.argv[2] || 'admin@example.com';
     const newPassword = process.argv[3] || 'password123';
 
-    console.log(`🔑 Resetting password for: ${email}\n`);
+    log.info({ email }, 'Resetting password');
 
     // Find user
     const user = await db.query.users.findFirst({
@@ -17,13 +20,11 @@ async function resetPassword() {
     });
 
     if (!user) {
-      console.error(`❌ User not found: ${email}`);
+      log.error({ email }, 'User not found');
       process.exit(1);
     }
 
-    console.log(`✅ Found user: ${user.name} (${user.email})`);
-    console.log(`   Role: ${user.role}`);
-    console.log(`   Tenant ID: ${user.tenantId}\n`);
+    log.info({ name: user.name, email: user.email, role: user.role, tenantId: user.tenantId }, 'Found user');
 
     // Hash new password
     const passwordHash = await bcrypt.hash(newPassword, 12);
@@ -33,14 +34,13 @@ async function resetPassword() {
       .set({ passwordHash })
       .where(eq(users.email, email));
 
-    console.log('✅ Password updated successfully!\n');
-    console.log(`📧 Email: ${email}`);
-    console.log(`🔑 New Password: ${newPassword}\n`);
-    console.log('🎉 You can now login at http://localhost:3000/login');
+    log.info({
+      email,
+      newPassword,
+    }, 'Password updated successfully! You can now login at http://localhost:3000/login');
 
   } catch (error) {
-    console.error('❌ Error resetting password:');
-    console.error(error);
+    log.error({ err: error }, 'Error resetting password');
     process.exit(1);
   } finally {
     process.exit(0);

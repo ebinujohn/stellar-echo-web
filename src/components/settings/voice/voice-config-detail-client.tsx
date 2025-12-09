@@ -2,32 +2,16 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import {
-  ChevronLeft,
-  Save,
-  Loader2,
-} from 'lucide-react';
+import { ChevronLeft, Save, Loader2, InfoIcon } from 'lucide-react';
 import { toast } from 'sonner';
-import {
-  useVoiceConfig,
-  useUpdateVoiceConfig,
-  useCreateVoiceConfigVersion,
-  useActivateVoiceConfigVersion,
-} from '@/lib/hooks/use-voice-configs';
+import { useVoiceConfig, useUpdateVoiceConfig } from '@/lib/hooks/use-voice-configs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { InfoIcon } from 'lucide-react';
 
 interface VoiceConfigDetailClientProps {
   voiceConfigId: string;
@@ -35,32 +19,24 @@ interface VoiceConfigDetailClientProps {
 
 /**
  * Voice Config Detail - Simplified voice catalog entry editor
- *
- * Voice configs are now a simple catalog of available voices.
- * TTS tuning parameters (stability, similarity, etc.) are configured
- * at the agent level in the agent's Settings tab.
+ * Voice configs are a simple catalog of available voices.
+ * TTS tuning parameters are configured at the agent level.
  */
 export function VoiceConfigDetailClient({ voiceConfigId }: VoiceConfigDetailClientProps) {
   const { data: config, isLoading, error } = useVoiceConfig(voiceConfigId);
   const updateConfig = useUpdateVoiceConfig();
-  const createVersion = useCreateVoiceConfigVersion();
-  const activateVersion = useActivateVoiceConfigVersion();
 
-  // Voice Catalog Fields Only
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [voiceId, setVoiceId] = useState('');
   const [isInitialized, setIsInitialized] = useState(false);
-
   const [isSaving, setIsSaving] = useState(false);
 
   // Initialize form with config data
   if (config && !isInitialized) {
     setName(config.name);
     setDescription(config.description || '');
-    if (config.activeVersion) {
-      setVoiceId(config.activeVersion.voiceId);
-    }
+    setVoiceId(config.voiceId || '');
     setIsInitialized(true);
   }
 
@@ -70,35 +46,13 @@ export function VoiceConfigDetailClient({ voiceConfigId }: VoiceConfigDetailClie
       return;
     }
 
-    if (!voiceId.trim()) {
-      toast.error('Voice ID is required');
-      return;
-    }
-
     setIsSaving(true);
-
     try {
-      // Update metadata (name, description)
       await updateConfig.mutateAsync({
         id: voiceConfigId,
         name: name.trim(),
         description: description.trim() || undefined,
       });
-
-      // Check if voice ID changed - if so, create new version
-      if (config?.activeVersion && voiceId.trim() !== config.activeVersion.voiceId) {
-        const result = await createVersion.mutateAsync({
-          voiceConfigId,
-          voiceId: voiceId.trim(),
-        });
-
-        // Auto-activate the new version
-        await activateVersion.mutateAsync({
-          voiceConfigId,
-          versionId: result.data.id,
-        });
-      }
-
       toast.success('Voice updated');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to update voice');

@@ -31,12 +31,11 @@ export const QUERY_KEYS = {
     versions: (id: string) => ['rag-configs', id, 'versions'] as const,
   },
 
-  // Voice Configs
+  // Voice Configs (simple catalog - no versioning)
   voiceConfigs: {
     all: ['voice-configs'] as const,
     detail: (id: string) => ['voice-configs', id] as const,
     dropdown: ['voice-configs', 'dropdown'] as const,
-    versions: (id: string) => ['voice-configs', id, 'versions'] as const,
   },
 
   // Phone Configs

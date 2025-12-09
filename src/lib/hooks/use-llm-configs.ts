@@ -1,8 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-
-// ========================================
-// Types
-// ========================================
+import { apiFetch } from './factories/create-api-hooks';
+import { QUERY_KEYS } from './constants/query-keys';
+import { STALE_TIMES } from './constants/stale-times';
 
 interface LlmModel {
   id: string;
@@ -24,43 +23,20 @@ interface LlmModelDropdownItem {
   description: string | null;
 }
 
-// ========================================
-// LLM Model Queries
-// ========================================
-
-async function fetchLlmModels(): Promise<LlmModel[]> {
-  const response = await fetch('/api/llm-models');
-  if (!response.ok) {
-    throw new Error('Failed to fetch LLM models');
-  }
-  const json = await response.json();
-  return json.data;
-}
-
-async function fetchLlmModelsDropdown(): Promise<LlmModelDropdownItem[]> {
-  const response = await fetch('/api/llm-models?format=dropdown');
-  if (!response.ok) {
-    throw new Error('Failed to fetch LLM models for dropdown');
-  }
-  const json = await response.json();
-  return json.data;
-}
-
 export function useLlmModels() {
   return useQuery({
-    queryKey: ['llm-models'],
-    queryFn: fetchLlmModels,
-    staleTime: 10 * 60 * 1000, // 10 minutes (models rarely change)
+    queryKey: QUERY_KEYS.llmModels.all,
+    queryFn: () => apiFetch<LlmModel[]>('/api/llm-models'),
+    staleTime: STALE_TIMES.LLM_MODELS,
   });
 }
 
 export function useLlmModelsDropdown() {
   return useQuery({
-    queryKey: ['llm-models', 'dropdown'],
-    queryFn: fetchLlmModelsDropdown,
-    staleTime: 10 * 60 * 1000, // 10 minutes
+    queryKey: QUERY_KEYS.llmModels.dropdown,
+    queryFn: () => apiFetch<LlmModelDropdownItem[]>('/api/llm-models?format=dropdown'),
+    staleTime: STALE_TIMES.LLM_MODELS,
   });
 }
 
-// Re-export types
 export type { LlmModel, LlmModelDropdownItem };

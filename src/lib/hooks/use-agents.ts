@@ -7,7 +7,6 @@ import {
 import { QUERY_KEYS } from './constants/query-keys';
 import { STALE_TIMES } from './constants/stale-times';
 import type {
-  CreateAgentInput,
   CreateVersionInput,
   WorkflowConfig,
 } from '@/lib/validations/agents';

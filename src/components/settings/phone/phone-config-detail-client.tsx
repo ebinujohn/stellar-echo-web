@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, Save, Loader2, Phone, User } from 'lucide-react';
 import { toast } from 'sonner';
@@ -40,7 +39,6 @@ function formatPhoneNumber(phone: string): string {
 }
 
 export function PhoneConfigDetailClient({ phoneConfigId }: PhoneConfigDetailClientProps) {
-  const router = useRouter();
   const { data: config, isLoading, error } = usePhoneConfig(phoneConfigId);
   const updateConfig = useUpdatePhoneConfig();
   const { data: agents, isLoading: agentsLoading } = useAgents();

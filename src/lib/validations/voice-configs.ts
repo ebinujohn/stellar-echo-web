@@ -53,24 +53,6 @@ export const updateVoiceConfigSchema = z.object({
 export type UpdateVoiceConfigInput = z.infer<typeof updateVoiceConfigSchema>;
 
 /**
- * Schema for creating a new Voice config version
- */
-export const createVoiceConfigVersionSchema = z.object({
-  voiceId: z.string().min(1).optional(),
-  model: z.string().optional(),
-  stability: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Must be a decimal number').optional(),
-  similarityBoost: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Must be a decimal number').optional(),
-  style: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Must be a decimal number').optional(),
-  useSpeakerBoost: z.boolean().optional(),
-  enableSsmlParsing: z.boolean().optional(),
-  pronunciationDictionariesEnabled: z.boolean().optional(),
-  pronunciationDictionaryIds: z.array(z.string()).optional(),
-  notes: z.string().max(500, 'Notes must be less than 500 characters').optional(),
-});
-
-export type CreateVoiceConfigVersionInput = z.infer<typeof createVoiceConfigVersionSchema>;
-
-/**
  * TTS model options for UI
  */
 export const ttsModels = [

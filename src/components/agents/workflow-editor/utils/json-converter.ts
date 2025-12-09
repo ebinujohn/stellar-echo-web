@@ -1,6 +1,56 @@
 import type { Node, Edge } from 'reactflow';
 import { MarkerType } from 'reactflow';
-import type { WorkflowConfig, WorkflowNode as ConfigNode } from '@/lib/validations/agents';
+import type { WorkflowConfig, WorkflowNode as ConfigNode, Transition } from '@/lib/validations/agents';
+
+/**
+ * Extended config node type that includes position metadata and all possible node fields.
+ * This is needed because the discriminated union WorkflowNode doesn't expose all fields at once.
+ */
+interface ExtendedConfigNode extends Omit<ConfigNode, 'transitions'> {
+  _metadata?: { position?: { x: number; y: number } };
+  system_prompt?: string;
+  static_text?: string;
+  variables?: Array<{
+    variable_name: string;
+    extraction_prompt: string;
+    default_value?: string | null;
+  }>;
+  variable_name?: string;
+  extraction_prompt?: string;
+  default_value?: string | null;
+  interruptions_enabled?: boolean | null;
+  transitions?: Transition[];
+  actions?: {
+    on_entry?: string[];
+    on_exit?: string[];
+  };
+  rag?: {
+    enabled?: boolean;
+    search_mode?: string;
+    top_k?: number;
+    rrf_k?: number;
+    vector_weight?: number;
+    fts_weight?: number;
+  };
+  llm_override?: {
+    model_name?: string;
+    temperature?: number;
+    max_tokens?: number;
+    service_tier?: 'auto' | 'default' | 'flex';
+  };
+  intents?: Record<string, {
+    description: string;
+    examples?: string[];
+  }>;
+  intent_config?: {
+    confidence_threshold?: number;
+    context_scope?: 'node' | 'conversation';
+    context_messages?: number;
+  };
+  target_agent_id?: string;
+  transfer_context?: boolean;
+  transfer_message?: string;
+}
 
 /**
  * Extended ReactFlow node data with position metadata
@@ -60,6 +110,44 @@ export interface WorkflowNodeData {
 }
 
 /**
+ * Extended workflow type to include llm and tts sections that may not be in base type
+ */
+interface ExtendedWorkflow {
+  initial_node: string;
+  global_prompt?: string;
+  history_window?: number;
+  max_transitions?: number;
+  interruption_settings?: {
+    enabled?: boolean;
+    delay_ms?: number;
+    resume_prompt?: string;
+  };
+  recording?: { enabled?: boolean };
+  llm?: {
+    enabled?: boolean;
+    model_name?: string;
+    temperature?: number;
+    max_tokens?: number;
+    service_tier?: 'auto' | 'default' | 'flex';
+  };
+  tts?: {
+    enabled?: boolean;
+    voice_name?: string;
+    voice_id?: string;
+    model?: string;
+    stability?: number;
+    similarity_boost?: number;
+    style?: number;
+    use_speaker_boost?: boolean;
+    enable_ssml_parsing?: boolean;
+    pronunciation_dictionaries_enabled?: boolean;
+    pronunciation_dictionary_ids?: string[];
+    aggregate_sentences?: boolean;
+  };
+  nodes: ExtendedConfigNode[];
+}
+
+/**
  * Convert workflow config JSON to ReactFlow nodes and edges
  */
 export function workflowToNodes(config: WorkflowConfig): {
@@ -70,8 +158,11 @@ export function workflowToNodes(config: WorkflowConfig): {
   const edges: Edge[] = [];
 
   config.workflow.nodes.forEach((node, index) => {
+    // Cast to extended type to access all possible fields
+    const extNode = node as ExtendedConfigNode;
+
     // Get stored position or calculate default position
-    const position = getNodePosition(node, index, config.workflow.nodes.length);
+    const position = getNodePosition(extNode, index, config.workflow.nodes.length);
 
     // Create ReactFlow node
     const reactFlowNode: Node<WorkflowNodeData> = {
@@ -82,30 +173,30 @@ export function workflowToNodes(config: WorkflowConfig): {
         id: node.id,
         type: node.type || 'standard',
         name: node.name,
-        system_prompt: (node as any).system_prompt,
-        static_text: (node as any).static_text,
-        variables: (node as any).variables,
-        variable_name: (node as any).variable_name,
-        extraction_prompt: (node as any).extraction_prompt,
-        default_value: (node as any).default_value,
-        interruptions_enabled: (node as any).interruptions_enabled,
-        transitions: (node as any).transitions,
-        actions: (node as any).actions,
-        rag: (node as any).rag,
-        llm_override: (node as any).llm_override,
-        intents: (node as any).intents,
-        intent_config: (node as any).intent_config,
+        system_prompt: extNode.system_prompt,
+        static_text: extNode.static_text,
+        variables: extNode.variables,
+        variable_name: extNode.variable_name,
+        extraction_prompt: extNode.extraction_prompt,
+        default_value: extNode.default_value,
+        interruptions_enabled: extNode.interruptions_enabled,
+        transitions: extNode.transitions,
+        actions: extNode.actions,
+        rag: extNode.rag,
+        llm_override: extNode.llm_override,
+        intents: extNode.intents,
+        intent_config: extNode.intent_config,
         // Agent transfer fields
-        target_agent_id: (node as any).target_agent_id,
-        transfer_context: (node as any).transfer_context,
-        transfer_message: (node as any).transfer_message,
+        target_agent_id: extNode.target_agent_id,
+        transfer_context: extNode.transfer_context,
+        transfer_message: extNode.transfer_message,
       },
     };
 
     nodes.push(reactFlowNode);
 
     // Create edges from transitions
-    const nodeTransitions = (node as any).transitions;
+    const nodeTransitions = extNode.transitions;
     if (nodeTransitions && Array.isArray(nodeTransitions)) {
       nodeTransitions.forEach((transition, transIdx) => {
         edges.push({
@@ -114,7 +205,7 @@ export function workflowToNodes(config: WorkflowConfig): {
           target: transition.target,
           label: transition.condition,
           type: 'deletable',
-          animated: transition.priority && transition.priority > 5,
+          animated: !!(transition.priority && transition.priority > 5),
           markerEnd: {
             type: MarkerType.ArrowClosed,
             width: 20,
@@ -143,23 +234,23 @@ export function nodesToWorkflow(
   edges: Edge[],
   existingConfig?: WorkflowConfig
 ): Partial<WorkflowConfig> {
-  const configNodes: ConfigNode[] = [];
+  const configNodes: ExtendedConfigNode[] = [];
 
   // Convert ReactFlow nodes to config nodes
   nodes.forEach((node) => {
     const data = node.data;
 
     // Build transitions from edges
-    const transitions = edges
+    const transitions: Transition[] = edges
       .filter((edge) => edge.source === node.id)
       .map((edge) => ({
-        condition: edge.data?.condition || edge.label?.toString() || 'always',
+        condition: (edge.data?.condition as string) || edge.label?.toString() || 'always',
         target: edge.target,
-        priority: edge.data?.priority || 0,
+        priority: (edge.data?.priority as number) || 0,
       }));
 
     // Build config node based on type
-    let configNode: any = {
+    let configNode: ExtendedConfigNode = {
       id: data.id,
       type: data.type,
       name: data.name,
@@ -232,19 +323,21 @@ export function nodesToWorkflow(
       recording: existingConfig.workflow.recording,
     }),
     // Preserve LLM config (lives in workflow.llm per AGENT_JSON_SCHEMA.md)
-    ...(existingConfig && (existingConfig.workflow as any)?.llm && {
-      llm: (existingConfig.workflow as any).llm,
-    }),
+    ...(() => {
+      const extWorkflow = existingConfig?.workflow as ExtendedWorkflow | undefined;
+      return extWorkflow?.llm ? { llm: extWorkflow.llm } : {};
+    })(),
     // Preserve TTS config (lives in workflow.tts per AGENT_JSON_SCHEMA.md)
-    ...(existingConfig && (existingConfig.workflow as any)?.tts && {
-      tts: (existingConfig.workflow as any).tts,
-    }),
+    ...(() => {
+      const extWorkflow = existingConfig?.workflow as ExtendedWorkflow | undefined;
+      return extWorkflow?.tts ? { tts: extWorkflow.tts } : {};
+    })(),
     nodes: configNodes,
   };
 
   return {
     ...existingConfig,
-    workflow: workflow as any,
+    workflow: workflow as unknown as WorkflowConfig['workflow'],
   };
 }
 
@@ -252,12 +345,12 @@ export function nodesToWorkflow(
  * Get node position (from metadata if stored, otherwise calculate default)
  */
 function getNodePosition(
-  node: ConfigNode,
+  node: ExtendedConfigNode,
   index: number,
   totalNodes: number
 ): { x: number; y: number } {
   // Check if position is stored in node metadata
-  const metadata = (node as any)._metadata;
+  const metadata = node._metadata;
   if (metadata?.position) {
     return metadata.position;
   }

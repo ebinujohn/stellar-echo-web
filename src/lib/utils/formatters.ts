@@ -1,4 +1,4 @@
-import { format, formatDistance, formatDistanceToNow } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 
 export function formatDateTime(date: Date | string | null): string {
   if (!date) return 'N/A';

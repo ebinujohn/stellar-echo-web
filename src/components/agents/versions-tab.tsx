@@ -48,12 +48,20 @@ interface VersionsTabProps {
   activeVersionId?: string;
 }
 
+// Extended config type that includes optional legacy fields at root level
+interface ExtendedWorkflowConfig extends WorkflowConfig {
+  llm?: Record<string, unknown>;
+  tts?: Record<string, unknown>;
+  stt?: Record<string, unknown>;
+  rag?: Record<string, unknown>;
+}
+
 interface AgentVersion {
   id: string;
   agentId: string;
   tenantId: string;
   version: number;
-  configJson: WorkflowConfig;
+  configJson: ExtendedWorkflowConfig;
   globalPrompt: string | null;
   ragEnabled: boolean;
   ragConfigId: string | null;
@@ -64,7 +72,7 @@ interface AgentVersion {
   notes: string | null;
 }
 
-export function VersionsTab({ agentId, activeVersionId }: VersionsTabProps) {
+export function VersionsTab({ agentId, activeVersionId: _activeVersionId }: VersionsTabProps) {
   const { data: versions, isLoading, error } = useAgentVersions(agentId);
   const activateVersion = useActivateVersion();
   const [selectedVersion, setSelectedVersion] = useState<AgentVersion | null>(null);
@@ -302,40 +310,40 @@ export function VersionsTab({ agentId, activeVersionId }: VersionsTabProps) {
                 )}
 
                 {/* LLM Section */}
-                {(selectedVersion.configJson as any)?.llm && (
+                {selectedVersion.configJson.llm && (
                   <ConfigSection
                     title="LLM Configuration"
-                    data={(selectedVersion.configJson as any).llm}
+                    data={selectedVersion.configJson.llm}
                     expanded={expandedSections.has('llm')}
                     onToggle={() => toggleSection('llm')}
                   />
                 )}
 
                 {/* TTS Section */}
-                {(selectedVersion.configJson as any)?.tts && (
+                {selectedVersion.configJson.tts && (
                   <ConfigSection
                     title="TTS Configuration"
-                    data={(selectedVersion.configJson as any).tts}
+                    data={selectedVersion.configJson.tts}
                     expanded={expandedSections.has('tts')}
                     onToggle={() => toggleSection('tts')}
                   />
                 )}
 
                 {/* STT Section */}
-                {(selectedVersion.configJson as any)?.stt && (
+                {selectedVersion.configJson.stt && (
                   <ConfigSection
                     title="STT Configuration"
-                    data={(selectedVersion.configJson as any).stt}
+                    data={selectedVersion.configJson.stt}
                     expanded={expandedSections.has('stt')}
                     onToggle={() => toggleSection('stt')}
                   />
                 )}
 
                 {/* RAG Section (from configJson if present) */}
-                {(selectedVersion.configJson as any)?.rag && (
+                {selectedVersion.configJson.rag && (
                   <ConfigSection
                     title="RAG Configuration (configJson)"
-                    data={(selectedVersion.configJson as any).rag}
+                    data={selectedVersion.configJson.rag}
                     expanded={expandedSections.has('rag')}
                     onToggle={() => toggleSection('rag')}
                   />

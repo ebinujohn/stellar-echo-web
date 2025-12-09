@@ -1,5 +1,8 @@
 import { createHash, createHmac, randomBytes } from 'crypto';
 import type { RAGChunk, RAGQueryMetadata, RAGQueryResponse } from '@/types';
+import { loggers } from '@/lib/logger';
+
+const log = loggers.admin;
 
 /**
  * Admin API Client for the Orchestrator Service
@@ -126,9 +129,7 @@ export async function refreshAgentConfigCache(
 ): Promise<AdminApiResponse | null> {
   // If Admin API is not configured, skip cache refresh silently
   if (!ADMIN_API_BASE_URL || !ADMIN_API_KEY) {
-    console.log(
-      '[Admin API] Skipping cache refresh - ADMIN_API_BASE_URL or ADMIN_API_KEY not configured'
-    );
+    log.debug('Skipping cache refresh - ADMIN_API_BASE_URL or ADMIN_API_KEY not configured');
     return null;
   }
 
@@ -138,17 +139,17 @@ export async function refreshAgentConfigCache(
       agent_id: params.agentId,
     });
 
-    console.log(
-      `[Admin API] Agent config cache refreshed for agent ${params.agentId} in tenant ${params.tenantId}:`,
-      response.message
+    log.info(
+      { agentId: params.agentId, tenantId: params.tenantId, message: response.message },
+      'Agent config cache refreshed'
     );
 
     return response;
   } catch (error) {
     // Log the error but don't throw - cache refresh failure shouldn't block activation
-    console.error(
-      `[Admin API] Failed to refresh agent config cache for agent ${params.agentId}:`,
-      error instanceof Error ? error.message : error
+    log.error(
+      { agentId: params.agentId, err: error },
+      'Failed to refresh agent config cache'
     );
 
     return null;

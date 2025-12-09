@@ -1,9 +1,8 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   createCrudHooks,
   createVersionHooks,
   createDropdownHook,
-  apiFetch,
   apiMutate,
 } from './factories/create-api-hooks';
 import { QUERY_KEYS } from './constants/query-keys';

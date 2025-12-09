@@ -55,6 +55,7 @@ export function ChartGrid() {
 interface ChartXAxisProps {
   dataKey: string;
   label?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tickFormatter?: (value: any) => string;
   angle?: number;
   height?: number;
@@ -95,6 +96,7 @@ export function ChartXAxis({
  */
 interface ChartYAxisProps {
   label?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tickFormatter?: (value: any) => string;
   width?: number;
   domain?: [number | string, number | string];
@@ -131,7 +133,9 @@ export function ChartYAxis({
  * Styled Tooltip with theme support
  */
 interface ChartTooltipProps {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   formatter?: (value: any, name: string, props: any) => React.ReactNode;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   labelFormatter?: (label: any) => React.ReactNode;
 }
 
@@ -149,6 +153,7 @@ export function ChartTooltip({ formatter, labelFormatter }: ChartTooltipProps) {
  * Styled Legend with theme support
  */
 interface ChartLegendProps {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   formatter?: (value: string, entry: any, index: number) => React.ReactNode;
   verticalAlign?: "top" | "middle" | "bottom";
   align?: "left" | "center" | "right";

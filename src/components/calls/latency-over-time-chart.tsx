@@ -1,6 +1,6 @@
 "use client";
 
-import { LineChart, Line, ReferenceLine, Dot } from "recharts";
+import { LineChart, Line, Dot } from "recharts";
 import {
   ChartContainer,
   ChartGrid,
@@ -20,6 +20,7 @@ interface LatencyOverTimeChartProps {
 }
 
 // Custom dot component to highlight interruptions
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CustomDot = (props: any) => {
   const { cx, cy, payload } = props;
 
@@ -80,6 +81,7 @@ export function LatencyOverTimeChart({
           tickFormatter={(value) => formatLatency(value)}
         />
         <ChartTooltip
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           formatter={(value: number, name: string, props: any) => {
             const labels: Record<string, string> = {
               pipelineTotal: "Pipeline Total",

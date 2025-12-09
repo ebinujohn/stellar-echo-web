@@ -136,7 +136,7 @@ export interface TranscriptEntry {
 export interface TranscriptData {
   callId: string;
   transcriptText: string | null;
-  transcriptJson: any;
+  transcriptJson: Record<string, unknown> | unknown[];
   wordCount: number | null;
 }
 
@@ -422,10 +422,12 @@ export async function getCallTranscript(callId: string, ctx: QueryContext): Prom
 
   // Handle transcript_data JSONB field with multiple possible structures
   if (transcript.transcriptData) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data = transcript.transcriptData as any;
 
     // Case 1: Direct array of transcript entries
     if (Array.isArray(data)) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return data.map((entry: any, index: number) => ({
         id: `${callId}-${index}`,
         speaker: entry.speaker || entry.role || entry.name || 'Unknown',
@@ -437,6 +439,7 @@ export async function getCallTranscript(callId: string, ctx: QueryContext): Prom
 
     // Case 2: Object with 'entries' or 'messages' or 'turns' array
     if (data.entries && Array.isArray(data.entries)) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return data.entries.map((entry: any, index: number) => ({
         id: `${callId}-${index}`,
         speaker: entry.speaker || entry.role || entry.name || 'Unknown',
@@ -447,6 +450,7 @@ export async function getCallTranscript(callId: string, ctx: QueryContext): Prom
     }
 
     if (data.messages && Array.isArray(data.messages)) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return data.messages.map((entry: any, index: number) => ({
         id: `${callId}-${index}`,
         speaker: entry.speaker || entry.role || entry.from || 'Unknown',
@@ -457,6 +461,7 @@ export async function getCallTranscript(callId: string, ctx: QueryContext): Prom
     }
 
     if (data.turns && Array.isArray(data.turns)) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return data.turns.map((entry: any, index: number) => ({
         id: `${callId}-${index}`,
         speaker: entry.speaker || entry.role || entry.who || 'Unknown',
@@ -538,6 +543,7 @@ export interface TimelineEvent {
   id: string;
   type: 'message' | 'transition' | 'transcript';
   timestamp: Date;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any;
 }
 

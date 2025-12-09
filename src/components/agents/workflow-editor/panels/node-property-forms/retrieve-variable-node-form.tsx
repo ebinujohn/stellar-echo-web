@@ -88,7 +88,7 @@ export function RetrieveVariableNodeForm({
     ]);
   };
 
-  const updateTransition = (index: number, updates: any) => {
+  const updateTransition = (index: number, updates: Partial<{ target: string; condition: string; priority: number }>) => {
     const newTransitions = [...transitions];
     newTransitions[index] = { ...newTransitions[index], ...updates };
     setTransitions(newTransitions);

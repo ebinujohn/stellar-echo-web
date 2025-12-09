@@ -37,18 +37,56 @@ function useOptionalAgentDraft() {
   }
 }
 
+// Config type for settings form
+interface SettingsConfig {
+  workflow?: {
+    llm?: {
+      enabled?: boolean;
+      model_name?: string;
+      temperature?: number;
+      max_tokens?: number;
+      service_tier?: 'auto' | 'default' | 'flex';
+    };
+    tts?: {
+      enabled?: boolean;
+      voice_name?: string;
+      model?: string;
+      stability?: number;
+      similarity_boost?: number;
+      style?: number;
+      use_speaker_boost?: boolean;
+      enable_ssml_parsing?: boolean;
+      pronunciation_dictionaries_enabled?: boolean;
+      pronunciation_dictionary_ids?: string[];
+      aggregate_sentences?: boolean;
+    };
+    rag?: {
+      override_enabled?: boolean;
+      search_mode?: 'vector' | 'fts' | 'hybrid';
+      top_k?: number;
+      rrf_k?: number;
+      vector_weight?: number;
+      fts_weight?: number;
+    };
+    [key: string]: unknown;
+  };
+  tts?: { enabled?: boolean };
+  auto_hangup?: { enabled?: boolean };
+  [key: string]: unknown;
+}
+
 interface SettingsFormProps {
   agentId: string;
-  currentConfig: any;
+  currentConfig: SettingsConfig;
   globalPrompt?: string | null;
   ragEnabled?: boolean;
   ragConfigId?: string | null;
   voiceConfigId?: string | null;
-  onSave: (config: any, ragEnabled?: boolean, ragConfigId?: string | null, voiceConfigId?: string | null, globalPrompt?: string | null) => Promise<void>;
+  onSave: (config: SettingsConfig, ragEnabled?: boolean, ragConfigId?: string | null, voiceConfigId?: string | null, globalPrompt?: string | null) => Promise<void>;
 }
 
 export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlobalPrompt, ragEnabled: initialRagEnabled, ragConfigId: initialRagConfigId, voiceConfigId: initialVoiceConfigId, onSave }: SettingsFormProps) {
-  const [isSaving, setIsSaving] = useState(false);
+  const [_isSaving, _setIsSaving] = useState(false);
 
   // Get draft context (optional - component can work without it)
   const draftContext = useOptionalAgentDraft();
@@ -129,7 +167,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
   const { data: selectedRagConfig } = useRagConfig(selectedRagConfigId || '');
 
   // Fetch selected Voice config details for preview
-  const { data: selectedVoiceConfig } = useVoiceConfig(selectedVoiceConfigId || '');
+  const { data: _selectedVoiceConfig } = useVoiceConfig(selectedVoiceConfigId || '');
 
   // LLM Settings (stored in workflow.llm per AGENT_JSON_SCHEMA.md)
   const workflowLlm = currentConfig.workflow?.llm;
@@ -145,8 +183,8 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
   const [llmMaxTokens, setLlmMaxTokens] = useState(() =>
     getInitialValue(draftContext?.settingsDraft?.llmMaxTokens, workflowLlm?.max_tokens ?? 150)
   );
-  const [llmServiceTier, setLlmServiceTier] = useState(() =>
-    getInitialValue(draftContext?.settingsDraft?.llmServiceTier, workflowLlm?.service_tier || 'auto')
+  const [llmServiceTier, setLlmServiceTier] = useState<'auto' | 'default' | 'flex'>(() =>
+    getInitialValue(draftContext?.settingsDraft?.llmServiceTier, workflowLlm?.service_tier || 'auto') as 'auto' | 'default' | 'flex'
   );
 
   // TTS Settings (stored in workflow.tts per AGENT_JSON_SCHEMA.md)
@@ -314,7 +352,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSaving(true);
+    _setIsSaving(true);
 
     try {
       // RAG config - only use shared config reference
@@ -395,10 +433,10 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
         draftContext.setSettingsDraft(null);
       }
       toast.success('Settings saved successfully');
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to save settings');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to save settings');
     } finally {
-      setIsSaving(false);
+      _setIsSaving(false);
     }
   };
 
@@ -471,7 +509,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
 
             <div className="space-y-2">
               <Label htmlFor="llm-service-tier">Service Tier</Label>
-              <Select value={llmServiceTier} onValueChange={setLlmServiceTier}>
+              <Select value={llmServiceTier} onValueChange={(v) => setLlmServiceTier(v as 'auto' | 'default' | 'flex')}>
                 <SelectTrigger id="llm-service-tier">
                   <SelectValue placeholder="Select tier" />
                 </SelectTrigger>

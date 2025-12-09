@@ -15,7 +15,9 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "format": "prettier --write .",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "security": "semgrep scan --config .semgrepconfig.yml --config p/typescript --config p/react",
+    "security:ci": "semgrep ci --config .semgrepconfig.yml --config p/typescript --config p/react"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.946.0",
@@ -50,6 +52,7 @@
     "lucide-react": "^0.556.0",
     "next": "16.0.7",
     "next-themes": "^0.4.6",
+    "pino": "^10.1.0",
     "postgres": "^3.4.7",
     "react": "19.2.1",
     "react-dom": "19.2.1",
@@ -69,6 +72,7 @@
     "drizzle-kit": "^0.31.8",
     "eslint": "^9.39.1",
     "eslint-config-next": "16.0.7",
+    "pino-pretty": "^13.1.3",
     "prettier": "^3.7.4",
     "prettier-plugin-tailwindcss": "^0.7.2",
     "tailwindcss": "^4.1.17",

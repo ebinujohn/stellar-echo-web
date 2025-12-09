@@ -213,7 +213,7 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
     ]);
   };
 
-  const updateTransition = (index: number, updates: any) => {
+  const updateTransition = (index: number, updates: Partial<{ target: string; condition: string; priority: number }>) => {
     const newTransitions = [...transitions];
     newTransitions[index] = { ...newTransitions[index], ...updates };
     setTransitions(newTransitions);
@@ -325,7 +325,7 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
                 className="min-h-[200px] font-mono text-sm"
               />
               <p className="text-xs text-muted-foreground">
-                Defines the AI's behavior and role in this conversation step.
+                Defines the AI&apos;s behavior and role in this conversation step.
               </p>
             </div>
           </div>
@@ -751,7 +751,7 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground mt-1">
-                          Leave empty to use agent's default model
+                          Leave empty to use agent&apos;s default model
                         </p>
                       </div>
 

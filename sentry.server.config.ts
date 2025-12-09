@@ -41,7 +41,7 @@ Sentry.init({
   ],
 
   // Before sending an event, you can modify it or return null to drop it
-  beforeSend(event, hint) {
+  beforeSend(event) {
     // Drop 4xx errors for certain known endpoints
     const statusCode = event.contexts?.response?.status_code;
     if (statusCode && statusCode >= 400 && statusCode < 500) {

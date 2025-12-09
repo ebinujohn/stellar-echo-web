@@ -18,7 +18,7 @@ export type {
 } from '@/lib/db/schema';
 
 // API Response types
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   message?: string;
@@ -70,7 +70,7 @@ export type TimelineEvent =
       timestamp: Date;
       role: 'user' | 'assistant';
       content: string;
-      metadata?: any;
+      metadata?: Record<string, unknown>;
     }
   | {
       type: 'transition';

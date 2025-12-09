@@ -10,18 +10,19 @@ interface CallAnalysisTabProps {
   callId: string;
 }
 
-function getSentimentIcon(sentiment: string | null) {
+// Icon component mapped by sentiment to avoid creating during render
+const SentimentIconDisplay = ({ sentiment, className }: { sentiment: string | null; className?: string }) => {
   switch (sentiment?.toLowerCase()) {
     case 'positive':
-      return Smile;
+      return <Smile className={className} />;
     case 'negative':
-      return Frown;
+      return <Frown className={className} />;
     case 'neutral':
-      return Meh;
+      return <Meh className={className} />;
     default:
-      return Meh;
+      return <Meh className={className} />;
   }
-}
+};
 
 function getSentimentColor(sentiment: string | null): string {
   switch (sentiment?.toLowerCase()) {
@@ -65,7 +66,6 @@ export function CallAnalysisTab({ callId }: CallAnalysisTabProps) {
     );
   }
 
-  const SentimentIcon = getSentimentIcon(analysis.sentiment);
   const sentimentColor = getSentimentColor(analysis.sentiment);
 
   return (
@@ -74,7 +74,7 @@ export function CallAnalysisTab({ callId }: CallAnalysisTabProps) {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <SentimentIcon className={`h-5 w-5 ${sentimentColor}`} />
+            <SentimentIconDisplay sentiment={analysis.sentiment} className={`h-5 w-5 ${sentimentColor}`} />
             Sentiment Analysis
           </CardTitle>
           <CardDescription>Overall sentiment detected in the conversation</CardDescription>

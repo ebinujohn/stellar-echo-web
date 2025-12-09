@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ChevronLeft,
@@ -43,7 +42,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatDateTime } from '@/lib/utils/formatters';
 
@@ -52,7 +50,6 @@ interface RagConfigDetailClientProps {
 }
 
 export function RagConfigDetailClient({ ragConfigId }: RagConfigDetailClientProps) {
-  const router = useRouter();
   const { data: config, isLoading, error } = useRagConfig(ragConfigId);
   const { data: versions } = useRagConfigVersions(ragConfigId);
   const updateConfig = useUpdateRagConfig();

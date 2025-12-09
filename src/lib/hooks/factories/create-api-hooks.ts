@@ -159,7 +159,7 @@ export function createCrudHooks<TList, TDetail>(
 /**
  * Configuration for versioned resource hooks
  */
-interface VersionedHooksConfig<TVersion, TIdKey extends string = 'id'> {
+interface VersionedHooksConfig<TIdKey extends string = 'id'> {
   /** Base endpoint, e.g., '/api/rag-configs' */
   endpoint: string;
   /** Function to get versions query key */
@@ -180,7 +180,7 @@ interface VersionedHooksConfig<TVersion, TIdKey extends string = 'id'> {
 export function createVersionHooks<
   TVersion,
   TIdKey extends string = 'id',
->(config: VersionedHooksConfig<TVersion, TIdKey>) {
+>(config: VersionedHooksConfig<TIdKey>) {
   const { endpoint, versionsKey, detailKey, listKey, staleTime, idKey = 'id' as TIdKey } = config;
 
   // Get versions list

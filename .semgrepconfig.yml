@@ -1,0 +1,159 @@
+# Semgrep configuration for Stellar Echo
+# Run: semgrep scan --config .semgrepconfig.yml
+
+rules:
+  # ============================================
+  # Security Rules - OWASP Top 10
+  # ============================================
+
+  # SQL Injection Prevention
+  - id: no-raw-sql-queries
+    patterns:
+      - pattern-either:
+          - pattern: db.execute($SQL)
+          - pattern: db.query($SQL)
+          - pattern: sql`${...}...`
+    message: "Avoid raw SQL queries. Use Drizzle ORM's type-safe query builders instead."
+    languages: [typescript, javascript]
+    severity: ERROR
+    metadata:
+      category: security
+      owasp: A03:2021 - Injection
+
+  # XSS Prevention
+  - id: no-dangerously-set-html
+    pattern: dangerouslySetInnerHTML={...}
+    message: "Avoid dangerouslySetInnerHTML - risk of XSS. Use safe rendering methods."
+    languages: [typescript, javascript]
+    severity: WARNING
+    metadata:
+      category: security
+      owasp: A03:2021 - Injection
+
+  # Sensitive Data Exposure
+  - id: no-hardcoded-secrets
+    patterns:
+      - pattern-either:
+          - pattern: |
+              $KEY = "sk_live_..."
+          - pattern: |
+              $KEY = "sk_test_..."
+          - pattern: |
+              password = "..."
+          - pattern: |
+              apiKey = "..."
+          - pattern: |
+              secret = "..."
+    message: "Hardcoded secrets detected. Use environment variables instead."
+    languages: [typescript, javascript]
+    severity: ERROR
+    metadata:
+      category: security
+      owasp: A02:2021 - Cryptographic Failures
+
+  # Insecure Cookie Settings
+  - id: insecure-cookie
+    patterns:
+      - pattern-either:
+          - pattern: |
+              { ..., httpOnly: false, ... }
+          - pattern: |
+              { ..., secure: false, ... }
+    message: "Cookies should have httpOnly and secure flags enabled."
+    languages: [typescript, javascript]
+    severity: WARNING
+    metadata:
+      category: security
+      owasp: A05:2021 - Security Misconfiguration
+
+  # ============================================
+  # Next.js / React Security
+  # ============================================
+
+  # Prevent eval usage
+  - id: no-eval
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: new Function(...)
+    message: "eval() and new Function() are dangerous - risk of code injection."
+    languages: [typescript, javascript]
+    severity: ERROR
+    metadata:
+      category: security
+
+  # Prevent document.write
+  - id: no-document-write
+    pattern: document.write(...)
+    message: "document.write() can cause XSS vulnerabilities."
+    languages: [typescript, javascript]
+    severity: ERROR
+    metadata:
+      category: security
+
+  # ============================================
+  # Authentication & Authorization
+  # ============================================
+
+  # Ensure auth checks in API routes
+  - id: api-route-missing-auth
+    patterns:
+      - pattern-inside: |
+          export async function $METHOD(request: NextRequest, ...) {
+            ...
+          }
+      - pattern-not-inside: |
+          export async function $METHOD(request: NextRequest, ...) {
+            ...
+            requireAuth()
+            ...
+          }
+      - pattern-not-inside: |
+          export async function $METHOD(request: NextRequest, ...) {
+            ...
+            await requireAuth()
+            ...
+          }
+      - pattern: return $RESPONSE
+    paths:
+      include:
+        - src/app/api/**/*.ts
+      exclude:
+        - src/app/api/auth/**/*.ts
+        - src/app/api/health/**/*.ts
+    message: "API route may be missing authentication. Ensure requireAuth() is called."
+    languages: [typescript]
+    severity: WARNING
+    metadata:
+      category: security
+      owasp: A01:2021 - Broken Access Control
+
+  # ============================================
+  # Code Quality
+  # ============================================
+
+  # Prevent console.log in production code
+  - id: no-console-log
+    pattern: console.log(...)
+    paths:
+      exclude:
+        - "**/*.test.ts"
+        - "**/*.spec.ts"
+        - "**/test/**"
+        - "**/scripts/**"
+    message: "Remove console.log statements before committing."
+    languages: [typescript, javascript]
+    severity: INFO
+    metadata:
+      category: quality
+
+  # Prevent TODO comments (reminder to complete)
+  - id: todo-comment
+    pattern-regex: "//\\s*(TODO|FIXME|HACK|XXX):"
+    paths:
+      exclude:
+        - "**/*.md"
+    message: "TODO/FIXME comment found - consider addressing before merge."
+    languages: [typescript, javascript]
+    severity: INFO
+    metadata:
+      category: quality

@@ -10,6 +10,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 2. **Use TodoWrite for Task Planning** - Multi-step tasks → Create todo list BEFORE coding
 3. **Clarify Requirements** - Use `AskUserQuestion` tool when requirements are ambiguous
 4. **Never Auto-Commit** - DO NOT AUTO COMMIT unless explicitly asked
+5. **Run Quality Checks After Code Changes** - ALWAYS run quality tools after modifying code:
+   ```bash
+   pnpm lint          # Check for linting errors
+   pnpm type-check    # Verify TypeScript types
+   pnpm security      # Run Semgrep security scan
+   ```
+   Fix any errors before considering the task complete.
 
 ## Project Overview
 
@@ -28,9 +35,26 @@ pnpm db:push          # Push schema changes
 pnpm db:studio        # Open Drizzle Studio
 pnpm lint             # Run ESLint
 pnpm type-check       # TypeScript checking
+pnpm format           # Run Prettier
+pnpm security         # Run Semgrep security scan
 pnpm test             # Run Vitest tests
 pnpm test:e2e         # Run Playwright E2E tests
 ```
+
+### Code Quality Tools
+
+| Tool | Purpose | Config File |
+|------|---------|-------------|
+| ESLint v9 | Linting (Next.js + TypeScript) | `eslint.config.mjs` |
+| Prettier v3 | Code formatting | `prettier-plugin-tailwindcss` |
+| TypeScript | Type checking | `tsconfig.json` |
+| Semgrep | Static security analysis | `.semgrepconfig.yml` |
+
+**Semgrep** checks for:
+- OWASP Top 10 vulnerabilities (SQL injection, XSS, secrets)
+- Missing authentication in API routes
+- Insecure cookie settings
+- Dangerous patterns (eval, document.write)
 
 ### Environment Variables
 
@@ -38,6 +62,7 @@ Required in `.env.local`:
 - `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` - PostgreSQL
 - `JWT_SECRET` - JWT signing key
 - `NEXT_PUBLIC_API_URL` - API base URL
+- `LOG_LEVEL` - Logging level (trace/debug/info/warn/error/fatal/silent). Default: 'info' in dev, 'warn' in prod
 - `NODE_ENV` - development/production
 - Optional: `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` - S3 for recordings
 - Optional: `ADMIN_API_BASE_URL`, `ADMIN_API_KEY` - Orchestrator cache management
@@ -60,7 +85,7 @@ Required in `.env.local`:
 ### API Routes
 - **Structure**: `src/app/api/[resource]/route.ts`
 - **Error handling**: Use `handleApiError()` from `src/lib/api/error-handler.ts`
-- **Handlers**: Use `handleGet()`, `handleDropdownGet()` from `src/lib/api/handlers.ts`
+- **Handlers**: Use `handleGet()`, `handleGetById()` from `src/lib/api/handlers.ts`
 - **Validation**: Zod schemas in `src/lib/validations/`
 
 ### React Hooks (TanStack Query)
@@ -229,9 +254,9 @@ export const useActivateResourceVersion = resourceVersions.useActivateVersion;
 - `call_metrics_summary` - 34 latency metrics columns
 - `call_analysis` - AI-powered insights
 
-### Config Tables (Versioned)
-- `rag_configs` + `rag_config_versions` - RAG settings
-- `voice_configs` + `voice_config_versions` - TTS settings
+### Config Tables
+- `rag_configs` + `rag_config_versions` - RAG settings (versioned)
+- `voice_configs` - Voice catalog (simple, no versioning)
 - `phone_configs` + `phone_config_mappings` - Phone number pool
 
 ## Latency Metrics

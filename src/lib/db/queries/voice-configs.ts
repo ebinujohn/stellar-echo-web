@@ -1,46 +1,25 @@
 import { db } from '@/lib/db';
 import { voiceConfigs } from '@/lib/db/schema/voice-configs';
 import { eq, desc } from 'drizzle-orm';
-import type { QueryContext } from './types';
 
 /**
  * Get all Voice configs (system-level, no tenant filtering)
  * Voice configs are a shared catalog available to all tenants
  */
-export async function getVoiceConfigs(_tenantId: string) {
-  // Note: tenantId parameter kept for API compatibility but not used
-  // Voice configs are system-level (shared across all tenants)
-  const configs = await db.query.voiceConfigs.findMany({
+export async function getVoiceConfigs() {
+  return db.query.voiceConfigs.findMany({
     where: eq(voiceConfigs.isActive, true),
     orderBy: [desc(voiceConfigs.createdAt)],
   });
-
-  // Return with null activeVersion for backward compatibility with UI
-  return configs.map((config) => ({
-    ...config,
-    activeVersion: null,
-    versionCount: 0,
-  }));
 }
 
 /**
  * Get a single Voice config by ID
  */
-export async function getVoiceConfigDetail(voiceConfigId: string, _tenantId: string) {
-  // Note: tenantId parameter kept for API compatibility but not used
-  const config = await db.query.voiceConfigs.findFirst({
+export async function getVoiceConfigDetail(voiceConfigId: string) {
+  return db.query.voiceConfigs.findFirst({
     where: eq(voiceConfigs.id, voiceConfigId),
   });
-
-  if (!config) {
-    return null;
-  }
-
-  return {
-    ...config,
-    activeVersion: null,
-    versionCount: 0,
-  };
 }
 
 /**
@@ -53,11 +32,9 @@ export async function createVoiceConfig(
     name: string;
     description?: string;
     voiceId: string;
-  },
-  _tenantId: string,
-  _userId: string
+  }
 ) {
-  // Note: tenantId and userId parameters kept for API compatibility but not used
+  // Voice configs are system-level and don't require tenant/user context
   const [newConfig] = await db
     .insert(voiceConfigs)
     .values({
@@ -81,8 +58,7 @@ export async function createVoiceConfig(
  */
 export async function updateVoiceConfig(
   voiceConfigId: string,
-  data: { name?: string; description?: string },
-  _tenantId: string
+  data: { name?: string; description?: string }
 ) {
   const [updatedConfig] = await db
     .update(voiceConfigs)
@@ -100,7 +76,7 @@ export async function updateVoiceConfig(
 /**
  * Soft delete a Voice config (set isActive = false)
  */
-export async function deleteVoiceConfig(voiceConfigId: string, _tenantId: string) {
+export async function deleteVoiceConfig(voiceConfigId: string) {
   const [deletedConfig] = await db
     .update(voiceConfigs)
     .set({
@@ -116,9 +92,8 @@ export async function deleteVoiceConfig(voiceConfigId: string, _tenantId: string
 /**
  * Get Voice configs for dropdown (simplified list)
  */
-export async function getVoiceConfigsForDropdown(_ctx: QueryContext) {
+export async function getVoiceConfigsForDropdown() {
   // Voice configs are system-level (shared across all tenants)
-  // QueryContext parameter kept for API consistency
   const configs = await db.query.voiceConfigs.findMany({
     where: eq(voiceConfigs.isActive, true),
     orderBy: [voiceConfigs.name],
@@ -131,41 +106,3 @@ export async function getVoiceConfigsForDropdown(_ctx: QueryContext) {
   }));
 }
 
-// Legacy functions kept for backward compatibility (no-op implementations)
-
-/**
- * Get versions - returns empty array (no versioning)
- */
-export async function getVoiceConfigVersions(_voiceConfigId: string, _tenantId: string) {
-  return [];
-}
-
-/**
- * Get version - returns null (no versioning)
- */
-export async function getVoiceConfigVersion(_versionId: string, _tenantId: string) {
-  return null;
-}
-
-/**
- * Create version - no-op (no versioning)
- */
-export async function createVoiceConfigVersion(
-  _voiceConfigId: string,
-  _data: any,
-  _tenantId: string,
-  _userId: string
-) {
-  return null;
-}
-
-/**
- * Activate version - no-op (no versioning)
- */
-export async function activateVoiceConfigVersion(
-  _versionId: string,
-  _voiceConfigId: string,
-  _tenantId: string
-) {
-  return null;
-}

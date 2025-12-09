@@ -68,32 +68,33 @@ const IntentCard = memo(function IntentCard({
   const [localDescription, setLocalDescription] = useState(intent.description);
   const [localExamples, setLocalExamples] = useState(intent.examples?.join('\n') || '');
 
+  // Parse examples: split by newline, trim only on save, filter empty
+  // Must be defined before callbacks that use it
+  const parseExamples = useCallback((text: string): string[] | undefined => {
+    const examples = text
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return examples.length > 0 ? examples : undefined;
+  }, []);
+
   // Sync ID to parent on blur
   const handleIdBlur = useCallback(() => {
     const newId = localId.replace(/\s+/g, '_').toLowerCase() || intentId;
     if (newId !== intentId) {
       onUpdate(newId, { description: localDescription, examples: parseExamples(localExamples) });
     }
-  }, [localId, intentId, localDescription, localExamples, onUpdate]);
+  }, [localId, intentId, localDescription, localExamples, onUpdate, parseExamples]);
 
   // Sync description to parent on blur
   const handleDescriptionBlur = useCallback(() => {
     onUpdate(localId, { description: localDescription, examples: parseExamples(localExamples) });
-  }, [localId, localDescription, localExamples, onUpdate]);
+  }, [localId, localDescription, localExamples, onUpdate, parseExamples]);
 
   // Sync examples to parent on blur
   const handleExamplesBlur = useCallback(() => {
     onUpdate(localId, { description: localDescription, examples: parseExamples(localExamples) });
-  }, [localId, localDescription, localExamples, onUpdate]);
-
-  // Parse examples: split by newline, trim only on save, filter empty
-  const parseExamples = (text: string): string[] | undefined => {
-    const examples = text
-      .split('\n')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    return examples.length > 0 ? examples : undefined;
-  };
+  }, [localId, localDescription, localExamples, onUpdate, parseExamples]);
 
   return (
     <div className="p-3 border rounded-lg space-y-3 bg-card">
@@ -330,7 +331,7 @@ export function IntentEditor({
             <>
               <p className="text-xs text-muted-foreground">
                 Define intents for LLM-based classification. Use these in
-                transitions with "Intent Match" condition.
+                transitions with &quot;Intent Match&quot; condition.
               </p>
               {intentEntries.map(([intentId, intent], index) => (
                 <IntentCard

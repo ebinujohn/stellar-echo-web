@@ -1,9 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
+import { apiFetch } from './factories/create-api-hooks';
+import { QUERY_KEYS } from './constants/query-keys';
+import { STALE_TIMES } from './constants/stale-times';
 import type { ConfigTypeCategory } from '@/lib/db/schema/workflow-config-types';
-
-// ========================================
-// Types
-// ========================================
 
 interface WorkflowConfigType {
   id: string;
@@ -21,93 +20,60 @@ interface WorkflowConfigType {
   updatedAt: Date;
 }
 
-// ========================================
-// Fetch Functions
-// ========================================
-
-async function fetchWorkflowConfigTypes(category?: ConfigTypeCategory): Promise<WorkflowConfigType[]> {
+function fetchConfigTypes(category?: ConfigTypeCategory) {
   const url = category
     ? `/api/workflow-config-types?category=${category}`
     : '/api/workflow-config-types';
-
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error('Failed to fetch workflow config types');
-  }
-  const json = await response.json();
-  return json.data;
+  return apiFetch<WorkflowConfigType[]>(url);
 }
 
-// ========================================
-// Hooks
-// ========================================
-
-/**
- * Get all workflow config types
- */
 export function useWorkflowConfigTypes() {
   return useQuery({
-    queryKey: ['workflow-config-types'],
-    queryFn: () => fetchWorkflowConfigTypes(),
-    staleTime: 30 * 60 * 1000, // 30 minutes (types rarely change)
+    queryKey: QUERY_KEYS.workflowConfigTypes.all,
+    queryFn: () => fetchConfigTypes(),
+    staleTime: STALE_TIMES.CONFIG_TYPES,
   });
 }
 
-/**
- * Get workflow config types by category
- */
 export function useWorkflowConfigTypesByCategory(category: ConfigTypeCategory) {
   return useQuery({
-    queryKey: ['workflow-config-types', category],
-    queryFn: () => fetchWorkflowConfigTypes(category),
-    staleTime: 30 * 60 * 1000, // 30 minutes
+    queryKey: QUERY_KEYS.workflowConfigTypes.byCategory(category),
+    queryFn: () => fetchConfigTypes(category),
+    staleTime: STALE_TIMES.CONFIG_TYPES,
     enabled: !!category,
   });
 }
 
-/**
- * Get node types
- */
 export function useNodeTypes() {
   return useQuery({
-    queryKey: ['workflow-config-types', 'node_type'],
-    queryFn: () => fetchWorkflowConfigTypes('node_type'),
-    staleTime: 30 * 60 * 1000,
+    queryKey: QUERY_KEYS.workflowConfigTypes.byCategory('node_type'),
+    queryFn: () => fetchConfigTypes('node_type'),
+    staleTime: STALE_TIMES.CONFIG_TYPES,
   });
 }
 
-/**
- * Get transition conditions for autocomplete
- */
 export function useTransitionConditions() {
   return useQuery({
-    queryKey: ['workflow-config-types', 'transition_condition'],
-    queryFn: () => fetchWorkflowConfigTypes('transition_condition'),
-    staleTime: 30 * 60 * 1000,
+    queryKey: QUERY_KEYS.workflowConfigTypes.byCategory('transition_condition'),
+    queryFn: () => fetchConfigTypes('transition_condition'),
+    staleTime: STALE_TIMES.CONFIG_TYPES,
   });
 }
 
-/**
- * Get action types for autocomplete
- */
 export function useActionTypes() {
   return useQuery({
-    queryKey: ['workflow-config-types', 'action_type'],
-    queryFn: () => fetchWorkflowConfigTypes('action_type'),
-    staleTime: 30 * 60 * 1000,
+    queryKey: QUERY_KEYS.workflowConfigTypes.byCategory('action_type'),
+    queryFn: () => fetchConfigTypes('action_type'),
+    staleTime: STALE_TIMES.CONFIG_TYPES,
   });
 }
 
-/**
- * Get RAG search modes
- */
 export function useSearchModes() {
   return useQuery({
-    queryKey: ['workflow-config-types', 'search_mode'],
-    queryFn: () => fetchWorkflowConfigTypes('search_mode'),
-    staleTime: 30 * 60 * 1000,
+    queryKey: QUERY_KEYS.workflowConfigTypes.byCategory('search_mode'),
+    queryFn: () => fetchConfigTypes('search_mode'),
+    staleTime: STALE_TIMES.CONFIG_TYPES,
   });
 }
 
-// Re-export types
 export type { WorkflowConfigType, ConfigTypeCategory };

@@ -1,4 +1,3 @@
-import { redirect } from 'next/navigation';
 import { requireAuth } from '@/lib/auth/session';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Navbar } from '@/components/layout/navbar';

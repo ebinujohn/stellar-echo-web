@@ -95,12 +95,10 @@ export function InitiateCallDialog({
 
   // Update call state based on status
   useEffect(() => {
-    if (callStatus) {
-      if (TERMINAL_STATUSES.includes(callStatus.status)) {
-        setCallState(callStatus.status === 'completed' ? 'completed' : 'failed');
-      }
+    if (callStatus && TERMINAL_STATUSES.includes(callStatus.status)) {
+      setCallState(callStatus.status === 'completed' ? 'completed' : 'failed');
     }
-  }, [callStatus]);
+  }, [callStatus?.status]);
 
   // Reset state when dialog opens/closes
   useEffect(() => {
@@ -162,7 +160,6 @@ export function InitiateCallDialog({
     onOpenChange(false);
   };
 
-  const isCallActive = callState === 'active' || callState === 'initiating';
   const currentStatus = callStatus?.status || activeCall?.status || '';
 
   return (

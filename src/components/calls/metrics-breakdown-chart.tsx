@@ -75,7 +75,8 @@ export function MetricsBreakdownChart({
           tick={{ fill: axisStyle.stroke }}
         />
         <ChartTooltip
-          formatter={(value: number, name: string, props: any) => [
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          formatter={(value: number, _name: string, props: any) => [
             formatLatency(value),
             props.payload.label,
           ]}

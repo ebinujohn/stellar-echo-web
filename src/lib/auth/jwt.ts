@@ -15,7 +15,7 @@ export interface JWTPayload {
 }
 
 export async function signToken(payload: Omit<JWTPayload, 'iat' | 'exp'>, expiresIn = '15m'): Promise<string> {
-  return new SignJWT(payload as any)
+  return new SignJWT(payload as Record<string, unknown>)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime(expiresIn)

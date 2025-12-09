@@ -1,141 +1,41 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/auth/session';
-import {
-  getAgentDetail,
-  updateAgent,
-  deleteAgent,
-} from '@/lib/db/queries/agents';
+import { getAgentDetail, updateAgent, deleteAgent } from '@/lib/db/queries/agents';
 import { updateAgentSchema } from '@/lib/validations/agents';
-import { z } from 'zod';
+import { handleApiError, successResponse } from '@/lib/api/error-handler';
+import { handleGetById } from '@/lib/api/handlers';
 
-type RouteContext = {
-  params: Promise<{ id: string }>;
-};
+type RouteParams = { params: Promise<{ id: string }> };
 
-export async function GET(
-  request: NextRequest,
-  context: RouteContext
-) {
-  try {
-    const session = await requireAuth();
-    const { id } = await context.params;
-
-    const agent = await getAgentDetail(id, { tenantId: session.tenantId, isGlobalUser: session.isGlobalUser });
-
-    if (!agent) {
-      return NextResponse.json(
-        { success: false, error: 'Agent not found' },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: agent,
-    });
-  } catch (error) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    console.error('API Error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
+/** GET /api/agents/[id] */
+export async function GET(_request: NextRequest, { params }: RouteParams) {
+  const { id } = await params;
+  return handleGetById(id, getAgentDetail, 'Agent');
 }
 
-export async function PUT(
-  request: NextRequest,
-  context: RouteContext
-) {
+/** PUT /api/agents/[id] */
+export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
     const session = await requireAuth();
-    const { id } = await context.params;
-    const body = await request.json();
-
-    // Validate input
-    const data = updateAgentSchema.parse(body);
-
-    // Update agent
+    const { id } = await params;
+    const data = updateAgentSchema.parse(await request.json());
     const updatedAgent = await updateAgent(id, data, session.tenantId);
-
-    if (!updatedAgent) {
-      return NextResponse.json(
-        { success: false, error: 'Agent not found' },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: updatedAgent,
-    });
+    if (!updatedAgent) throw new Error('Agent not found');
+    return successResponse(updatedAgent);
   } catch (error) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Invalid input',
-          details: error.issues,
-        },
-        { status: 400 }
-      );
-    }
-
-    console.error('API Error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
+    return handleApiError(error, { resourceName: 'Agent', fieldName: 'name' });
   }
 }
 
-export async function DELETE(
-  request: NextRequest,
-  context: RouteContext
-) {
+/** DELETE /api/agents/[id] */
+export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
     const session = await requireAuth();
-    const { id } = await context.params;
-
-    // Delete agent (cascades to versions, clears phone mappings)
+    const { id } = await params;
     const deletedAgent = await deleteAgent(id, session.tenantId);
-
-    if (!deletedAgent) {
-      return NextResponse.json(
-        { success: false, error: 'Agent not found' },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: deletedAgent,
-    });
+    if (!deletedAgent) throw new Error('Agent not found');
+    return successResponse(deletedAgent);
   } catch (error) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    console.error('API Error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
+    return handleApiError(error);
   }
 }

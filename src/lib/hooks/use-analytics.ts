@@ -1,4 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
+import { apiFetch } from './factories/create-api-hooks';
+import { QUERY_KEYS } from './constants/query-keys';
+import { STALE_TIMES } from './constants/stale-times';
 
 interface LatencyByAgentData {
   agentId: string | null;
@@ -14,36 +17,18 @@ interface TokenUsageTrendsData {
   callCount: number;
 }
 
-async function fetchLatencyByAgent(): Promise<LatencyByAgentData[]> {
-  const response = await fetch('/api/analytics/latency-by-agent');
-  if (!response.ok) {
-    throw new Error('Failed to fetch latency by agent data');
-  }
-  const json = await response.json();
-  return json.data;
-}
-
-async function fetchTokenUsageTrends(days: number = 30): Promise<TokenUsageTrendsData[]> {
-  const response = await fetch(`/api/analytics/token-usage-trends?days=${days}`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch token usage trends');
-  }
-  const json = await response.json();
-  return json.data;
-}
-
 export function useLatencyByAgent() {
   return useQuery({
-    queryKey: ['analytics', 'latency-by-agent'],
-    queryFn: fetchLatencyByAgent,
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    queryKey: QUERY_KEYS.analytics.latencyByAgent(),
+    queryFn: () => apiFetch<LatencyByAgentData[]>('/api/analytics/latency-by-agent'),
+    staleTime: STALE_TIMES.ANALYTICS,
   });
 }
 
 export function useTokenUsageTrends(days: number = 30) {
   return useQuery({
-    queryKey: ['analytics', 'token-usage-trends', days],
-    queryFn: () => fetchTokenUsageTrends(days),
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    queryKey: QUERY_KEYS.analytics.tokenUsageTrends({ days }),
+    queryFn: () => apiFetch<TokenUsageTrendsData[]>(`/api/analytics/token-usage-trends?days=${days}`),
+    staleTime: STALE_TIMES.ANALYTICS,
   });
 }

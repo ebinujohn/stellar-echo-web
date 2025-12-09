@@ -20,11 +20,14 @@ export function getLayoutedNodes(
 ): Node<WorkflowNodeData>[] {
   const {
     direction = 'TB',
-    nodeWidth = 280,
-    nodeHeight = 180,
+    nodeWidth: _nodeWidth = 280,
+    nodeHeight: _nodeHeight = 180,
     ranksep = 280,  // Increased for better vertical spacing between ranks
     nodesep = 220,  // Increased for better horizontal spacing between nodes
   } = options;
+  // Note: nodeWidth/nodeHeight defaults provided for API but actual dimensions come from getNodeDimensions
+  void _nodeWidth;
+  void _nodeHeight;
 
   // Create a new directed graph
   const dagreGraph = new dagre.graphlib.Graph();

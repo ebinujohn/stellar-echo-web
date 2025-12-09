@@ -3,15 +3,9 @@ import {
   agents,
   agentConfigVersions,
   phoneMappings,
-  type Agent,
-  type NewAgent,
-  type AgentConfigVersion,
-  type NewAgentConfigVersion,
-  type PhoneMapping,
-  type NewPhoneMapping,
 } from '@/lib/db/schema/agents';
 import { calls } from '@/lib/db/schema/calls';
-import { eq, and, desc, count, sql } from 'drizzle-orm';
+import { eq, and, desc, count } from 'drizzle-orm';
 import { tenantFilter, type QueryContext } from './utils';
 
 /**
@@ -94,7 +88,7 @@ export async function getAgentDetail(agentId: string, ctx: QueryContext) {
  */
 export async function createAgent(
   data: { name: string; description?: string },
-  configJson: any,
+  configJson: Record<string, unknown>,
   tenantId: string,
   userId: string
 ) {
@@ -224,7 +218,7 @@ export async function getAgentVersion(versionId: string, ctx: QueryContext) {
  */
 export async function createAgentVersion(
   agentId: string,
-  configJson: any,
+  configJson: Record<string, unknown>,
   userId: string,
   tenantId: string,
   notes?: string,

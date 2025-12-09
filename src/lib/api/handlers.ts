@@ -52,8 +52,3 @@ export async function handleGetById<T>(
   }
 }
 
-/**
- * Generic handler for dropdown endpoints (simplified list for select elements).
- * @deprecated Use handleGet directly - this is just a wrapper with no additional logic
- */
-export const handleDropdownGet = handleGet;

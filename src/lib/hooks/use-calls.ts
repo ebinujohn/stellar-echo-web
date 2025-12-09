@@ -1,4 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiFetch } from './factories/create-api-hooks';
+import { QUERY_KEYS } from './constants/query-keys';
+import { STALE_TIMES } from './constants/stale-times';
 import type { CallFilters, PaginatedResponse, CallListItem, KPIMetrics } from '@/types';
 
 interface CallsQueryParams extends CallFilters {
@@ -8,7 +11,7 @@ interface CallsQueryParams extends CallFilters {
 
 export function useCalls(params: CallsQueryParams = {}) {
   return useQuery({
-    queryKey: ['calls', params],
+    queryKey: QUERY_KEYS.calls.all(params),
     queryFn: async () => {
       const searchParams = new URLSearchParams();
 
@@ -32,13 +35,13 @@ export function useCalls(params: CallsQueryParams = {}) {
       const json = await response.json();
       return json as PaginatedResponse<CallListItem>;
     },
-    staleTime: 30000, // 30 seconds
+    staleTime: STALE_TIMES.CALLS_LIST,
   });
 }
 
 export function useCallsStats(filters?: { startDate?: Date; endDate?: Date }) {
   return useQuery({
-    queryKey: ['calls-stats', filters],
+    queryKey: QUERY_KEYS.calls.stats(filters),
     queryFn: async () => {
       const searchParams = new URLSearchParams();
 
@@ -49,16 +52,9 @@ export function useCallsStats(filters?: { startDate?: Date; endDate?: Date }) {
         searchParams.set('endDate', filters.endDate.toISOString());
       }
 
-      const response = await fetch(`/api/calls/stats?${searchParams.toString()}`);
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch stats');
-      }
-
-      const json = await response.json();
-      return json.data as KPIMetrics;
+      return apiFetch<KPIMetrics>(`/api/calls/stats?${searchParams.toString()}`);
     },
-    staleTime: 60000, // 1 minute
+    staleTime: STALE_TIMES.STATS,
   });
 }
 
@@ -133,8 +129,7 @@ export function useInitiateOutboundCall() {
       return json.data as OutboundCallResponse;
     },
     onSuccess: () => {
-      // Invalidate calls list to show the new outbound call
-      queryClient.invalidateQueries({ queryKey: ['calls'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.calls.all() });
     },
   });
 }
@@ -144,7 +139,7 @@ export function useInitiateOutboundCall() {
  */
 export function useCallStatus(callId: string | null, options?: { enabled?: boolean; refetchInterval?: number }) {
   return useQuery({
-    queryKey: ['call-status', callId],
+    queryKey: ['call-status', callId] as const,
     queryFn: async (): Promise<CallStatusResponse> => {
       if (!callId) throw new Error('Call ID is required');
 

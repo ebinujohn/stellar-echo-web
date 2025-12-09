@@ -4,9 +4,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import {
   MessageSquare,
-  GitBranch,
-  Mic,
-  Clock,
+  ArrowRight,
+  FileText,
+  Circle,
   Zap,
 } from 'lucide-react';
 import { useCallTimeline } from '@/lib/hooks/use-call-detail';
@@ -15,19 +15,6 @@ import type { TimelineEvent } from '@/lib/db/queries/call-details';
 
 interface CallTimelineProps {
   callId: string;
-}
-
-function getEventIcon(type: string) {
-  switch (type) {
-    case 'message':
-      return MessageSquare;
-    case 'transition':
-      return GitBranch;
-    case 'transcript':
-      return Mic;
-    default:
-      return Clock;
-  }
 }
 
 function getEventColor(type: string) {
@@ -43,8 +30,21 @@ function getEventColor(type: string) {
   }
 }
 
+// Icon components mapped by event type to avoid creating during render
+const EventIcon = ({ type }: { type: string }) => {
+  switch (type) {
+    case 'message':
+      return <MessageSquare className="h-4 w-4" />;
+    case 'transition':
+      return <ArrowRight className="h-4 w-4" />;
+    case 'transcript':
+      return <FileText className="h-4 w-4" />;
+    default:
+      return <Circle className="h-4 w-4" />;
+  }
+};
+
 function TimelineEventItem({ event }: { event: TimelineEvent }) {
-  const Icon = getEventIcon(event.type);
   const colorClass = getEventColor(event.type);
 
   return (
@@ -54,7 +54,7 @@ function TimelineEventItem({ event }: { event: TimelineEvent }) {
 
       {/* Icon */}
       <div className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 bg-background ${colorClass}`}>
-        <Icon className="h-4 w-4" />
+        <EventIcon type={event.type} />
       </div>
 
       {/* Content */}
@@ -73,18 +73,18 @@ function TimelineEventItem({ event }: { event: TimelineEvent }) {
         {event.type === 'message' && (
           <div className="rounded-lg border bg-card p-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium capitalize">{event.data.role}</span>
+              <span className="text-sm font-medium capitalize">{String(event.data.role)}</span>
               {event.data.latencyMs && (
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Zap className="h-3 w-3" />
-                  {event.data.latencyMs}ms
+                  {Number(event.data.latencyMs)}ms
                 </div>
               )}
             </div>
-            <p className="text-sm text-muted-foreground">{event.data.content}</p>
+            <p className="text-sm text-muted-foreground">{String(event.data.content)}</p>
             {event.data.tokensUsed && (
               <div className="mt-2 text-xs text-muted-foreground">
-                Tokens: {event.data.tokensUsed}
+                Tokens: {Number(event.data.tokensUsed)}
               </div>
             )}
           </div>
@@ -95,14 +95,14 @@ function TimelineEventItem({ event }: { event: TimelineEvent }) {
             <div className="text-sm">
               {event.data.fromState && (
                 <>
-                  <span className="font-medium">{event.data.fromState}</span>
+                  <span className="font-medium">{String(event.data.fromState)}</span>
                   {' → '}
                 </>
               )}
-              <span className="font-medium">{event.data.toState}</span>
+              <span className="font-medium">{String(event.data.toState)}</span>
             </div>
             {event.data.reason && (
-              <p className="text-xs text-muted-foreground mt-1">{event.data.reason}</p>
+              <p className="text-xs text-muted-foreground mt-1">{String(event.data.reason)}</p>
             )}
           </div>
         )}
@@ -110,14 +110,14 @@ function TimelineEventItem({ event }: { event: TimelineEvent }) {
         {event.type === 'transcript' && (
           <div className="rounded-lg border bg-card p-3">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-sm font-medium capitalize">{event.data.speaker}</span>
+              <span className="text-sm font-medium capitalize">{String(event.data.speaker)}</span>
               {event.data.confidence && (
                 <span className="text-xs text-muted-foreground">
-                  {(event.data.confidence * 100).toFixed(0)}% confidence
+                  {(Number(event.data.confidence) * 100).toFixed(0)}% confidence
                 </span>
               )}
             </div>
-            <p className="text-sm">{event.data.text}</p>
+            <p className="text-sm">{String(event.data.text)}</p>
           </div>
         )}
       </div>

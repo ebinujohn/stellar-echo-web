@@ -165,9 +165,9 @@ export function VoiceConfigList() {
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-2">
-                  {config.activeVersion && (
+                  {config.voiceId && (
                     <Badge variant="secondary" className="font-mono text-xs">
-                      {config.activeVersion.voiceId.substring(0, 16)}...
+                      {config.voiceId.length > 16 ? `${config.voiceId.substring(0, 16)}...` : config.voiceId}
                     </Badge>
                   )}
                 </div>

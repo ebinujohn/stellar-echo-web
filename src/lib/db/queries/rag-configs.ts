@@ -2,10 +2,8 @@ import { db } from '@/lib/db';
 import {
   ragConfigs,
   ragConfigVersions,
-  type RagConfig,
-  type RagConfigVersion,
 } from '@/lib/db/schema/rag-configs';
-import { eq, and, desc, count, inArray, sql } from 'drizzle-orm';
+import { eq, and, desc, count, inArray } from 'drizzle-orm';
 import { tenantFilter, type QueryContext } from './utils';
 
 /**

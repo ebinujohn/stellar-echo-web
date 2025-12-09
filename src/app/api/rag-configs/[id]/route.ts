@@ -1,159 +1,43 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/auth/session';
 import { getRagConfigDetail, updateRagConfig, deleteRagConfig } from '@/lib/db/queries/rag-configs';
 import { updateRagConfigSchema } from '@/lib/validations/rag-configs';
-import { z } from 'zod';
+import { handleApiError, successResponse } from '@/lib/api/error-handler';
+import { handleGetById } from '@/lib/api/handlers';
 
-interface RouteParams {
-  params: Promise<{ id: string }>;
+type RouteParams = { params: Promise<{ id: string }> };
+
+/** GET /api/rag-configs/[id] */
+export async function GET(_request: NextRequest, { params }: RouteParams) {
+  const { id } = await params;
+  return handleGetById(id, getRagConfigDetail, 'RAG config');
 }
 
-/**
- * GET /api/rag-configs/[id]
- * Get a single RAG config with its active version
- */
-export async function GET(request: NextRequest, { params }: RouteParams) {
-  try {
-    const session = await requireAuth();
-    const { id } = await params;
-
-    const ctx = { tenantId: session.tenantId, isGlobalUser: session.isGlobalUser };
-    const config = await getRagConfigDetail(id, ctx);
-
-    if (!config) {
-      return NextResponse.json(
-        { success: false, error: 'RAG config not found' },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: config,
-    });
-  } catch (error) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    console.error('API Error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
-}
-
-/**
- * PUT /api/rag-configs/[id]
- * Update RAG config metadata (name, description)
- */
+/** PUT /api/rag-configs/[id] */
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
     const session = await requireAuth();
     const { id } = await params;
-    const body = await request.json();
-
-    // Validate input
-    const data = updateRagConfigSchema.parse(body);
-
+    const data = updateRagConfigSchema.parse(await request.json());
     const ctx = { tenantId: session.tenantId, isGlobalUser: session.isGlobalUser };
-
-    // Check if config exists
-    const existingConfig = await getRagConfigDetail(id, ctx);
-    if (!existingConfig) {
-      return NextResponse.json(
-        { success: false, error: 'RAG config not found' },
-        { status: 404 }
-      );
-    }
-
-    // Update the config
     const updatedConfig = await updateRagConfig(id, data, ctx);
-
-    return NextResponse.json({
-      success: true,
-      data: updatedConfig,
-    });
-
+    if (!updatedConfig) throw new Error('RAG config not found');
+    return successResponse(updatedConfig);
   } catch (error) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Invalid input',
-          details: error.issues,
-        },
-        { status: 400 }
-      );
-    }
-
-    // Handle unique constraint violation
-    if (error instanceof Error && error.message.includes('unique')) {
-      return NextResponse.json(
-        { success: false, error: 'A RAG config with this name already exists' },
-        { status: 409 }
-      );
-    }
-
-    console.error('API Error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
+    return handleApiError(error, { resourceName: 'RAG config', fieldName: 'name' });
   }
 }
 
-/**
- * DELETE /api/rag-configs/[id]
- * Soft delete a RAG config (set isActive = false)
- */
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+/** DELETE /api/rag-configs/[id] */
+export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
     const session = await requireAuth();
     const { id } = await params;
-
     const ctx = { tenantId: session.tenantId, isGlobalUser: session.isGlobalUser };
-
-    // Check if config exists
-    const existingConfig = await getRagConfigDetail(id, ctx);
-    if (!existingConfig) {
-      return NextResponse.json(
-        { success: false, error: 'RAG config not found' },
-        { status: 404 }
-      );
-    }
-
-    // Soft delete the config
     const deletedConfig = await deleteRagConfig(id, ctx);
-
-    return NextResponse.json({
-      success: true,
-      data: deletedConfig,
-    });
-
+    if (!deletedConfig) throw new Error('RAG config not found');
+    return successResponse(deletedConfig);
   } catch (error) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    console.error('API Error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
+    return handleApiError(error);
   }
 }

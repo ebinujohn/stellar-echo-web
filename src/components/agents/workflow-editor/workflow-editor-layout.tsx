@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useMemo, useRef, ReactNode, useContext } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef, ReactNode } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -11,8 +11,6 @@ import ReactFlow, {
   Connection,
   Edge,
   Node,
-  NodeChange,
-  EdgeChange,
   Panel,
   MarkerType,
   useReactFlow,
@@ -75,7 +73,7 @@ function WorkflowEditorContent({ initialConfig, onSave, agentId }: WorkflowEdito
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedNode, setSelectedNode] = useState<Node<WorkflowNodeData> | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
+  const [_isSaving, _setIsSaving] = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [validationResult, setValidationResult] = useState<{
     valid: boolean;
@@ -137,7 +135,7 @@ function WorkflowEditorContent({ initialConfig, onSave, agentId }: WorkflowEdito
       }
       isInitializedRef.current = true;
     }
-  }, [initialConfig, setNodes, setEdges, draftContext?.workflowDraft]);
+  }, [initialConfig, setNodes, setEdges, draftContext?.workflowDraft, layoutDirection]);
 
   // Sync edges to node.data.transitions whenever edges change
   // This ensures node labels and properties panel stay in sync with canvas
@@ -427,8 +425,8 @@ function WorkflowEditorContent({ initialConfig, onSave, agentId }: WorkflowEdito
     [setNodes, setEdges]
   );
 
-  // Handle save
-  const handleSave = useCallback(async () => {
+  // Handle save - exported for parent components if needed
+  const _handleSave = useCallback(async () => {
     if (!onSave) return;
 
     // Validate first
@@ -439,7 +437,7 @@ function WorkflowEditorContent({ initialConfig, onSave, agentId }: WorkflowEdito
       return;
     }
 
-    setIsSaving(true);
+    _setIsSaving(true);
     try {
       const updatedConfig = nodesToWorkflow(nodes, edges, initialConfig);
       await onSave(updatedConfig);
@@ -455,7 +453,7 @@ function WorkflowEditorContent({ initialConfig, onSave, agentId }: WorkflowEdito
       console.error('Failed to save workflow:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to save workflow');
     } finally {
-      setIsSaving(false);
+      _setIsSaving(false);
     }
   }, [nodes, edges, initialConfig, onSave, draftContext]);
 

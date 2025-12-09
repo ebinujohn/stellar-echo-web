@@ -15,7 +15,6 @@ import {
   Activity,
   Phone,
   PhoneOutgoing,
-  History,
   Edit,
   Trash2,
   CheckCircle2,
@@ -46,6 +45,36 @@ interface AgentDetailClientProps {
   agentId: string;
 }
 
+// Type for agent active version with all expected properties
+interface AgentActiveVersion {
+  id: string;
+  version: number;
+  configJson: {
+    workflow?: {
+      llm?: {
+        enabled?: boolean;
+        model_name?: string;
+        temperature?: number;
+        max_tokens?: number;
+      };
+      tts?: {
+        enabled?: boolean;
+      };
+      nodes?: unknown[];
+    };
+    tts?: {
+      enabled?: boolean;
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    [key: string]: any;
+  };
+  globalPrompt: string | null;
+  ragEnabled: boolean;
+  ragConfigId: string | null;
+  voiceConfigId: string | null;
+  createdAt: Date;
+}
+
 // Inner component that uses the context
 function AgentDetailContent({ agentId }: AgentDetailClientProps) {
   const router = useRouter();
@@ -53,7 +82,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
   const { data: phoneConfigs } = useAgentPhoneConfigs(agentId);
 
   // Get voice config ID from active version
-  const voiceConfigId = (agent?.activeVersion as any)?.voiceConfigId;
+  const voiceConfigId = (agent?.activeVersion as AgentActiveVersion | undefined)?.voiceConfigId;
   const { data: voiceConfig } = useVoiceConfig(voiceConfigId || '');
 
   // Get versions for RAG Query tab
@@ -67,13 +96,13 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
   // Unsaved changes dialog state
   const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
-  const [isSavingFromDialog, setIsSavingFromDialog] = useState(false);
+  const isSavingFromDialog = false; // Currently not used but kept for UnsavedChangesDialog prop
 
   // Save version dialog state
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [saveDialogContext, setSaveDialogContext] = useState<{
     type: 'workflow' | 'settings' | 'combined';
-    config?: any;
+    config?: Record<string, unknown>;
     ragEnabled?: boolean;
     ragConfigId?: string | null;
     voiceConfigId?: string | null;
@@ -151,45 +180,18 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
     return () => document.removeEventListener('click', handleClick, true);
   }, [isDirty, agentId]);
 
-  // Handle unsaved changes dialog action
-  const handleUnsavedAction = useCallback(
-    async (action: UnsavedChangesAction) => {
-      if (action === 'cancel') {
-        setUnsavedDialogOpen(false);
-        setPendingNavigation(null);
-        return;
-      }
-
-      if (action === 'discard') {
-        // Clear all drafts and navigate
-        clearAllDrafts();
-        setUnsavedDialogOpen(false);
-        if (pendingNavigation) {
-          // Allow navigation through and trigger it
-          allowNavigationRef.current = true;
-          router.push(pendingNavigation);
-          setPendingNavigation(null);
-        }
-        return;
-      }
-
-      if (action === 'save') {
-        // Close unsaved dialog and open save notes dialog with navigation context
-        setUnsavedDialogOpen(false);
-        // Trigger combined save which will open the notes dialog
-        // Pass the pending navigation to continue after save
-        handleCombinedSaveWithNavigation(pendingNavigation);
-        setPendingNavigation(null);
-      }
-    },
-    [pendingNavigation, router, clearAllDrafts]
-  );
-
   // Combined save that includes navigation after save
-  const handleCombinedSaveWithNavigation = (navigateTo: string | null) => {
+  const handleCombinedSaveWithNavigation = useCallback((navigateTo: string | null) => {
     if (!agent?.activeVersion) return;
 
-    const activeVersion = agent.activeVersion as any;
+    interface ActiveVersionType {
+      configJson: Record<string, unknown>;
+      globalPrompt: string | null;
+      ragEnabled: boolean;
+      ragConfigId: string | null;
+      voiceConfigId: string | null;
+    }
+    const activeVersion = agent.activeVersion as ActiveVersionType;
     let configJson = activeVersion.configJson;
     let globalPrompt = activeVersion.globalPrompt;
     let ragEnabled = activeVersion.ragEnabled;
@@ -227,10 +229,13 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
         aggregate_sentences: settingsDraft.tts.aggregateSentences,
       };
 
+      const currentWorkflow = typeof configJson.workflow === 'object' && configJson.workflow !== null
+        ? configJson.workflow as Record<string, unknown>
+        : {};
       configJson = {
         ...configJson,
         workflow: {
-          ...configJson.workflow,
+          ...currentWorkflow,
           llm: llmConfig,
           tts: ttsConfig,
         },
@@ -257,13 +262,47 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
       navigateAfterSave: navigateTo || undefined,
     });
     setSaveDialogOpen(true);
-  };
+  }, [agent?.activeVersion, isWorkflowDirty, workflowDraft, isSettingsDirty, settingsDraft]);
+
+  // Handle unsaved changes dialog action
+  const handleUnsavedAction = useCallback(
+    async (action: UnsavedChangesAction) => {
+      if (action === 'cancel') {
+        setUnsavedDialogOpen(false);
+        setPendingNavigation(null);
+        return;
+      }
+
+      if (action === 'discard') {
+        // Clear all drafts and navigate
+        clearAllDrafts();
+        setUnsavedDialogOpen(false);
+        if (pendingNavigation) {
+          // Allow navigation through and trigger it
+          allowNavigationRef.current = true;
+          router.push(pendingNavigation);
+          setPendingNavigation(null);
+        }
+        return;
+      }
+
+      if (action === 'save') {
+        // Close unsaved dialog and open save notes dialog with navigation context
+        setUnsavedDialogOpen(false);
+        // Trigger combined save which will open the notes dialog
+        // Pass the pending navigation to continue after save
+        handleCombinedSaveWithNavigation(pendingNavigation);
+        setPendingNavigation(null);
+      }
+    },
+    [pendingNavigation, router, clearAllDrafts, handleCombinedSaveWithNavigation]
+  );
 
   // Handler for settings form - opens dialog to get notes, then saves
   // voiceConfigId is FK to voice_configs table (voice selection)
   // TTS tuning params are in configJson.workflow.tts
   const handleSettingsSave = async (
-    config: any,
+    config: Record<string, unknown>,
     ragEnabled?: boolean,
     ragConfigId?: string | null,
     voiceConfigId?: string | null,
@@ -281,70 +320,16 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
     setSaveDialogOpen(true);
   };
 
-  // Helper to save settings from draft
-  const handleSettingsSaveFromDraft = async () => {
-    if (!settingsDraft || !agent?.activeVersion) return;
-
-    const activeVersion = agent.activeVersion as any;
-    const currentConfig = activeVersion.configJson;
-
-    // Build the config from draft
-    const llmConfig = {
-      enabled: settingsDraft.llmEnabled,
-      model_name: settingsDraft.llmModel,
-      temperature: settingsDraft.llmTemperature,
-      max_tokens: settingsDraft.llmMaxTokens,
-      service_tier: settingsDraft.llmServiceTier,
-    };
-
-    // Build TTS config from draft - tuning params in workflow.tts per AGENT_JSON_SCHEMA.md
-    // Note: voice_name is NOT included - voice selection is via voiceConfigId FK
-    const ttsConfig = {
-      enabled: settingsDraft.ttsEnabled,
-      model: settingsDraft.tts.model,
-      stability: settingsDraft.tts.stability,
-      similarity_boost: settingsDraft.tts.similarityBoost,
-      style: settingsDraft.tts.style,
-      use_speaker_boost: settingsDraft.tts.useSpeakerBoost,
-      enable_ssml_parsing: settingsDraft.tts.enableSsmlParsing,
-      pronunciation_dictionaries_enabled: settingsDraft.tts.pronunciationDictionariesEnabled,
-      pronunciation_dictionary_ids: settingsDraft.tts.pronunciationDictionaryIds
-        .split(',')
-        .map((id: string) => id.trim())
-        .filter(Boolean),
-      aggregate_sentences: settingsDraft.tts.aggregateSentences,
-    };
-
-    const updatedConfig = {
-      ...currentConfig,
-      workflow: {
-        ...currentConfig.workflow,
-        // Note: global_prompt goes to DB column, not workflow JSON
-        llm: llmConfig,
-        tts: ttsConfig, // TTS tuning params inside workflow per AGENT_JSON_SCHEMA.md
-      },
-      // Remove deprecated root-level fields
-      tts: undefined,
-      stt: undefined,
-      llm: undefined,
-      rag: undefined,
-      auto_hangup: { enabled: settingsDraft.autoHangupEnabled },
-    };
-
-    await handleSettingsSave(
-      updatedConfig,
-      settingsDraft.ragEnabled,
-      settingsDraft.ragConfigId,
-      settingsDraft.voiceConfigId,
-      settingsDraft.globalPrompt
-    );
-  };
-
   // Handler for workflow editor - opens dialog to get notes, then saves
   // voiceConfigId is FK to voice_configs table (voice selection)
-  const handleWorkflowSave = async (config: any) => {
+  const handleWorkflowSave = async (config: Record<string, unknown>) => {
     // Store context and open dialog
-    const activeVersion = agent?.activeVersion as any;
+    const activeVersion = agent?.activeVersion as {
+      ragEnabled?: boolean;
+      ragConfigId?: string | null;
+      voiceConfigId?: string | null;
+      globalPrompt?: string | null;
+    } | null;
     setSaveDialogContext({
       type: 'workflow',
       config,
@@ -361,7 +346,14 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
   const handleCombinedSave = async () => {
     if (!agent?.activeVersion) return;
 
-    const activeVersion = agent.activeVersion as any;
+    interface ActiveVersionType {
+      configJson: Record<string, unknown>;
+      globalPrompt: string | null;
+      ragEnabled: boolean;
+      ragConfigId: string | null;
+      voiceConfigId: string | null;
+    }
+    const activeVersion = agent.activeVersion as ActiveVersionType;
     let configJson = activeVersion.configJson;
     let globalPrompt = activeVersion.globalPrompt;
     let ragEnabled = activeVersion.ragEnabled;
@@ -401,10 +393,11 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
         aggregate_sentences: settingsDraft.tts.aggregateSentences,
       };
 
+      const existingWorkflow = configJson.workflow || {};
       configJson = {
         ...configJson,
         workflow: {
-          ...configJson.workflow,
+          ...existingWorkflow,
           // Note: global_prompt goes to DB column, not workflow JSON
           llm: llmConfig,
           tts: ttsConfig, // TTS tuning params inside workflow per AGENT_JSON_SCHEMA.md
@@ -444,7 +437,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
     try {
       await createVersion.mutateAsync({
         agentId,
-        configJson: saveDialogContext.config,
+        configJson: saveDialogContext.config || {},
         notes,
         globalPrompt: saveDialogContext.globalPrompt,
         ragEnabled: saveDialogContext.ragEnabled,
@@ -476,24 +469,6 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
     } catch (error) {
       toast.error('Failed to save changes');
       throw error;
-    }
-  };
-
-  // Get tab label for dialog
-  const getTabLabel = (tab: string) => {
-    switch (tab) {
-      case 'overview':
-        return 'Overview';
-      case 'workflow':
-        return 'Workflow Editor';
-      case 'versions':
-        return 'Versions';
-      case 'settings':
-        return 'Settings';
-      case 'rag-query':
-        return 'RAG Query';
-      default:
-        return tab;
     }
   };
 
@@ -669,7 +644,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
               <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-500" />
             )}
           </TabsTrigger>
-          {(agent.activeVersion as any)?.ragEnabled && (
+          {(agent.activeVersion as AgentActiveVersion)?.ragEnabled && (
             <TabsTrigger value="rag-query">
               <Database className="mr-1.5 h-4 w-4" />
               RAG Query
@@ -869,25 +844,25 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
                     <div>
                       <div className="text-muted-foreground">Enabled</div>
                       <div className="font-medium">
-                        {(agent.activeVersion.configJson.workflow as any)?.llm?.enabled !== false ? 'Yes' : 'No'}
+                        {(agent.activeVersion.configJson as AgentActiveVersion['configJson']).workflow?.llm?.enabled !== false ? 'Yes' : 'No'}
                       </div>
                     </div>
                     <div>
                       <div className="text-muted-foreground">Model</div>
                       <div className="font-mono text-xs">
-                        {(agent.activeVersion.configJson.workflow as any)?.llm?.model_name || 'N/A'}
+                        {(agent.activeVersion.configJson as AgentActiveVersion['configJson']).workflow?.llm?.model_name || 'N/A'}
                       </div>
                     </div>
                     <div>
                       <div className="text-muted-foreground">Temperature</div>
                       <div className="font-medium">
-                        {(agent.activeVersion.configJson.workflow as any)?.llm?.temperature ?? 'N/A'}
+                        {(agent.activeVersion.configJson as AgentActiveVersion['configJson']).workflow?.llm?.temperature ?? 'N/A'}
                       </div>
                     </div>
                     <div>
                       <div className="text-muted-foreground">Max Tokens</div>
                       <div className="font-medium">
-                        {(agent.activeVersion.configJson.workflow as any)?.llm?.max_tokens || 'N/A'}
+                        {(agent.activeVersion.configJson as AgentActiveVersion['configJson']).workflow?.llm?.max_tokens || 'N/A'}
                       </div>
                     </div>
                   </div>
@@ -911,7 +886,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
                     <div>
                       <div className="text-muted-foreground">TTS Enabled</div>
                       <div className="font-medium">
-                        {(agent.activeVersion.configJson as any).tts?.enabled !== false ? 'Yes' : 'No'}
+                        {(agent.activeVersion.configJson as AgentActiveVersion['configJson']).tts?.enabled !== false ? 'Yes' : 'No'}
                       </div>
                     </div>
                   </div>
@@ -950,13 +925,13 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
                     <div>
                       <div className="text-muted-foreground">RAG Enabled</div>
                       <div className="font-medium">
-                        {(agent.activeVersion as any).ragEnabled ? 'Yes' : 'No'}
+                        {(agent.activeVersion as AgentActiveVersion).ragEnabled ? 'Yes' : 'No'}
                       </div>
                     </div>
                     <div>
                       <div className="text-muted-foreground">Configuration</div>
                       <div className="font-medium">
-                        {(agent.activeVersion as any).ragConfigId ? 'Linked' : 'Not Configured'}
+                        {(agent.activeVersion as AgentActiveVersion).ragConfigId ? 'Linked' : 'Not Configured'}
                       </div>
                     </div>
                   </div>
@@ -1005,7 +980,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
                   <FileCode className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p className="text-lg font-medium mb-2">No Active Configuration</p>
                   <p className="text-sm">
-                    This agent doesn't have an active workflow version.
+                    This agent does not have an active workflow version.
                   </p>
                 </div>
               </CardContent>
@@ -1031,7 +1006,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
               globalPrompt={agent.activeVersion.globalPrompt}
               ragEnabled={agent.activeVersion.ragEnabled}
               ragConfigId={agent.activeVersion.ragConfigId}
-              voiceConfigId={(agent.activeVersion as any)?.voiceConfigId}
+              voiceConfigId={(agent.activeVersion as AgentActiveVersion)?.voiceConfigId}
               onSave={handleSettingsSave}
             />
           ) : (
@@ -1047,7 +1022,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
                   <Settings className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p className="text-lg font-medium mb-2">No Active Configuration</p>
                   <p className="text-sm">
-                    This agent doesn't have an active workflow version.
+                    This agent does not have an active workflow version.
                   </p>
                 </div>
               </CardContent>
@@ -1056,11 +1031,11 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
         </TabsContent>
 
         {/* RAG Query Tab - Only shown when RAG is enabled */}
-        {(agent.activeVersion as any)?.ragEnabled && versions && (
+        {(agent.activeVersion as AgentActiveVersion)?.ragEnabled && versions && (
           <TabsContent value="rag-query" className="space-y-4">
             <RagQueryTab
               agentId={agentId}
-              versions={versions.map((v: any) => ({
+              versions={versions.map((v: { id: string; version: number; isActive: boolean; createdAt: Date }) => ({
                 id: v.id,
                 version: v.version,
                 isActive: v.isActive,

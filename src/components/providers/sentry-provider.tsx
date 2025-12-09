@@ -2,6 +2,9 @@
 
 import { useEffect } from "react";
 import * as Sentry from "@sentry/nextjs";
+import { browserLoggers } from "@/lib/browser-logger";
+
+const log = browserLoggers.sentry;
 
 /**
  * SentryProvider initializes the Sentry client-side SDK.
@@ -17,18 +20,14 @@ export function SentryProvider() {
       process.env.NEXT_PUBLIC_SENTRY_ENABLED === "true";
 
     if (!dsn || !isEnabled) {
-      if (process.env.NODE_ENV === "development") {
-        console.log("[Sentry] Client SDK disabled - DSN:", !!dsn, "Enabled:", isEnabled);
-      }
+      log.debug("Client SDK disabled", { hasDsn: !!dsn, isEnabled });
       return;
     }
 
     // Check if Sentry is already initialized
     const client = Sentry.getClient();
     if (client) {
-      if (process.env.NODE_ENV === "development") {
-        console.log("[Sentry] Client SDK already initialized");
-      }
+      log.debug("Client SDK already initialized");
       return;
     }
 
@@ -72,9 +71,7 @@ export function SentryProvider() {
       ],
     });
 
-    if (process.env.NODE_ENV === "development") {
-      console.log("[Sentry] Client SDK initialized successfully");
-    }
+    log.debug("Client SDK initialized successfully");
   }, []);
 
   // This component doesn't render anything
