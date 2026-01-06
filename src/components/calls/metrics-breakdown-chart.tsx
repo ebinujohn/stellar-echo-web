@@ -76,7 +76,7 @@ export function MetricsBreakdownChart({
         />
         <ChartTooltip
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          formatter={(value: number, _name: string, props: any) => [
+          formatter={(value: number, _name: string | undefined, props: any) => [
             formatLatency(value),
             props.payload.label,
           ]}

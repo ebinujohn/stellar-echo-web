@@ -411,6 +411,161 @@ POST /admin/rag/query
 
 ---
 
+### Deploy RAG from S3
+
+Deploy RAG database files from S3 to local storage (EFS in production) and register in PostgreSQL. Supports both synchronous and asynchronous execution.
+
+```
+POST /admin/rag/deploy
+```
+
+**Request Body:**
+```json
+{
+  "s3_url": "s3://my-bucket/rag-data/tenant-123/rag-456",
+  "tenant_id": "550e8400-e29b-41d4-a716-446655440000",
+  "rag_name": "Product Knowledge Base",
+  "rag_id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+  "description": "Product catalog and FAQ knowledge base",
+  "link_to_agent_id": "agent-uuid-to-link",
+  "force_overwrite": false,
+  "run_async": true,
+  "rag_config": {
+    "search_mode": "hybrid",
+    "top_k": 5
+  }
+}
+```
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `s3_url` | string | **Yes** | S3 URL containing RAG files (s3:// or https:// format). Expected structure: `{prefix}/faiss/index.faiss`, `{prefix}/faiss/mapping.pkl`, `{prefix}/metadata/rag.db` |
+| `tenant_id` | string | **Yes** | Target tenant UUID |
+| `rag_name` | string | **Yes** | Display name for RAG config (1-255 chars) |
+| `rag_id` | string | No | RAG config UUID. If not provided, extracted from S3 URL path (last component) |
+| `description` | string | No | Optional description for RAG config |
+| `link_to_agent_id` | string | No | Optional agent UUID to auto-link this RAG config to |
+| `force_overwrite` | boolean | No | Overwrite existing local files (default: false) |
+| `run_async` | boolean | No | Run in background (default: false). If true, returns immediately with deployment_id |
+| `rag_config` | object | No | Optional RAG configuration overrides (search_mode, top_k, rrf_k, etc.) |
+
+**Synchronous Response (run_async=false):**
+```json
+{
+  "success": true,
+  "deployment_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "status": "completed",
+  "message": "RAG deployment completed successfully",
+  "rag_config_id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+  "rag_version": 1,
+  "paths": {
+    "faiss_index": "/app/data/tenants/tenant-123/rag-456/faiss/index.faiss",
+    "faiss_mapping": "/app/data/tenants/tenant-123/rag-456/faiss/mapping.pkl",
+    "sqlite_db": "/app/data/tenants/tenant-123/rag-456/metadata/rag.db"
+  }
+}
+```
+
+**Asynchronous Response (run_async=true):**
+```json
+{
+  "success": true,
+  "deployment_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "status": "pending",
+  "message": "Deployment started in background. Poll /admin/rag/deploy/{deployment_id}/status for progress."
+}
+```
+
+**Error Responses:**
+
+| Status Code | Scenario | Detail |
+|-------------|----------|--------|
+| 400 Bad Request | Invalid UUID format | `"Invalid UUID format: ..."` |
+| 400 Bad Request | Missing RAG ID | `"RAG ID must be provided or extractable from S3 URL path"` |
+| 404 Not Found | Tenant not found | `"Tenant not found: <tenant_id>"` |
+| 500 Internal Server Error | S3 files not found | `"Required RAG files not found in S3: ..."` |
+| 500 Internal Server Error | AWS credentials error | `"AWS credentials not configured or invalid"` |
+
+---
+
+### Get RAG Deployment Status
+
+Get the current status of a RAG deployment (for async deployments).
+
+```
+GET /admin/rag/deploy/{deployment_id}/status
+```
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `deployment_id` | string | Deployment UUID returned from deploy endpoint |
+
+**Response:**
+```json
+{
+  "deployment_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "status": "downloading",
+  "tenant_id": "550e8400-e29b-41d4-a716-446655440000",
+  "rag_id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+  "s3_url": "s3://my-bucket/rag-data/tenant-123/rag-456",
+  "files_total": 3,
+  "files_downloaded": 1,
+  "current_file": "mapping.pkl",
+  "bytes_downloaded": 52428800,
+  "started_at": "2025-01-15T10:30:00.000000+00:00",
+  "completed_at": null,
+  "duration_seconds": 12.5,
+  "rag_config_id": null,
+  "rag_version": null,
+  "paths": {},
+  "error_message": null
+}
+```
+
+**Deployment Status Values:**
+- `pending` - Deployment initialized, not started
+- `downloading` - Downloading files from S3
+- `registering` - Registering RAG config in PostgreSQL
+- `linking` - Linking RAG to agent (if link_to_agent_id provided)
+- `completed` - Deployment finished successfully
+- `failed` - Deployment failed (check error_message)
+
+**Completed Response:**
+```json
+{
+  "deployment_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "status": "completed",
+  "tenant_id": "550e8400-e29b-41d4-a716-446655440000",
+  "rag_id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+  "s3_url": "s3://my-bucket/rag-data/tenant-123/rag-456",
+  "files_total": 3,
+  "files_downloaded": 3,
+  "current_file": "",
+  "bytes_downloaded": 157286400,
+  "started_at": "2025-01-15T10:30:00.000000+00:00",
+  "completed_at": "2025-01-15T10:30:45.000000+00:00",
+  "duration_seconds": 45.0,
+  "rag_config_id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+  "rag_version": 1,
+  "paths": {
+    "faiss_index": "/app/data/tenants/tenant-123/rag-456/faiss/index.faiss",
+    "faiss_mapping": "/app/data/tenants/tenant-123/rag-456/faiss/mapping.pkl",
+    "sqlite_db": "/app/data/tenants/tenant-123/rag-456/metadata/rag.db"
+  },
+  "error_message": null
+}
+```
+
+**Error Responses:**
+
+| Status Code | Scenario | Detail |
+|-------------|----------|--------|
+| 404 Not Found | Deployment not found | `"Deployment not found: <deployment_id>. Deployment status is cached for 1 hour after completion."` |
+
+---
+
 ## Response Models
 
 ### CacheRefreshResponse
@@ -477,6 +632,52 @@ Response for the `/admin/rag/query` endpoint.
     "agent_config_version": number,
     "is_active_version": boolean
   }
+}
+```
+
+### RAGDeployResponse
+
+Response for the `/admin/rag/deploy` endpoint.
+
+```json
+{
+  "success": boolean,
+  "deployment_id": "Unique deployment ID for status tracking",
+  "status": "pending|downloading|registering|linking|completed|failed",
+  "message": "Human-readable status message",
+  "rag_config_id": "string | null (populated on completion)",
+  "rag_version": "number | null (populated on completion)",
+  "paths": {
+    "faiss_index": "Local file path",
+    "faiss_mapping": "Local file path",
+    "sqlite_db": "Local file path"
+  },
+  "error_message": "string | null (populated on failure)"
+}
+```
+
+### RAGDeployStatusResponse
+
+Response for the `/admin/rag/deploy/{deployment_id}/status` endpoint.
+
+```json
+{
+  "deployment_id": "string",
+  "status": "pending|downloading|registering|linking|completed|failed",
+  "tenant_id": "string",
+  "rag_id": "string",
+  "s3_url": "string",
+  "files_total": number,
+  "files_downloaded": number,
+  "current_file": "string (empty when complete)",
+  "bytes_downloaded": number,
+  "started_at": "ISO timestamp",
+  "completed_at": "ISO timestamp | null",
+  "duration_seconds": "number | null",
+  "rag_config_id": "string | null",
+  "rag_version": "number | null",
+  "paths": {},
+  "error_message": "string | null"
 }
 ```
 
@@ -592,6 +793,39 @@ result = make_request("POST", "/admin/rag/query", {
 print(f"Version {result['metadata']['agent_config_version']} (active={result['metadata']['is_active_version']})")
 for chunk in result["chunks"]:
     print(f"  - {chunk['filename']}: {chunk['content'][:100]}...")
+
+# Deploy RAG from S3 (synchronous - small files)
+result = make_request("POST", "/admin/rag/deploy", {
+    "s3_url": "s3://my-bucket/rag-data/tenant-123/rag-456",
+    "tenant_id": "your-tenant-uuid",
+    "rag_name": "Product Knowledge Base",
+    "link_to_agent_id": "your-agent-uuid"  # Optional: auto-link
+})
+print(f"RAG deployed: {result['rag_config_id']} v{result['rag_version']}")
+
+# Deploy RAG from S3 (asynchronous - large files)
+result = make_request("POST", "/admin/rag/deploy", {
+    "s3_url": "s3://my-bucket/rag-data/tenant-123/large-rag-789",
+    "tenant_id": "your-tenant-uuid",
+    "rag_name": "Large Knowledge Base",
+    "run_async": True
+})
+deployment_id = result["deployment_id"]
+print(f"Deployment started: {deployment_id}")
+
+# Poll for completion
+import time
+while True:
+    status = make_request("GET", f"/admin/rag/deploy/{deployment_id}/status")
+    print(f"Status: {status['status']} ({status['files_downloaded']}/{status['files_total']} files)")
+    if status["status"] in ("completed", "failed"):
+        break
+    time.sleep(5)
+
+if status["status"] == "completed":
+    print(f"RAG deployed: {status['rag_config_id']} v{status['rag_version']}")
+else:
+    print(f"Deployment failed: {status['error_message']}")
 ```
 
 ### Node.js
@@ -752,6 +986,86 @@ curl -X GET "${BASE_URL}${PATH_}" \
   -H "X-Timestamp: $TIMESTAMP" \
   -H "X-Nonce: $NONCE" \
   -H "X-Signature: $SIGNATURE" | jq .
+```
+
+**RAG Deploy Example (POST):**
+```bash
+#!/bin/bash
+
+API_KEY="your_api_key_here"
+BASE_URL="http://localhost:8000"
+PATH_="/admin/rag/deploy"
+METHOD="POST"
+BODY='{"s3_url":"s3://my-bucket/rag-data/tenant-123/rag-456","tenant_id":"your-tenant-uuid","rag_name":"Product KB","link_to_agent_id":"your-agent-uuid"}'
+
+TIMESTAMP=$(date +%s)
+NONCE=$(openssl rand -base64 24 | tr -d '/+=' | head -c 32)
+BODY_HASH=$(echo -n "$BODY" | sha256sum | cut -d' ' -f1)
+MESSAGE="${TIMESTAMP}${NONCE}${METHOD}${PATH_}${BODY_HASH}"
+SIGNATURE=$(echo -n "$MESSAGE" | openssl dgst -sha256 -hmac "$API_KEY" | cut -d' ' -f2)
+
+curl -X POST "${BASE_URL}${PATH_}" \
+  -H "X-Timestamp: $TIMESTAMP" \
+  -H "X-Nonce: $NONCE" \
+  -H "X-Signature: $SIGNATURE" \
+  -H "Content-Type: application/json" \
+  -d "$BODY" | jq .
+```
+
+**RAG Deploy Async with Polling:**
+```bash
+#!/bin/bash
+
+API_KEY="your_api_key_here"
+BASE_URL="http://localhost:8000"
+
+# Start async deployment
+PATH_="/admin/rag/deploy"
+METHOD="POST"
+BODY='{"s3_url":"s3://my-bucket/rag-data/tenant-123/large-rag","tenant_id":"your-tenant-uuid","rag_name":"Large KB","run_async":true}'
+
+TIMESTAMP=$(date +%s)
+NONCE=$(openssl rand -base64 24 | tr -d '/+=' | head -c 32)
+BODY_HASH=$(echo -n "$BODY" | sha256sum | cut -d' ' -f1)
+MESSAGE="${TIMESTAMP}${NONCE}${METHOD}${PATH_}${BODY_HASH}"
+SIGNATURE=$(echo -n "$MESSAGE" | openssl dgst -sha256 -hmac "$API_KEY" | cut -d' ' -f2)
+
+RESULT=$(curl -s -X POST "${BASE_URL}${PATH_}" \
+  -H "X-Timestamp: $TIMESTAMP" \
+  -H "X-Nonce: $NONCE" \
+  -H "X-Signature: $SIGNATURE" \
+  -H "Content-Type: application/json" \
+  -d "$BODY")
+
+DEPLOYMENT_ID=$(echo "$RESULT" | jq -r '.deployment_id')
+echo "Deployment started: $DEPLOYMENT_ID"
+
+# Poll for status
+while true; do
+    PATH_="/admin/rag/deploy/${DEPLOYMENT_ID}/status"
+    METHOD="GET"
+    BODY=""
+
+    TIMESTAMP=$(date +%s)
+    NONCE=$(openssl rand -base64 24 | tr -d '/+=' | head -c 32)
+    BODY_HASH=$(echo -n "$BODY" | sha256sum | cut -d' ' -f1)
+    MESSAGE="${TIMESTAMP}${NONCE}${METHOD}${PATH_}${BODY_HASH}"
+    SIGNATURE=$(echo -n "$MESSAGE" | openssl dgst -sha256 -hmac "$API_KEY" | cut -d' ' -f2)
+
+    STATUS=$(curl -s -X GET "${BASE_URL}${PATH_}" \
+      -H "X-Timestamp: $TIMESTAMP" \
+      -H "X-Nonce: $NONCE" \
+      -H "X-Signature: $SIGNATURE")
+
+    STATUS_VALUE=$(echo "$STATUS" | jq -r '.status')
+    echo "Status: $STATUS_VALUE"
+
+    if [ "$STATUS_VALUE" = "completed" ] || [ "$STATUS_VALUE" = "failed" ]; then
+        echo "$STATUS" | jq .
+        break
+    fi
+    sleep 5
+done
 ```
 
 ---

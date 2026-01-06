@@ -134,7 +134,7 @@ export function ChartYAxis({
  */
 interface ChartTooltipProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  formatter?: (value: any, name: string, props: any) => React.ReactNode;
+  formatter?: (value: any, name: string | undefined, props: any) => React.ReactNode;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   labelFormatter?: (label: any) => React.ReactNode;
 }

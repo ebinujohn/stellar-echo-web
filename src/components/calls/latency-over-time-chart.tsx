@@ -82,7 +82,7 @@ export function LatencyOverTimeChart({
         />
         <ChartTooltip
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          formatter={(value: number, name: string, props: any) => {
+          formatter={(value: number, name: string | undefined, props: any) => {
             const labels: Record<string, string> = {
               pipelineTotal: "Pipeline Total",
               llmProcessing: "LLM Processing",
@@ -93,7 +93,7 @@ export function LatencyOverTimeChart({
               ragProcessing: "RAG Processing",
               variableExtraction: "Variable Extraction",
             };
-            const label = labels[name] || name;
+            const label = (name && labels[name]) || name || "";
             const interrupted = props.payload.wasInterrupted ? " ⚠️ INTERRUPTED" : "";
             return [formatLatency(value), label + interrupted];
           }}

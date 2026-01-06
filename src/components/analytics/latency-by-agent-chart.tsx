@@ -56,11 +56,11 @@ export function LatencyByAgentChart({ height = 300 }: LatencyByAgentChartProps) 
           tickFormatter={(value) => formatLatency(value)}
         />
         <ChartTooltip
-          formatter={(value: number, name: string, props: { payload: { calls: number } }) => {
+          formatter={(value: number, name: string | undefined, props: { payload: { calls: number } }) => {
             if (name === "latency") {
               return [formatLatency(value), `Avg Latency (${props.payload.calls} calls)`];
             }
-            return [value, name];
+            return [value, name ?? ""];
           }}
         />
         <Bar

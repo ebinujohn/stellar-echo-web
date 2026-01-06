@@ -63,7 +63,7 @@ export function TokenUsageTrendsChart({
             tickFormatter={(value) => formatNumber(value)}
           />
           <ChartTooltip
-            formatter={(value: number, name: string) => [
+            formatter={(value: number, name: string | undefined) => [
               formatNumber(value),
               name === "tokens" ? "LLM Tokens" : "TTS Characters"
             ]}
@@ -94,7 +94,7 @@ export function TokenUsageTrendsChart({
             tickFormatter={(value) => formatNumber(value)}
           />
           <ChartTooltip
-            formatter={(value: number, name: string) => [
+            formatter={(value: number, name: string | undefined) => [
               formatNumber(value),
               name === "tokens" ? "LLM Tokens" : "TTS Characters"
             ]}

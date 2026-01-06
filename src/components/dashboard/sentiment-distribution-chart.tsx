@@ -74,7 +74,7 @@ export function SentimentDistributionChart({ height = 280 }: SentimentDistributi
           ))}
         </Pie>
         <ChartTooltip
-          formatter={(value: number, name: string) => [`${value} calls`, name]}
+          formatter={(value: number, name: string | undefined) => [`${value} calls`, name ?? ""]}
         />
         <ChartLegend />
       </PieChart>

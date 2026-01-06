@@ -62,6 +62,23 @@ export const createRagConfigVersionSchema = z.object({
 export type CreateRagConfigVersionInput = z.infer<typeof createRagConfigVersionSchema>;
 
 /**
+ * Schema for deploying RAG from S3
+ */
+export const deployRagSchema = z.object({
+  s3_url: z
+    .string()
+    .min(1, 'S3 URL is required')
+    .regex(/^s3:\/\/[a-zA-Z0-9.-]+\//, 'Must be a valid S3 URL (s3://bucket/path)'),
+  rag_name: z
+    .string()
+    .min(1, 'RAG name is required')
+    .max(255, 'RAG name must be less than 255 characters'),
+  description: z.string().max(1000, 'Description must be less than 1000 characters').optional(),
+});
+
+export type DeployRagInput = z.infer<typeof deployRagSchema>;
+
+/**
  * Search mode enum for UI
  */
 export const searchModes = [

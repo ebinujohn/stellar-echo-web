@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Plus, Database, MoreHorizontal, Pencil, Trash2, ChevronLeft } from 'lucide-react';
+import { Plus, Database, MoreHorizontal, Pencil, Trash2, ChevronLeft, CloudDownload } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRagConfigs, useDeleteRagConfig } from '@/lib/hooks/use-rag-configs';
 import { Button } from '@/components/ui/button';
@@ -107,12 +107,20 @@ export function RagConfigList() {
             </p>
           </div>
         </div>
-        <Link href="/settings/rag/new">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            New Configuration
-          </Button>
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/settings/rag/deploy">
+            <Button variant="outline">
+              <CloudDownload className="mr-2 h-4 w-4" />
+              Deploy from S3
+            </Button>
+          </Link>
+          <Link href="/settings/rag/new">
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              New Configuration
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {isLoading ? (

@@ -504,3 +504,152 @@ export async function getCallDebugTrace(callId: string): Promise<CallDebugTraceR
 
   return response.json() as Promise<CallDebugTraceResponse>;
 }
+
+// ============================================================================
+// RAG Deployment API
+// ============================================================================
+
+/**
+ * Request parameters for deploying RAG from S3.
+ */
+export interface RagDeploymentRequest {
+  s3_url: string;
+  tenant_id: string;
+  rag_name: string;
+  description?: string;
+  run_async: boolean;
+}
+
+/**
+ * Response from initiating a RAG deployment.
+ */
+export interface RagDeploymentResponse {
+  success: boolean;
+  deployment_id: string;
+  status: 'pending' | 'downloading' | 'registering' | 'linking' | 'completed' | 'failed';
+  message: string;
+  rag_config_id?: string;
+  rag_version?: number;
+  paths?: Record<string, string>;
+  error_message?: string;
+}
+
+/**
+ * Response from getting RAG deployment status.
+ */
+export interface RagDeploymentStatusResponse {
+  deployment_id: string;
+  status: 'pending' | 'downloading' | 'registering' | 'linking' | 'completed' | 'failed';
+  tenant_id: string;
+  rag_id: string;
+  s3_url: string;
+  files_total: number;
+  files_downloaded: number;
+  current_file: string;
+  bytes_downloaded: number;
+  started_at: string;
+  completed_at: string | null;
+  duration_seconds: number | null;
+  rag_config_id: string | null;
+  rag_version: number | null;
+  paths: Record<string, string>;
+  error_message: string | null;
+}
+
+/**
+ * Deploys RAG configuration files from S3.
+ *
+ * Downloads RAG files (FAISS index, mapping, SQLite DB) from S3 to local storage
+ * and registers the configuration in PostgreSQL.
+ *
+ * @param params - Deployment parameters including S3 URL and RAG name
+ * @returns The deployment response with deployment_id for status tracking
+ * @throws Error if Admin API is not configured or deployment initiation fails
+ */
+export async function deployRagFromS3(
+  params: RagDeploymentRequest
+): Promise<RagDeploymentResponse> {
+  if (!ADMIN_API_BASE_URL || !ADMIN_API_KEY) {
+    throw new Error('Admin API is not configured. Set ADMIN_API_BASE_URL and ADMIN_API_KEY.');
+  }
+
+  const requestBody: Record<string, unknown> = {
+    s3_url: params.s3_url,
+    tenant_id: params.tenant_id,
+    rag_name: params.rag_name,
+    run_async: params.run_async,
+  };
+
+  // Add optional parameters only if provided
+  if (params.description) {
+    requestBody.description = params.description;
+  }
+
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const nonce = generateNonce();
+  const path = '/admin/rag/deploy';
+  const bodyStr = JSON.stringify(requestBody);
+  const signature = computeSignature(ADMIN_API_KEY, timestamp, nonce, 'POST', path, bodyStr);
+
+  const response = await fetch(`${ADMIN_API_BASE_URL}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Timestamp': timestamp,
+      'X-Nonce': nonce,
+      'X-Signature': signature,
+    },
+    body: bodyStr,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+    const errorMessage = errorData.detail || `Admin API error: ${response.status}`;
+    throw new Error(errorMessage);
+  }
+
+  return response.json() as Promise<RagDeploymentResponse>;
+}
+
+/**
+ * Gets the status of a RAG deployment.
+ *
+ * Polls the orchestrator for deployment progress including files downloaded,
+ * current status, and any error messages.
+ *
+ * @param deploymentId - The deployment UUID returned from deployRagFromS3
+ * @returns The deployment status response
+ * @throws Error if Admin API is not configured or status fetch fails
+ */
+export async function getRagDeploymentStatus(
+  deploymentId: string
+): Promise<RagDeploymentStatusResponse> {
+  if (!ADMIN_API_BASE_URL || !ADMIN_API_KEY) {
+    throw new Error('Admin API is not configured. Set ADMIN_API_BASE_URL and ADMIN_API_KEY.');
+  }
+
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const nonce = generateNonce();
+  const path = `/admin/rag/deploy/${deploymentId}/status`;
+  // For GET requests, use empty string for body hash (no request body)
+  const bodyStr = '';
+  const signature = computeSignature(ADMIN_API_KEY, timestamp, nonce, 'GET', path, bodyStr);
+
+  const response = await fetch(`${ADMIN_API_BASE_URL}${path}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Timestamp': timestamp,
+      'X-Nonce': nonce,
+      'X-Signature': signature,
+    },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+    const errorMessage = errorData.detail || `Admin API error: ${response.status}`;
+    throw new Error(errorMessage);
+  }
+
+  return response.json() as Promise<RagDeploymentStatusResponse>;
+}
