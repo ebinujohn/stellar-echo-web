@@ -41,6 +41,25 @@ pnpm test             # Run Vitest tests
 pnpm test:e2e         # Run Playwright E2E tests
 ```
 
+### Docker Deployment
+
+```bash
+# Build image
+docker build -t stellar-echo-web \
+  --build-arg NEXT_PUBLIC_API_URL=https://api.example.com \
+  --build-arg NEXT_PUBLIC_SENTRY_DSN=<your-sentry-dsn> \
+  .
+
+# Run container
+docker run -p 3000:3000 \
+  -e DB_HOST=postgres \
+  -e DB_NAME=stellar_echo \
+  -e JWT_SECRET=your-secret \
+  stellar-echo-web
+```
+
+Health check endpoint: `GET /api/health` (used by container orchestration)
+
 ### Code Quality Tools
 
 | Tool | Purpose | Config File |

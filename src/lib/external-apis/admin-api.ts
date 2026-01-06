@@ -366,3 +366,141 @@ export async function getCallStatus(callId: string): Promise<CallStatusResponse>
 
   return response.json() as Promise<CallStatusResponse>;
 }
+
+// ============================================================================
+// Call Debug Trace API
+// ============================================================================
+
+/**
+ * Transition in a call workflow.
+ */
+export interface CallDebugTransition {
+  sequence: number;
+  timestamp: string;
+  from_node_id: string | null;
+  from_node_name: string | null;
+  to_node_id: string | null;
+  to_node_name: string | null;
+  reason: string | null;
+  condition: string | null;
+  turn_number: number | null;
+}
+
+/**
+ * Message in a call conversation.
+ */
+export interface CallDebugMessage {
+  sequence: number;
+  timestamp: string;
+  role: string;
+  content: string;
+  node_id: string | null;
+  turn_number: number | null;
+  was_interrupted: boolean;
+}
+
+/**
+ * RAG retrieval event during a call.
+ */
+export interface CallDebugRagRetrieval {
+  sequence: number;
+  timestamp: string;
+  query: string;
+  node_id: string | null;
+  search_mode: string;
+  chunks_retrieved: number;
+  processing_time_ms: number;
+}
+
+/**
+ * User interruption event during a call.
+ */
+export interface CallDebugInterruption {
+  sequence: number;
+  timestamp: string;
+  turn_number: number | null;
+  node_id: string | null;
+}
+
+/**
+ * Metrics summary with min/avg/max statistics.
+ */
+export interface CallDebugMetricStats {
+  avg: number;
+  min: number;
+  max: number;
+  num: number;
+}
+
+/**
+ * Full debug trace response from the orchestrator.
+ */
+export interface CallDebugTraceResponse {
+  call_id: string;
+  tenant_id: string;
+  agent_id: string;
+  agent_name: string;
+  status: string;
+  direction: 'inbound' | 'outbound';
+  started_at: string;
+  ended_at: string | null;
+  duration_seconds: number | null;
+  from_number: string;
+  to_number: string;
+  twilio_call_sid: string | null;
+  twilio_stream_sid: string | null;
+  initial_node_id: string | null;
+  final_node_id: string | null;
+  total_turns: number;
+  total_messages: number;
+  total_transitions: number;
+  total_rag_queries: number;
+  total_interruptions: number;
+  transitions: CallDebugTransition[];
+  messages: CallDebugMessage[];
+  rag_retrievals: CallDebugRagRetrieval[];
+  variables: Record<string, string>;
+  interruptions: CallDebugInterruption[];
+  metrics_summary: Record<string, CallDebugMetricStats> | null;
+}
+
+/**
+ * Gets the debug trace for a call.
+ *
+ * Fetches comprehensive call trace data from the orchestrator including
+ * transitions, messages, RAG queries, variables, and interruptions.
+ *
+ * @param callId - The call UUID
+ * @returns The complete debug trace response
+ * @throws Error if Admin API is not configured or fetch fails
+ */
+export async function getCallDebugTrace(callId: string): Promise<CallDebugTraceResponse> {
+  if (!ADMIN_API_BASE_URL || !ADMIN_API_KEY) {
+    throw new Error('Admin API is not configured. Set ADMIN_API_BASE_URL and ADMIN_API_KEY.');
+  }
+
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const nonce = generateNonce();
+  const path = `/admin/calls/${callId}/debug`;
+  // For GET requests, use empty string for body hash (no request body)
+  const bodyStr = '';
+  const signature = computeSignature(ADMIN_API_KEY, timestamp, nonce, 'GET', path, bodyStr);
+
+  const response = await fetch(`${ADMIN_API_BASE_URL}${path}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Timestamp': timestamp,
+      'X-Nonce': nonce,
+      'X-Signature': signature,
+    },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+    const errorMessage = errorData.detail || `Admin API error: ${response.status}`;
+    throw new Error(errorMessage);
+  }
+
+  return response.json() as Promise<CallDebugTraceResponse>;
+}

@@ -17,9 +17,9 @@ export const QUERY_KEYS = {
     all: (params?: object) => ['calls', params ?? {}] as const,
     detail: (id: string) => ['call-detail', id] as const,
     metrics: (id: string) => ['call-metrics', id] as const,
-    timeline: (id: string) => ['call-timeline', id] as const,
     transcript: (id: string) => ['call-transcript', id] as const,
     analysis: (id: string) => ['call-analysis', id] as const,
+    debug: (id: string) => ['call-debug', id] as const,
     stats: (filters?: object) => ['calls-stats', filters] as const,
   },
 

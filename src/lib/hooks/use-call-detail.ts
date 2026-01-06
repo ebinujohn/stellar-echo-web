@@ -7,22 +7,13 @@ import type {
   CallMetrics,
   CallAnalysisData,
   TranscriptEntry,
-  TimelineEvent,
 } from '@/lib/db/queries/call-details';
+import type { CallDebugTraceResponse } from '@/lib/external-apis/admin-api';
 
 export function useCallDetail(callId: string) {
   return useQuery({
     queryKey: QUERY_KEYS.calls.detail(callId),
     queryFn: () => apiFetch<CallDetail>(`/api/calls/${callId}`),
-    enabled: !!callId,
-    staleTime: STALE_TIMES.CALL_DETAIL,
-  });
-}
-
-export function useCallTimeline(callId: string) {
-  return useQuery({
-    queryKey: QUERY_KEYS.calls.timeline(callId),
-    queryFn: () => apiFetch<TimelineEvent[]>(`/api/calls/${callId}/timeline`),
     enabled: !!callId,
     staleTime: STALE_TIMES.CALL_DETAIL,
   });
@@ -50,6 +41,15 @@ export function useCallTranscript(callId: string) {
   return useQuery({
     queryKey: QUERY_KEYS.calls.transcript(callId),
     queryFn: () => apiFetch<TranscriptEntry[]>(`/api/calls/${callId}/transcript`),
+    enabled: !!callId,
+    staleTime: STALE_TIMES.CALL_DETAIL,
+  });
+}
+
+export function useCallDebug(callId: string) {
+  return useQuery({
+    queryKey: QUERY_KEYS.calls.debug(callId),
+    queryFn: () => apiFetch<CallDebugTraceResponse>(`/api/calls/${callId}/debug`),
     enabled: !!callId,
     staleTime: STALE_TIMES.CALL_DETAIL,
   });

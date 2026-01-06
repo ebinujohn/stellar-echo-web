@@ -1,13 +1,11 @@
 import { db } from '@/lib/db';
 import {
   calls,
-  callMessages,
-  callTransitions,
   callTranscripts,
   callMetricsSummary,
   callAnalysis
 } from '@/lib/db/schema';
-import { eq, and, asc } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { tenantFilter, type QueryContext } from './utils';
 
 export interface CallDetail {
@@ -22,23 +20,6 @@ export interface CallDetail {
   durationSeconds: number | null;
   totalMessages: number | null;
   recordingUrl: string | null;
-}
-
-export interface CallMessage {
-  id: string;
-  role: string;
-  content: string;
-  timestamp: Date | null;
-  latencyMs: number | null;
-  tokensUsed: number | null;
-}
-
-export interface CallTransition {
-  id: string;
-  fromState: string | null;
-  toState: string | null;
-  timestamp: Date;
-  reason: string | null;
 }
 
 export interface TurnMetrics {
@@ -167,65 +148,6 @@ export async function getCallDetail(callId: string, ctx: QueryContext): Promise<
     totalMessages: result.totalMessages,
     recordingUrl: result.recordingUrl,
   };
-}
-
-/**
- * Get all messages for a call
- */
-export async function getCallMessages(callId: string, ctx: QueryContext): Promise<CallMessage[]> {
-  // Verify call belongs to tenant (or is accessible by global user)
-  const conditions = [eq(calls.callId, callId)];
-  const tenantCondition = tenantFilter(calls.tenantId, ctx);
-  if (tenantCondition) conditions.push(tenantCondition);
-
-  const call = await db.query.calls.findFirst({
-    where: and(...conditions),
-  });
-
-  if (!call) return [];
-
-  const messages = await db.query.callMessages.findMany({
-    where: eq(callMessages.callId, callId),
-    orderBy: [asc(callMessages.timestamp)],
-  });
-
-  return messages.map(msg => ({
-    id: msg.id,
-    role: msg.role,
-    content: msg.content,
-    timestamp: msg.timestamp,
-    latencyMs: null, // Not available in schema
-    tokensUsed: null, // Not available in schema
-  }));
-}
-
-/**
- * Get all state transitions for a call
- */
-export async function getCallTransitions(callId: string, ctx: QueryContext): Promise<CallTransition[]> {
-  // Verify call belongs to tenant (or is accessible by global user)
-  const conditions = [eq(calls.callId, callId)];
-  const tenantCondition = tenantFilter(calls.tenantId, ctx);
-  if (tenantCondition) conditions.push(tenantCondition);
-
-  const call = await db.query.calls.findFirst({
-    where: and(...conditions),
-  });
-
-  if (!call) return [];
-
-  const transitions = await db.query.callTransitions.findMany({
-    where: eq(callTransitions.callId, callId),
-    orderBy: [asc(callTransitions.timestamp)],
-  });
-
-  return transitions.map(t => ({
-    id: t.id,
-    fromState: t.fromNodeId,
-    toState: t.toNodeId,
-    timestamp: t.timestamp,
-    reason: t.reason,
-  }));
 }
 
 /**
@@ -534,75 +456,4 @@ export async function getCallTranscript(callId: string, ctx: QueryContext): Prom
   }
 
   return [];
-}
-
-/**
- * Get unified timeline combining messages, transitions, and other events
- */
-export interface TimelineEvent {
-  id: string;
-  type: 'message' | 'transition' | 'transcript';
-  timestamp: Date;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data: any;
-}
-
-export async function getCallTimeline(callId: string, ctx: QueryContext): Promise<TimelineEvent[]> {
-  // Verify call belongs to tenant (or is accessible by global user)
-  const conditions = [eq(calls.callId, callId)];
-  const tenantCondition = tenantFilter(calls.tenantId, ctx);
-  if (tenantCondition) conditions.push(tenantCondition);
-
-  const call = await db.query.calls.findFirst({
-    where: and(...conditions),
-  });
-
-  if (!call) return [];
-
-  const [messages, transitions, transcript] = await Promise.all([
-    getCallMessages(callId, ctx),
-    getCallTransitions(callId, ctx),
-    getCallTranscript(callId, ctx),
-  ]);
-
-  const timeline: TimelineEvent[] = [];
-
-  // Add messages
-  messages.forEach(msg => {
-    if (msg.timestamp) {
-      timeline.push({
-        id: `msg-${msg.id}`,
-        type: 'message',
-        timestamp: msg.timestamp,
-        data: msg,
-      });
-    }
-  });
-
-  // Add transitions
-  transitions.forEach(t => {
-    timeline.push({
-      id: `trans-${t.id}`,
-      type: 'transition',
-      timestamp: t.timestamp,
-      data: t,
-    });
-  });
-
-  // Add transcript entries
-  transcript.forEach(entry => {
-    if (entry.timestamp) {
-      timeline.push({
-        id: `transcript-${entry.id}`,
-        type: 'transcript',
-        timestamp: entry.timestamp,
-        data: entry,
-      });
-    }
-  });
-
-  // Sort by timestamp
-  timeline.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-
-  return timeline;
 }

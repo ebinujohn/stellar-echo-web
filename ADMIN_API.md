@@ -731,6 +731,29 @@ curl -X POST "${BASE_URL}${PATH_}" \
   -d "$BODY"
 ```
 
+**Call Debug Trace Example (GET):**
+```bash
+#!/bin/bash
+
+API_KEY="your_api_key_here"
+BASE_URL="http://localhost:8000"
+CALL_ID="01934a7f-1234-5678-9abc-def012345678"
+PATH_="/admin/calls/${CALL_ID}/debug"
+METHOD="GET"
+BODY=""  # Empty string for GET requests
+
+TIMESTAMP=$(date +%s)
+NONCE=$(openssl rand -base64 24 | tr -d '/+=' | head -c 32)
+BODY_HASH=$(echo -n "$BODY" | sha256sum | cut -d' ' -f1)
+MESSAGE="${TIMESTAMP}${NONCE}${METHOD}${PATH_}${BODY_HASH}"
+SIGNATURE=$(echo -n "$MESSAGE" | openssl dgst -sha256 -hmac "$API_KEY" | cut -d' ' -f2)
+
+curl -X GET "${BASE_URL}${PATH_}" \
+  -H "X-Timestamp: $TIMESTAMP" \
+  -H "X-Nonce: $NONCE" \
+  -H "X-Signature: $SIGNATURE" | jq .
+```
+
 ---
 
 ## Security Best Practices
@@ -885,6 +908,170 @@ GET /admin/calls/{call_id}/status
 - `no-answer` - Recipient didn't answer
 - `failed` - Call failed (check error_message)
 - `canceled` - Call was canceled
+
+---
+
+### Get Call Debug Trace
+
+Fetch complete call trace for debugging. Aggregates all call data from PostgreSQL into a single response, including messages, transitions, RAG queries, variables, interruptions, and metrics.
+
+```
+GET /admin/calls/{call_id}/debug
+```
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `call_id` | string | Call UUID |
+
+**Response:**
+```json
+{
+  "call_id": "01934a7f-1234-5678-9abc-def012345678",
+  "tenant_id": "550e8400-e29b-41d4-a716-446655440000",
+  "agent_id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+  "agent_name": "Sales Agent",
+  "status": "ended",
+  "direction": "inbound",
+  "started_at": "2025-12-09T10:30:00.123456+00:00",
+  "ended_at": "2025-12-09T10:32:45.789012+00:00",
+  "duration_seconds": 165,
+
+  "from_number": "+15551234567",
+  "to_number": "+15559876543",
+  "twilio_call_sid": "CA1234567890abcdef",
+  "twilio_stream_sid": "MZ1234567890abcdef",
+
+  "initial_node_id": "greeting",
+  "final_node_id": "end_call",
+
+  "total_turns": 5,
+  "total_messages": 10,
+  "total_transitions": 4,
+  "total_rag_queries": 2,
+  "total_interruptions": 1,
+
+  "transitions": [
+    {
+      "sequence": 1,
+      "timestamp": "2025-12-09T10:30:05.000000+00:00",
+      "from_node_id": "greeting",
+      "from_node_name": "Greeting",
+      "to_node_id": "collect_info",
+      "to_node_name": "Collect Information",
+      "reason": "user_responded",
+      "condition": "always",
+      "turn_number": 1
+    }
+  ],
+
+  "messages": [
+    {
+      "sequence": 1,
+      "timestamp": "2025-12-09T10:30:02.000000+00:00",
+      "role": "assistant",
+      "content": "Hello! How can I help you today?",
+      "node_id": "greeting",
+      "turn_number": 0,
+      "was_interrupted": false
+    },
+    {
+      "sequence": 2,
+      "timestamp": "2025-12-09T10:30:05.000000+00:00",
+      "role": "user",
+      "content": "I need help with my order",
+      "node_id": "greeting",
+      "turn_number": 1,
+      "was_interrupted": false
+    }
+  ],
+
+  "rag_retrievals": [
+    {
+      "sequence": 3,
+      "timestamp": "2025-12-09T10:30:10.000000+00:00",
+      "query": "help with order",
+      "node_id": "collect_info",
+      "search_mode": "hybrid",
+      "chunks_retrieved": 3,
+      "processing_time_ms": 320.5
+    }
+  ],
+
+  "variables": {
+    "customer_name": "John Smith",
+    "order_number": "ORD-12345"
+  },
+
+  "interruptions": [
+    {
+      "sequence": 5,
+      "timestamp": "2025-12-09T10:31:20.000000+00:00",
+      "turn_number": 3,
+      "node_id": "collect_info"
+    }
+  ],
+
+  "metrics_summary": {
+    "stt_delay": {"avg": 45.2, "min": 30, "max": 65, "num": 5},
+    "user_to_bot_latency": {"avg": 1250.5, "min": 800, "max": 1800, "num": 5},
+    "llm_ttfb": {"avg": 450.3, "min": 320, "max": 620, "num": 5},
+    "rag_processing_time": {"avg": 315.0, "min": 280, "max": 350, "num": 2}
+  }
+}
+```
+
+**Response Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `call_id` | string | Call UUID |
+| `tenant_id` | string | Tenant UUID |
+| `agent_id` | string | Agent UUID |
+| `agent_name` | string | Human-readable agent name |
+| `status` | string | Call status (started, ongoing, ended, failed) |
+| `direction` | string | Call direction (inbound, outbound) |
+| `started_at` | string | ISO timestamp of call start |
+| `ended_at` | string | ISO timestamp of call end (null if ongoing) |
+| `duration_seconds` | integer | Call duration in seconds |
+| `from_number` | string | Caller phone number |
+| `to_number` | string | Recipient phone number |
+| `twilio_call_sid` | string | Twilio call SID |
+| `twilio_stream_sid` | string | Twilio stream SID |
+| `initial_node_id` | string | Starting workflow node |
+| `final_node_id` | string | Ending workflow node |
+| `total_turns` | integer | Number of conversation turns |
+| `total_messages` | integer | Total messages exchanged |
+| `total_transitions` | integer | Number of workflow transitions |
+| `total_rag_queries` | integer | Number of RAG queries |
+| `total_interruptions` | integer | Number of user interruptions |
+| `transitions` | array | List of workflow transitions in chronological order |
+| `messages` | array | List of conversation messages in chronological order |
+| `rag_retrievals` | array | List of RAG queries with results |
+| `variables` | object | Extracted variables (key-value pairs) |
+| `interruptions` | array | List of user interruption events |
+| `metrics_summary` | object | Performance metrics (JSONB from call_metrics_summary) |
+
+**Error Responses:**
+
+| Status Code | Scenario | Detail |
+|-------------|----------|--------|
+| 400 Bad Request | Invalid UUID format | `"Invalid call_id format: <call_id>"` |
+| 404 Not Found | Call not found | `"Call not found: <call_id>"` |
+
+**Use Case:**
+
+This endpoint is designed for debugging call issues. Instead of querying CloudWatch logs or multiple database tables, you can get a complete picture of a call in a single API request:
+
+1. **What happened?** - See all messages exchanged between user and bot
+2. **How did it flow?** - See all workflow transitions with reasons
+3. **What was retrieved?** - See RAG queries and their results
+4. **What was extracted?** - See collected variables
+5. **Were there interruptions?** - See when users interrupted the bot
+6. **Performance issues?** - See latency metrics
+
+See also: [TRACEABILITY_GUIDE.md](TRACEABILITY_GUIDE.md) for more debugging guidance.
 
 ---
 
