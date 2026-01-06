@@ -92,7 +92,7 @@ export const useUpdateAgent = agentCrud.useUpdate;
 export const useAgentVersions = agentVersions.useVersions;
 export const useActivateVersion = agentVersions.useActivateVersion;
 
-// Custom delete hook (also invalidates phone mappings)
+// Custom delete hook
 export function useDeleteAgent() {
   const queryClient = useQueryClient();
 
@@ -100,7 +100,6 @@ export function useDeleteAgent() {
     mutationFn: (id: string) => apiMutate(`/api/agents/${id}`, 'DELETE'),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.agents.all });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.phoneMappings });
     },
   });
 }
@@ -121,12 +120,3 @@ export function useCreateVersion() {
 
 // Re-export types
 export type { Agent, AgentDetail, AgentVersion };
-
-// Re-export phone mapping hooks for backward compatibility
-export {
-  usePhoneMappings,
-  useCreatePhoneMapping,
-  useUpdatePhoneMapping,
-  useDeletePhoneMapping,
-} from './use-phone-mappings';
-export type { PhoneMapping } from './use-phone-mappings';

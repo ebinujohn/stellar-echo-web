@@ -254,6 +254,11 @@ export const useActivateResourceVersion = resourceVersions.useActivateVersion;
 - `formatDateTime()`, `formatDuration()`, `formatLatency()`, `formatPhoneNumber()`
 - `formatPercentage()`, `formatNumber()`, `getStatusVariant()`, `getStatusColor()`
 
+### HMAC Signing (`src/lib/external-apis/hmac-signing.ts`)
+- `generateNonce()` - Cryptographically secure random nonce (URL-safe, 32 chars)
+- `computeSignature()` - HMAC-SHA256 signature for API authentication
+- `generateSignedHeaders()` - Generate X-Timestamp, X-Nonce, X-Signature headers
+
 ### S3 Presigned URLs (`src/lib/s3/presigned-url.ts`)
 - `generatePresignedDownloadUrl()` - Secure temporary download URLs
 - `isValidS3Url()` - Validate S3 URL format

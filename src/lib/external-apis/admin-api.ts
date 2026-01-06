@@ -1,6 +1,6 @@
-import { createHash, createHmac, randomBytes } from 'crypto';
 import type { RAGChunk, RAGQueryMetadata, RAGQueryResponse } from '@/types';
 import { loggers } from '@/lib/logger';
+import { generateNonce, computeSignature } from './hmac-signing';
 
 const log = loggers.admin;
 
@@ -38,41 +38,6 @@ export interface RAGQueryParams {
 
 // Re-export types for consumers that import from this module
 export type { RAGChunk, RAGQueryMetadata, RAGQueryResponse };
-
-/**
- * Generates a cryptographically secure random nonce.
- * Per ADMIN_API.md: minimum 16 characters, URL-safe.
- * Uses 24 random bytes encoded as base64url (32 characters).
- */
-function generateNonce(): string {
-  return randomBytes(24).toString('base64url');
-}
-
-/**
- * Computes HMAC-SHA256 signature for Admin API requests.
- *
- * Signature computation (per ADMIN_API.md):
- * 1. body_hash = SHA256(request_body)
- * 2. message = timestamp + nonce + method + path + body_hash
- * 3. signature = HMAC-SHA256(api_key, message)
- */
-function computeSignature(
-  apiKey: string,
-  timestamp: string,
-  nonce: string,
-  method: string,
-  path: string,
-  body: string
-): string {
-  // Compute SHA256 hash of the request body
-  const bodyHash = createHash('sha256').update(body).digest('hex');
-
-  // Build the message to sign (includes nonce for replay attack protection)
-  const message = `${timestamp}${nonce}${method.toUpperCase()}${path}${bodyHash}`;
-
-  // Compute HMAC-SHA256 signature
-  return createHmac('sha256', apiKey).update(message).digest('hex');
-}
 
 /**
  * Makes a signed request to the Admin API.

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { phoneNumberSchema } from './phone-configs';
 
 /**
  * Schema for creating a new agent
@@ -43,13 +44,6 @@ export const createVersionSchema = z.object({
 });
 
 export type CreateVersionInput = z.infer<typeof createVersionSchema>;
-
-/**
- * Phone number validation (E.164 format)
- */
-export const phoneNumberSchema = z
-  .string()
-  .regex(/^\+[1-9]\d{1,14}$/, 'Phone number must be in E.164 format (e.g., +17708304765)');
 
 /**
  * Schema for creating a phone mapping

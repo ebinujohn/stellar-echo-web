@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Plus, Phone, MoreHorizontal, Pencil, Trash2, ChevronLeft, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePhoneConfigs, useDeletePhoneConfig } from '@/lib/hooks/use-phone-configs';
+import { formatPhoneNumber } from '@/lib/utils/formatters';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -32,14 +33,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-
-function formatPhoneNumber(phone: string): string {
-  // Simple E.164 to display format
-  if (phone.startsWith('+1') && phone.length === 12) {
-    return `(${phone.slice(2, 5)}) ${phone.slice(5, 8)}-${phone.slice(8)}`;
-  }
-  return phone;
-}
 
 export function PhoneConfigList() {
   const router = useRouter();

@@ -1,109 +1,40 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/auth/session';
-import {
-  updatePhoneMapping,
-  deletePhoneMapping,
-} from '@/lib/db/queries/agents';
+import { updatePhoneMapping, deletePhoneMapping } from '@/lib/db/queries/agents';
 import { updatePhoneMappingSchema } from '@/lib/validations/agents';
-import { z } from 'zod';
+import { handleApiError, successResponse } from '@/lib/api/error-handler';
 
-type RouteContext = {
-  params: Promise<{ phone: string }>;
-};
+type RouteContext = { params: Promise<{ phone: string }> };
 
-export async function PUT(
-  request: NextRequest,
-  context: RouteContext
-) {
+export async function PUT(request: NextRequest, context: RouteContext) {
   try {
     const session = await requireAuth();
     const { phone } = await context.params;
     const phoneNumber = decodeURIComponent(phone);
-    const body = await request.json();
+    const data = updatePhoneMappingSchema.parse(await request.json());
 
-    // Validate input
-    const data = updatePhoneMappingSchema.parse(body);
-
-    // Update mapping
-    const mapping = await updatePhoneMapping(
-      phoneNumber,
-      data.agentId,
-      session.tenantId
-    );
-
+    const mapping = await updatePhoneMapping(phoneNumber, data.agentId, session.tenantId);
     if (!mapping) {
-      return NextResponse.json(
-        { success: false, error: 'Phone mapping not found' },
-        { status: 404 }
-      );
+      throw new Error('Phone mapping not found');
     }
-
-    return NextResponse.json({
-      success: true,
-      data: mapping,
-    });
+    return successResponse(mapping);
   } catch (error) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Invalid input',
-          details: error.issues,
-        },
-        { status: 400 }
-      );
-    }
-
-    console.error('API Error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
+    return handleApiError(error);
   }
 }
 
-export async function DELETE(
-  request: NextRequest,
-  context: RouteContext
-) {
+export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
     const session = await requireAuth();
     const { phone } = await context.params;
     const phoneNumber = decodeURIComponent(phone);
 
-    // Delete mapping
     const mapping = await deletePhoneMapping(phoneNumber, session.tenantId);
-
     if (!mapping) {
-      return NextResponse.json(
-        { success: false, error: 'Phone mapping not found' },
-        { status: 404 }
-      );
+      throw new Error('Phone mapping not found');
     }
-
-    return NextResponse.json({
-      success: true,
-      data: mapping,
-    });
+    return successResponse(mapping);
   } catch (error) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    console.error('API Error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
+    return handleApiError(error);
   }
 }

@@ -71,15 +71,18 @@ export function formatPercentage(value: number | null, decimals = 1): string {
 export function formatPhoneNumber(phone: string | null): string {
   if (!phone) return 'N/A';
 
-  // Remove non-numeric characters
-  const cleaned = phone.replace(/\D/g, '');
-
-  // Format as E.164 if it looks like one
-  if (cleaned.startsWith('1') && cleaned.length === 11) {
-    return `+1 (${cleaned.slice(1, 4)}) ${cleaned.slice(4, 7)}-${cleaned.slice(7)}`;
+  // Handle E.164 format with +1 prefix (e.g., +17708304765)
+  if (phone.startsWith('+1') && phone.length === 12) {
+    return `(${phone.slice(2, 5)}) ${phone.slice(5, 8)}-${phone.slice(8)}`;
   }
 
-  // Just return as-is if we can't parse it
+  // Handle 11-digit US numbers without plus (e.g., 17708304765)
+  const cleaned = phone.replace(/\D/g, '');
+  if (cleaned.startsWith('1') && cleaned.length === 11) {
+    return `(${cleaned.slice(1, 4)}) ${cleaned.slice(4, 7)}-${cleaned.slice(7)}`;
+  }
+
+  // Return as-is if we can't parse it
   return phone;
 }
 

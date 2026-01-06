@@ -6,6 +6,7 @@ import { ChevronLeft, Save, Loader2, Phone, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePhoneConfig, useUpdatePhoneConfig } from '@/lib/hooks/use-phone-configs';
 import { useAgents } from '@/lib/hooks/use-agents';
+import { formatPhoneNumber } from '@/lib/utils/formatters';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -29,13 +30,6 @@ import {
 
 interface PhoneConfigDetailClientProps {
   phoneConfigId: string;
-}
-
-function formatPhoneNumber(phone: string): string {
-  if (phone.startsWith('+1') && phone.length === 12) {
-    return `(${phone.slice(2, 5)}) ${phone.slice(5, 8)}-${phone.slice(8)}`;
-  }
-  return phone;
 }
 
 export function PhoneConfigDetailClient({ phoneConfigId }: PhoneConfigDetailClientProps) {

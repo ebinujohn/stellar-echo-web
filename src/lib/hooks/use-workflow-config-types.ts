@@ -27,6 +27,7 @@ function fetchConfigTypes(category?: ConfigTypeCategory) {
   return apiFetch<WorkflowConfigType[]>(url);
 }
 
+/** Fetch all workflow config types */
 export function useWorkflowConfigTypes() {
   return useQuery({
     queryKey: QUERY_KEYS.workflowConfigTypes.all,
@@ -35,6 +36,7 @@ export function useWorkflowConfigTypes() {
   });
 }
 
+/** Fetch config types by category (dynamic) */
 export function useWorkflowConfigTypesByCategory(category: ConfigTypeCategory) {
   return useQuery({
     queryKey: QUERY_KEYS.workflowConfigTypes.byCategory(category),
@@ -44,36 +46,17 @@ export function useWorkflowConfigTypesByCategory(category: ConfigTypeCategory) {
   });
 }
 
-export function useNodeTypes() {
-  return useQuery({
-    queryKey: QUERY_KEYS.workflowConfigTypes.byCategory('node_type'),
-    queryFn: () => fetchConfigTypes('node_type'),
+// Category-specific hooks using the generic factory pattern
+const createCategoryHook = (category: ConfigTypeCategory) => () =>
+  useQuery({
+    queryKey: QUERY_KEYS.workflowConfigTypes.byCategory(category),
+    queryFn: () => fetchConfigTypes(category),
     staleTime: STALE_TIMES.CONFIG_TYPES,
   });
-}
 
-export function useTransitionConditions() {
-  return useQuery({
-    queryKey: QUERY_KEYS.workflowConfigTypes.byCategory('transition_condition'),
-    queryFn: () => fetchConfigTypes('transition_condition'),
-    staleTime: STALE_TIMES.CONFIG_TYPES,
-  });
-}
-
-export function useActionTypes() {
-  return useQuery({
-    queryKey: QUERY_KEYS.workflowConfigTypes.byCategory('action_type'),
-    queryFn: () => fetchConfigTypes('action_type'),
-    staleTime: STALE_TIMES.CONFIG_TYPES,
-  });
-}
-
-export function useSearchModes() {
-  return useQuery({
-    queryKey: QUERY_KEYS.workflowConfigTypes.byCategory('search_mode'),
-    queryFn: () => fetchConfigTypes('search_mode'),
-    staleTime: STALE_TIMES.CONFIG_TYPES,
-  });
-}
+export const useNodeTypes = createCategoryHook('node_type');
+export const useTransitionConditions = createCategoryHook('transition_condition');
+export const useActionTypes = createCategoryHook('action_type');
+export const useSearchModes = createCategoryHook('search_mode');
 
 export type { WorkflowConfigType, ConfigTypeCategory };

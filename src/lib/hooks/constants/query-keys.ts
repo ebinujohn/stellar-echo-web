@@ -45,9 +45,6 @@ export const QUERY_KEYS = {
     dropdown: ['phone-configs', 'dropdown'] as const,
   },
 
-  // Legacy phone mappings (for backwards compatibility)
-  phoneMappings: ['phone-mappings'] as const,
-
   // Dashboard
   dashboard: {
     callVolume: (params?: object) => ['dashboard', 'call-volume', params] as const,

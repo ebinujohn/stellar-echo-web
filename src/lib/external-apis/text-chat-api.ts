@@ -1,10 +1,10 @@
-import { createHmac, createHash, randomBytes } from 'crypto';
 import type {
   CreateTextChatSessionResponse,
   SendTextChatMessageResponse,
   TextChatSessionStatusResponse,
   EndTextChatSessionResponse,
 } from '@/types';
+import { generateNonce, computeSignature } from './hmac-signing';
 
 /**
  * Text Chat API Client for the Orchestrator Service
@@ -32,41 +32,6 @@ interface SendMessageParams {
 }
 
 /**
- * Generates a cryptographically secure random nonce.
- * Per ADMIN_API.md: minimum 16 characters, URL-safe.
- * Uses 24 random bytes encoded as base64url (32 characters).
- */
-function generateNonce(): string {
-  return randomBytes(24).toString('base64url');
-}
-
-/**
- * Generates HMAC-SHA256 signature for Text Chat API requests.
- *
- * Signature format (per ADMIN_API.md specification):
- * 1. Hash the body with SHA-256
- * 2. Concatenate: timestamp + nonce + method + path + body_hash
- * 3. HMAC-SHA256 with API key
- */
-function generateSignature(
-  apiKey: string,
-  timestamp: string,
-  nonce: string,
-  method: string,
-  path: string,
-  body: string
-): string {
-  // Hash the body to normalize it (handles empty bodies consistently)
-  const bodyHash = createHash('sha256').update(body).digest('hex');
-
-  // Create the message to sign (includes nonce for replay attack protection)
-  const message = `${timestamp}${nonce}${method.toUpperCase()}${path}${bodyHash}`;
-
-  // Compute HMAC-SHA256
-  return createHmac('sha256', apiKey).update(message).digest('hex');
-}
-
-/**
  * Makes a signed request to the Text Chat API.
  * Includes HMAC-SHA256 signature with nonce for replay attack protection.
  */
@@ -86,7 +51,7 @@ async function makeTextChatApiRequest<T>(
   const timestamp = Math.floor(Date.now() / 1000).toString();
   const nonce = generateNonce();
   const bodyStr = body ? JSON.stringify(body) : '';
-  const signature = generateSignature(
+  const signature = computeSignature(
     TEXT_CHAT_API_KEY,
     timestamp,
     nonce,
