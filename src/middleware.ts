@@ -15,6 +15,7 @@ export async function middleware(request: NextRequest) {
   if (
     pathname.startsWith('/login') ||
     pathname.startsWith('/api/auth') || // All auth routes (login, logout, Better Auth callbacks)
+    pathname.startsWith('/api/health') || // Health check endpoint for container orchestration
     pathname.startsWith('/monitoring-tunnel') // Sentry tunnel route
   ) {
     return NextResponse.next();
