@@ -20,7 +20,7 @@ import { ExternalLink, Database, Volume2, Phone, AlertTriangle, MessageSquare } 
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { useRagConfigsDropdown, useRagConfig } from '@/lib/hooks/use-rag-configs';
-import { useVoiceConfigsDropdown, useVoiceConfig } from '@/lib/hooks/use-voice-configs';
+import { useVoiceConfigsDropdown } from '@/lib/hooks/use-voice-configs';
 import { useAgentPhoneConfigs } from '@/lib/hooks/use-phone-configs';
 import { useLlmModelsDropdown } from '@/lib/hooks/use-llm-configs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -86,7 +86,7 @@ interface SettingsFormProps {
 }
 
 export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlobalPrompt, ragEnabled: initialRagEnabled, ragConfigId: initialRagConfigId, voiceConfigId: initialVoiceConfigId, onSave }: SettingsFormProps) {
-  const [_isSaving, _setIsSaving] = useState(false);
+  const [, setIsSaving] = useState(false);
 
   // Get draft context (optional - component can work without it)
   const draftContext = useOptionalAgentDraft();
@@ -165,9 +165,6 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
 
   // Fetch selected RAG config details for preview
   const { data: selectedRagConfig } = useRagConfig(selectedRagConfigId || '');
-
-  // Fetch selected Voice config details for preview
-  const { data: _selectedVoiceConfig } = useVoiceConfig(selectedVoiceConfigId || '');
 
   // LLM Settings (stored in workflow.llm per AGENT_JSON_SCHEMA.md)
   const workflowLlm = currentConfig.workflow?.llm;
@@ -326,6 +323,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
       autoHangupEnabled: currentConfig.auto_hangup?.enabled ?? true,
     };
     initialStateRef.current = JSON.stringify(initialSettings);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentional: capture initial state only once on mount
   }, []);
 
   // Sync current state to draft context and track dirty state
@@ -352,7 +350,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    _setIsSaving(true);
+    setIsSaving(true);
 
     try {
       // RAG config - only use shared config reference
@@ -436,7 +434,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to save settings');
     } finally {
-      _setIsSaving(false);
+      setIsSaving(false);
     }
   };
 

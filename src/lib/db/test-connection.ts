@@ -1,7 +1,7 @@
-import 'dotenv/config';
 import { db } from './index';
-import { sql } from 'drizzle-orm';
+import { sql, count } from 'drizzle-orm';
 import { loggers } from '@/lib/logger';
+import { calls, agents, tenants } from './schema';
 
 const log = loggers.db;
 
@@ -9,11 +9,13 @@ async function testConnection() {
   try {
     log.info('Testing database connection...');
 
-    // Test basic connection
+    // Test basic connection - raw SQL required for system functions
+    // nosemgrep: no-raw-sql-queries
     const result = await db.execute(sql`SELECT NOW() as current_time, current_database() as database`);
     log.info({ result: result[0] }, 'Database connection successful!');
 
-    // Test if tables exist
+    // Test if tables exist - raw SQL required for information_schema queries
+    // nosemgrep: no-raw-sql-queries
     const tablesResult = await db.execute(sql`
       SELECT table_name
       FROM information_schema.tables
@@ -24,16 +26,16 @@ async function testConnection() {
     const tables = tablesResult.map((row: { table_name?: string }) => row.table_name);
     log.info({ tables }, 'Tables in database');
 
-    // Count records in key tables (if they exist)
+    // Count records in key tables using Drizzle ORM
     try {
-      const callsCount = await db.execute(sql`SELECT COUNT(*) as count FROM calls`) as { count: number }[];
-      const agentsCount = await db.execute(sql`SELECT COUNT(*) as count FROM agents`) as { count: number }[];
-      const tenantsCount = await db.execute(sql`SELECT COUNT(*) as count FROM tenants`) as { count: number }[];
+      const [callsResult] = await db.select({ count: count() }).from(calls);
+      const [agentsResult] = await db.select({ count: count() }).from(agents);
+      const [tenantsResult] = await db.select({ count: count() }).from(tenants);
 
       log.info({
-        calls: callsCount[0].count,
-        agents: agentsCount[0].count,
-        tenants: tenantsCount[0].count,
+        calls: callsResult.count,
+        agents: agentsResult.count,
+        tenants: tenantsResult.count,
       }, 'Record counts');
     } catch {
       log.debug('Some tables might not have data yet, which is normal.');

@@ -45,7 +45,6 @@ import type { WorkflowConfig } from '@/lib/validations/agents';
 
 interface VersionsTabProps {
   agentId: string;
-  activeVersionId?: string;
 }
 
 // Extended config type that includes optional legacy fields at root level
@@ -72,7 +71,7 @@ interface AgentVersion {
   notes: string | null;
 }
 
-export function VersionsTab({ agentId, activeVersionId: _activeVersionId }: VersionsTabProps) {
+export function VersionsTab({ agentId }: VersionsTabProps) {
   const { data: versions, isLoading, error } = useAgentVersions(agentId);
   const activateVersion = useActivateVersion();
   const [selectedVersion, setSelectedVersion] = useState<AgentVersion | null>(null);

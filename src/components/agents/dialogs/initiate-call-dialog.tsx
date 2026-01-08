@@ -93,12 +93,14 @@ export function InitiateCallDialog({
     refetchInterval: callState === 'active' ? 2000 : undefined, // Poll every 2 seconds
   });
 
-  // Update call state based on status
+  // Update call state based on terminal status from server
+  // This is intentional state synchronization with server data
   useEffect(() => {
     if (callStatus && TERMINAL_STATUSES.includes(callStatus.status)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Syncing with server response
       setCallState(callStatus.status === 'completed' ? 'completed' : 'failed');
     }
-  }, [callStatus?.status]);
+  }, [callStatus]);
 
   // Reset state when dialog opens/closes
   useEffect(() => {

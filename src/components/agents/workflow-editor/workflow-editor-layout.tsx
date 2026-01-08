@@ -68,12 +68,11 @@ function useOptionalAgentDraft() {
   }
 }
 
-function WorkflowEditorContent({ initialConfig, onSave, agentId }: WorkflowEditorLayoutProps) {
+function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNodeData>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedNode, setSelectedNode] = useState<Node<WorkflowNodeData> | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
-  const [_isSaving, _setIsSaving] = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [validationResult, setValidationResult] = useState<{
     valid: boolean;
@@ -182,7 +181,9 @@ function WorkflowEditorContent({ initialConfig, onSave, agentId }: WorkflowEdito
   // Sync current state to draft context and track dirty state
   // Use a ref for draftContext to avoid circular updates
   const draftContextRef = useRef(draftContext);
-  draftContextRef.current = draftContext;
+  useEffect(() => {
+    draftContextRef.current = draftContext;
+  }, [draftContext]);
 
   useEffect(() => {
     if (!isInitializedRef.current || !initialConfig || nodes.length === 0) return;
@@ -424,38 +425,6 @@ function WorkflowEditorContent({ initialConfig, onSave, agentId }: WorkflowEdito
     },
     [setNodes, setEdges]
   );
-
-  // Handle save - exported for parent components if needed
-  const _handleSave = useCallback(async () => {
-    if (!onSave) return;
-
-    // Validate first
-    const result = validateWorkflowGraph(nodes, edges);
-    if (!result.valid) {
-      toast.error('Cannot save: workflow has validation errors');
-      setValidationResult(result);
-      return;
-    }
-
-    _setIsSaving(true);
-    try {
-      const updatedConfig = nodesToWorkflow(nodes, edges, initialConfig);
-      await onSave(updatedConfig);
-      // Update initial state after successful save
-      initialStateRef.current = JSON.stringify(updatedConfig);
-      // Clear dirty state
-      if (draftContext) {
-        draftContext.setIsWorkflowDirty(false);
-        draftContext.setWorkflowDraft(null);
-      }
-      toast.success('Workflow saved successfully');
-    } catch (error) {
-      console.error('Failed to save workflow:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to save workflow');
-    } finally {
-      _setIsSaving(false);
-    }
-  }, [nodes, edges, initialConfig, onSave, draftContext]);
 
   // Calculate validation counts
   const validationCounts = useMemo(() => {

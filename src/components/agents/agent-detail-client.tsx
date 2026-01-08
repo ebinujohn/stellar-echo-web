@@ -262,7 +262,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
       navigateAfterSave: navigateTo || undefined,
     });
     setSaveDialogOpen(true);
-  }, [agent?.activeVersion, isWorkflowDirty, workflowDraft, isSettingsDirty, settingsDraft]);
+  }, [agent, isWorkflowDirty, workflowDraft, isSettingsDirty, settingsDraft]);
 
   // Handle unsaved changes dialog action
   const handleUnsavedAction = useCallback(
@@ -990,10 +990,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
 
         {/* Versions Tab */}
         <TabsContent value="versions" className="space-y-4">
-          <VersionsTab
-            agentId={agentId}
-            activeVersionId={agent.activeVersion?.id}
-          />
+          <VersionsTab agentId={agentId} />
         </TabsContent>
 
         {/* Settings Tab */}

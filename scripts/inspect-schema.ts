@@ -1,8 +1,9 @@
-import * as dotenv from 'dotenv';
-import * as path from 'path';
 import postgres from 'postgres';
+import { loadEnv } from '../src/lib/env';
 
-dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
+// Load environment variables from .env.local if it exists,
+// otherwise use environment variables from the deployment environment
+loadEnv();
 
 const connectionString = `postgresql://${process.env.DB_USER}:${process.env.DB_PASSWORD}@${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`;
 

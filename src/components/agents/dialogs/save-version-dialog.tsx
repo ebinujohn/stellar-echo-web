@@ -31,9 +31,10 @@ export function SaveVersionDialog({
 }: SaveVersionDialogProps) {
   const [notes, setNotes] = useState(defaultNotes);
 
-  // Reset notes when dialog opens
+  // Reset notes when dialog opens - this is intentional form reset behavior
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional form reset on dialog open
       setNotes(defaultNotes);
     }
   }, [open, defaultNotes]);
