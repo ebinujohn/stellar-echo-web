@@ -7,17 +7,41 @@ import { loadEnv } from '../env';
 // otherwise use environment variables from the deployment environment
 loadEnv();
 
-// Get database credentials from environment variables
-const connectionString = `postgresql://${process.env.DB_USER}:${process.env.DB_PASSWORD}@${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`;
+// Lazy initialization for database connection
+// This prevents connection attempts during Next.js build when env vars aren't available
+let _db: ReturnType<typeof drizzle<typeof schema>> | null = null;
+let _queryClient: ReturnType<typeof postgres> | null = null;
 
-// For query purposes
-const queryClient = postgres(connectionString, {
-  max: 10, // Maximum number of connections
-  idle_timeout: 20, // Close connections after 20 seconds of inactivity
-  connect_timeout: 10, // Connection timeout in seconds
+function getConnectionString(): string {
+  const { DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, DB_NAME } = process.env;
+  return `postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}`;
+}
+
+function createDb() {
+  if (!_db) {
+    const connectionString = getConnectionString();
+    _queryClient = postgres(connectionString, {
+      max: 10, // Maximum number of connections
+      idle_timeout: 20, // Close connections after 20 seconds of inactivity
+      connect_timeout: 10, // Connection timeout in seconds
+    });
+    _db = drizzle(_queryClient, { schema });
+  }
+  return _db;
+}
+
+// Export a proxy that lazily initializes the database connection
+// This allows the module to be imported during build without establishing a connection
+export const db = new Proxy({} as ReturnType<typeof drizzle<typeof schema>>, {
+  get(_target, prop) {
+    const realDb = createDb();
+    const value = realDb[prop as keyof typeof realDb];
+    if (typeof value === 'function') {
+      return value.bind(realDb);
+    }
+    return value;
+  },
 });
-
-export const db = drizzle(queryClient, { schema });
 
 // Types
 export type Database = typeof db;
