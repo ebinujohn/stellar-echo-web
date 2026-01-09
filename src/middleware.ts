@@ -3,6 +3,9 @@ import type { NextRequest } from 'next/server';
 import { verifyToken, refreshAccessToken } from '@/lib/auth/jwt';
 import { getSessionCookie } from 'better-auth/cookies';
 
+// Simple console logger for middleware (Edge runtime doesn't support pino)
+const DEBUG = process.env.LOG_LEVEL === 'debug' || process.env.LOG_LEVEL === 'trace';
+
 /**
  * Middleware that handles both authentication systems:
  * - JWT (email/password users)
@@ -11,6 +14,26 @@ import { getSessionCookie } from 'better-auth/cookies';
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Debug logging for health check requests
+  if (DEBUG && pathname.startsWith('/api/health')) {
+    console.log('[middleware] Health check request:', {
+      pathname,
+      url: request.url,
+      method: request.method,
+      nextUrl: {
+        pathname: request.nextUrl.pathname,
+        search: request.nextUrl.search,
+        href: request.nextUrl.href,
+      },
+      headers: {
+        host: request.headers.get('host'),
+        'x-forwarded-proto': request.headers.get('x-forwarded-proto'),
+        'x-forwarded-for': request.headers.get('x-forwarded-for'),
+        'user-agent': request.headers.get('user-agent'),
+      },
+    });
+  }
+
   // Public routes - no auth required
   if (
     pathname.startsWith('/login') ||
@@ -18,6 +41,9 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/health') || // Health check endpoint for container orchestration
     pathname.startsWith('/monitoring-tunnel') // Sentry tunnel route
   ) {
+    if (DEBUG && pathname.startsWith('/api/health')) {
+      console.log('[middleware] Health check - bypassing auth, returning NextResponse.next()');
+    }
     return NextResponse.next();
   }
 

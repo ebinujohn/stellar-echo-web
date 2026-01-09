@@ -4,6 +4,9 @@ import { withSentryConfig } from "@sentry/nextjs";
 const nextConfig: NextConfig = {
   // Enable standalone output for optimized Docker builds
   output: 'standalone',
+
+  // Prevent 307 redirects on health check endpoint from trailing slash normalization
+  skipTrailingSlashRedirect: true,
 };
 
 // Sentry configuration options
