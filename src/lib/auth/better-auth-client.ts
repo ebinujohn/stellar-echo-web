@@ -9,9 +9,13 @@ import { createAuthClient } from 'better-auth/react';
  * - signIn.social({ provider: 'google' }) for Google OAuth
  * - signOut() for logging out
  * - useSession() for checking session state
+ *
+ * Uses window.location.origin as baseURL to ensure OAuth works correctly
+ * regardless of which domain the app is accessed from (localhost, ngrok, production).
+ * This avoids issues with NEXT_PUBLIC_* variables being baked in at build time.
  */
 export const authClient = createAuthClient({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000',
+  baseURL: typeof window !== 'undefined' ? window.location.origin : '',
 });
 
 // Export convenience methods
