@@ -34,6 +34,15 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const session = await requireAuth();
+
+    // Global users cannot create agents (no tenant context)
+    if (session.isGlobalUser || !session.tenantId) {
+      return NextResponse.json(
+        { success: false, error: 'Global users cannot create agents. Please select a tenant context.' },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
 
     // Validate agent metadata

@@ -5,6 +5,15 @@ import { db } from '@/lib/db';
 import * as schema from '@/lib/db/schema';
 
 /**
+ * Get the default tenant ID for new users
+ * Assumes only one tenant exists and returns its ID
+ */
+async function getDefaultTenantId(): Promise<string | null> {
+  const tenant = await db.query.tenants.findFirst();
+  return tenant?.id ?? null;
+}
+
+/**
  * Allowed email domain for Google OAuth sign-in
  */
 const ALLOWED_DOMAIN = 'higgsbosonhealth.com';
@@ -13,7 +22,7 @@ const ALLOWED_DOMAIN = 'higgsbosonhealth.com';
  * Better Auth configuration for Google Workspace OAuth
  *
  * - Restricts sign-in to higgsbosonhealth.com domain only
- * - Google users get isGlobalUser=true (cross-tenant access)
+ * - Google users are assigned to the default tenant (first tenant in DB)
  * - Google users get role='admin' by default
  * - Supports account linking for existing email/password users
  */
@@ -131,12 +140,16 @@ export const auth = betterAuth({
           // The user.id at this point is the Google sub claim before Better Auth assigns a new ID
           const googleId = user.id;
 
-          // Set Google OAuth users as global admins
+          // Get the default tenant for new users
+          const defaultTenantId = await getDefaultTenantId();
+          console.log('[BetterAuth] Default tenant ID:', defaultTenantId);
+
+          // Set Google OAuth users as admins with default tenant
           const userData = {
             ...user,
             role: 'admin',
-            isGlobalUser: true, // Cross-tenant access
-            tenantId: null, // No specific tenant
+            isGlobalUser: !defaultTenantId, // Only global if no tenant exists
+            tenantId: defaultTenantId, // Assign to default tenant
             emailVerified: true, // Google verifies email
             isActive: true, // Ensure user is active
             googleId: googleId, // Store Google's user ID
