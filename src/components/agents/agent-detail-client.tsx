@@ -25,6 +25,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import { useAgent, useCreateVersion, useAgentVersions } from '@/lib/hooks/use-agents';
+import { ApiError } from '@/lib/hooks/factories/create-api-hooks';
 import { useAgentPhoneConfigs } from '@/lib/hooks/use-phone-configs';
 import { useVoiceConfig } from '@/lib/hooks/use-voice-configs';
 import { formatDateTime, formatPhoneNumber } from '@/lib/utils/formatters';
@@ -467,7 +468,11 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
         router.push(navigateTo);
       }
     } catch (error) {
-      toast.error('Failed to save changes');
+      const message =
+        error instanceof ApiError
+          ? error.getFullMessage()
+          : 'Failed to save changes';
+      toast.error(message);
       throw error;
     }
   };

@@ -1,13 +1,56 @@
 import { useQuery, useMutation, useQueryClient, QueryKey } from '@tanstack/react-query';
 
 /**
+ * API error detail from validation
+ */
+export interface ApiErrorDetail {
+  path?: (string | number)[];
+  message: string;
+  code?: string;
+}
+
+/**
+ * Custom error class that preserves API error details
+ */
+export class ApiError extends Error {
+  public readonly details?: ApiErrorDetail[];
+  public readonly warnings?: string[];
+
+  constructor(
+    message: string,
+    details?: ApiErrorDetail[],
+    warnings?: string[]
+  ) {
+    super(message);
+    this.name = 'ApiError';
+    this.details = details;
+    this.warnings = warnings;
+  }
+
+  /**
+   * Get a formatted error message including details
+   */
+  getFullMessage(): string {
+    if (!this.details || this.details.length === 0) {
+      return this.message;
+    }
+    const detailMessages = this.details.map((d) => d.message).join('; ');
+    return `${this.message}: ${detailMessages}`;
+  }
+}
+
+/**
  * Generic fetch wrapper with consistent error handling
  */
 export async function apiFetch<T>(endpoint: string): Promise<T> {
   const response = await fetch(endpoint);
   if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.error || `Failed to fetch ${endpoint}`);
+    const errorBody = await response.json().catch(() => ({}));
+    throw new ApiError(
+      errorBody.error || `Failed to fetch ${endpoint}`,
+      errorBody.details,
+      errorBody.warnings
+    );
   }
   const json = await response.json();
   return json.data;
@@ -36,8 +79,12 @@ export async function apiMutate<T = unknown>(
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.error || `Failed to ${method} ${endpoint}`);
+    const errorBody = await response.json().catch(() => ({}));
+    throw new ApiError(
+      errorBody.error || `Failed to ${method} ${endpoint}`,
+      errorBody.details,
+      errorBody.warnings
+    );
   }
 
   return response.json();
