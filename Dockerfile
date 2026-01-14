@@ -71,9 +71,9 @@ USER nextjs
 # Expose port
 EXPOSE 3000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:3000/api/health || exit 1
+# Health check (use 127.0.0.1 instead of localhost to avoid IPv6 resolution issues in Alpine)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://127.0.0.1:3000/api/health || exit 1
 
 # Use tini as init system
 ENTRYPOINT ["/sbin/tini", "--"]

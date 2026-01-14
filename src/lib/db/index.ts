@@ -20,10 +20,13 @@ function getConnectionString(): string {
 function createDb() {
   if (!_db) {
     const connectionString = getConnectionString();
+    // Enable SSL for production database connections (required by most cloud databases)
+    const sslEnabled = process.env.DB_SSL === 'true' || process.env.NODE_ENV === 'production';
     _queryClient = postgres(connectionString, {
       max: 10, // Maximum number of connections
       idle_timeout: 20, // Close connections after 20 seconds of inactivity
       connect_timeout: 10, // Connection timeout in seconds
+      ssl: sslEnabled ? 'require' : false,
     });
     _db = drizzle(_queryClient, { schema });
   }
