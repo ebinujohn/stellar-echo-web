@@ -89,6 +89,12 @@ export const auth = betterAuth({
         defaultValue: false,
         input: false,
       },
+      isActive: {
+        type: 'boolean',
+        required: true,
+        defaultValue: true,
+        input: false,
+      },
       tenantId: {
         type: 'string',
         required: false,
@@ -107,27 +113,43 @@ export const auth = betterAuth({
     user: {
       create: {
         before: async (user) => {
+          console.log('[BetterAuth] User create hook - incoming user:', JSON.stringify(user, null, 2));
+
           // Extract email domain
           const email = user.email;
           const domain = email.split('@')[1]?.toLowerCase();
 
           // Validate domain for Google OAuth users
           if (domain !== ALLOWED_DOMAIN) {
+            console.log('[BetterAuth] Domain validation failed:', domain);
             throw new APIError('FORBIDDEN', {
               message: `Only @${ALLOWED_DOMAIN} email addresses are allowed to sign in with Google`,
             });
           }
 
+          // Capture Google ID if present (from OAuth response)
+          // The user.id at this point is the Google sub claim before Better Auth assigns a new ID
+          const googleId = user.id;
+
           // Set Google OAuth users as global admins
-          return {
-            data: {
-              ...user,
-              role: 'admin',
-              isGlobalUser: true, // Cross-tenant access
-              tenantId: null, // No specific tenant
-              emailVerified: true, // Google verifies email
-            },
+          const userData = {
+            ...user,
+            role: 'admin',
+            isGlobalUser: true, // Cross-tenant access
+            tenantId: null, // No specific tenant
+            emailVerified: true, // Google verifies email
+            isActive: true, // Ensure user is active
+            googleId: googleId, // Store Google's user ID
           };
+
+          console.log('[BetterAuth] User create hook - modified user:', JSON.stringify(userData, null, 2));
+
+          return {
+            data: userData,
+          };
+        },
+        after: async (user) => {
+          console.log('[BetterAuth] User created successfully:', user.id, user.email);
         },
       },
     },

@@ -13,6 +13,8 @@ export const users = pgTable(
     email: varchar('email', { length: 255 }).notNull(),
     passwordHash: text('password_hash'),
     name: varchar('name', { length: 255 }).notNull(),
+    // Profile image URL (populated from Google OAuth)
+    image: text('image'),
     role: userRoleEnum('role').notNull().default('user'),
     isActive: boolean('is_active').notNull().default(true),
     emailVerified: boolean('email_verified').notNull().default(false),
