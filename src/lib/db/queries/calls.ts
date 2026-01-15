@@ -1,6 +1,6 @@
 import { db } from '../index';
 import { calls, callMessages, callTransitions, callMetricsSummary, callAnalysis, agents, agentConfigVersions } from '../schema';
-import { eq, and, gte, lte, desc, count, sql, ilike, or } from 'drizzle-orm';
+import { eq, and, gte, lte, desc, count, sql, ilike, or, inArray } from 'drizzle-orm';
 import type { CallFilters } from '@/types';
 import { tenantFilter, type QueryContext } from './utils';
 
@@ -201,36 +201,40 @@ export async function getAgentsList(ctx: QueryContext) {
     orderBy: [agents.name],
   });
 
-  // Get call counts for each agent
-  const agentsWithStats = await Promise.all(
-    agentData.map(async (agent) => {
-      const callConditions = [eq(calls.agentId, agent.id)];
-      const callTenantCondition = tenantFilter(calls.tenantId, ctx);
-      if (callTenantCondition) callConditions.push(callTenantCondition);
+  // Early return if no agents
+  if (agentData.length === 0) {
+    return [];
+  }
 
-      const callCount = await db
-        .select({ count: count() })
-        .from(calls)
-        .where(and(...callConditions))
-        .then(result => result[0]?.count || 0);
+  const agentIds = agentData.map((a) => a.id);
 
-      // Get active version
-      const activeVersion = await db.query.agentConfigVersions.findFirst({
-        where: and(
-          eq(agentConfigVersions.agentId, agent.id),
-          eq(agentConfigVersions.isActive, true)
-        ),
-      });
+  // Batch query 1: Get all call counts in one query (grouped by agentId)
+  const callCountConditions = [inArray(calls.agentId, agentIds)];
+  const callTenantCondition = tenantFilter(calls.tenantId, ctx);
+  if (callTenantCondition) callCountConditions.push(callTenantCondition);
 
-      return {
-        ...agent,
-        callCount: Number(callCount),
-        activeVersion: activeVersion?.version || null,
-      };
-    })
-  );
+  const callCounts = await db
+    .select({ agentId: calls.agentId, count: count() })
+    .from(calls)
+    .where(and(...callCountConditions))
+    .groupBy(calls.agentId);
+  const callCountMap = new Map(callCounts.map((c) => [c.agentId, Number(c.count)]));
 
-  return agentsWithStats;
+  // Batch query 2: Get all active versions in one query
+  const activeVersions = await db.query.agentConfigVersions.findMany({
+    where: and(
+      inArray(agentConfigVersions.agentId, agentIds),
+      eq(agentConfigVersions.isActive, true)
+    ),
+  });
+  const versionMap = new Map(activeVersions.map((v) => [v.agentId, v.version]));
+
+  // Map results without additional queries
+  return agentData.map((agent) => ({
+    ...agent,
+    callCount: callCountMap.get(agent.id) || 0,
+    activeVersion: versionMap.get(agent.id) || null,
+  }));
 }
 
 /**

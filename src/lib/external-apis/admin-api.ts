@@ -4,6 +4,37 @@ import { generateNonce, computeSignature } from './hmac-signing';
 
 const log = loggers.admin;
 
+// Default timeout for external API calls (10 seconds)
+const DEFAULT_API_TIMEOUT_MS = 10_000;
+
+/**
+ * Fetch with timeout support using AbortController.
+ * Prevents hanging requests when external services are slow or unresponsive.
+ */
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs: number = DEFAULT_API_TIMEOUT_MS
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    return response;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Request timeout after ${timeoutMs}ms: ${url}`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 /**
  * Admin API Client for the Orchestrator Service
  *
@@ -61,7 +92,7 @@ async function makeAdminApiRequest(
   const bodyStr = JSON.stringify(body);
   const signature = computeSignature(ADMIN_API_KEY, timestamp, nonce, method, path, bodyStr);
 
-  const response = await fetch(`${ADMIN_API_BASE_URL}${path}`, {
+  const response = await fetchWithTimeout(`${ADMIN_API_BASE_URL}${path}`, {
     method,
     headers: {
       'Content-Type': 'application/json',
@@ -166,7 +197,7 @@ export async function queryRAG(params: RAGQueryParams): Promise<RAGQueryResponse
   const bodyStr = JSON.stringify(requestBody);
   const signature = computeSignature(ADMIN_API_KEY, timestamp, nonce, 'POST', path, bodyStr);
 
-  const response = await fetch(`${ADMIN_API_BASE_URL}${path}`, {
+  const response = await fetchWithTimeout(`${ADMIN_API_BASE_URL}${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -274,7 +305,7 @@ export async function initiateOutboundCall(
   const bodyStr = JSON.stringify(requestBody);
   const signature = computeSignature(ADMIN_API_KEY, timestamp, nonce, 'POST', path, bodyStr);
 
-  const response = await fetch(`${ADMIN_API_BASE_URL}${path}`, {
+  const response = await fetchWithTimeout(`${ADMIN_API_BASE_URL}${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -313,7 +344,7 @@ export async function getCallStatus(callId: string): Promise<CallStatusResponse>
   const bodyStr = '';
   const signature = computeSignature(ADMIN_API_KEY, timestamp, nonce, 'GET', path, bodyStr);
 
-  const response = await fetch(`${ADMIN_API_BASE_URL}${path}`, {
+  const response = await fetchWithTimeout(`${ADMIN_API_BASE_URL}${path}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -451,7 +482,7 @@ export async function getCallDebugTrace(callId: string): Promise<CallDebugTraceR
   const bodyStr = '';
   const signature = computeSignature(ADMIN_API_KEY, timestamp, nonce, 'GET', path, bodyStr);
 
-  const response = await fetch(`${ADMIN_API_BASE_URL}${path}`, {
+  const response = await fetchWithTimeout(`${ADMIN_API_BASE_URL}${path}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -556,7 +587,7 @@ export async function deployRagFromS3(
   const bodyStr = JSON.stringify(requestBody);
   const signature = computeSignature(ADMIN_API_KEY, timestamp, nonce, 'POST', path, bodyStr);
 
-  const response = await fetch(`${ADMIN_API_BASE_URL}${path}`, {
+  const response = await fetchWithTimeout(`${ADMIN_API_BASE_URL}${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -600,7 +631,7 @@ export async function getRagDeploymentStatus(
   const bodyStr = '';
   const signature = computeSignature(ADMIN_API_KEY, timestamp, nonce, 'GET', path, bodyStr);
 
-  const response = await fetch(`${ADMIN_API_BASE_URL}${path}`, {
+  const response = await fetchWithTimeout(`${ADMIN_API_BASE_URL}${path}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
