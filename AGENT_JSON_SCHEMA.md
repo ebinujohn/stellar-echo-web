@@ -16,6 +16,8 @@ This document provides a comprehensive specification of the JSON schema used for
    - [Per-Node Interruption Control](#per-node-interruption-control)
    - [History Window Details](#history-window-details)
    - [Max Transitions Limit](#max-transitions-limit)
+   - [Global Intents](#global-intents)
+   - [Post-Call Analysis](#post-call-analysis-configuration)
 5. [Node Types](#node-types)
    - [Standard Node](#standard-node)
    - [Retrieve Variable Node](#retrieve-variable-node)
@@ -306,6 +308,225 @@ If transitions exceed 50, call forces end.
 - **Increase** (100+): Complex workflows with many steps
 - **Decrease** (10): Simple workflows, detect runaway loops quickly
 - Keep sensible limit to catch infinite loop bugs
+
+### Global Intents
+
+Global intents enable workflow-wide "always listening" conditions that can trigger from any node. Unlike node-level intents (which only work within a specific node), global intents are evaluated on EVERY user input before node-level transitions.
+
+#### Schema
+
+```json
+{
+  "workflow": {
+    "global_intents": {
+      "intent_id": {
+        "description": "string (required)",
+        "examples": ["string"],
+        "target_node": "string (required)",
+        "priority": 0,
+        "active_from_nodes": ["string"] | null,
+        "excluded_from_nodes": ["string"] | null
+      }
+    },
+    "global_intent_config": {
+      "enabled": true,
+      "confidence_threshold": 0.75,
+      "context_messages": 4
+    }
+  }
+}
+```
+
+#### Global Intent Definition Fields
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `description` | string | ✅ Yes | - | What this intent represents (used for AI classification) |
+| `examples` | array | ❌ No | `[]` | Example utterances that trigger this intent |
+| `target_node` | string | ✅ Yes | - | Node ID to transition to when matched |
+| `priority` | integer | ❌ No | `0` | Higher priority wins when multiple intents match |
+| `active_from_nodes` | array | ❌ No | `null` | Whitelist: Only evaluate when in these nodes |
+| `excluded_from_nodes` | array | ❌ No | `null` | Blacklist: Never evaluate when in these nodes |
+
+#### Global Intent Config Fields
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `enabled` | boolean | ❌ No | `true` | Enable/disable global intent matching |
+| `confidence_threshold` | float | ❌ No | `0.75` | Minimum confidence (0.0-1.0) to trigger |
+| `context_messages` | integer | ❌ No | `4` | Messages to include in classification context |
+
+#### Example: Multi-Topic Agent with Global Intents
+
+```json
+{
+  "workflow": {
+    "initial_node": "greeting",
+    "global_intents": {
+      "appointment_topic": {
+        "description": "User wants to discuss appointments or scheduling",
+        "examples": ["appointment", "schedule", "what to bring"],
+        "target_node": "appointment_info",
+        "priority": 10
+      },
+      "mri_topic": {
+        "description": "User wants information about MRI procedures",
+        "examples": ["MRI", "scan", "magnetic", "imaging"],
+        "target_node": "mri_info",
+        "priority": 10
+      },
+      "emergency_exit": {
+        "description": "User is experiencing an emergency",
+        "examples": ["emergency", "urgent", "call 911"],
+        "target_node": "emergency_redirect",
+        "priority": 100,
+        "excluded_from_nodes": ["emergency_redirect", "end_call"]
+      }
+    },
+    "global_intent_config": {
+      "enabled": true,
+      "confidence_threshold": 0.7,
+      "context_messages": 4
+    },
+    "nodes": [...]
+  }
+}
+```
+
+#### Evaluation Order
+
+1. User input received
+2. Global intents evaluated FIRST (if `global_intent_config.enabled: true`)
+3. Filter by `active_from_nodes` / `excluded_from_nodes`
+4. Classify against active global intents
+5. If match with confidence ≥ threshold → transition to `target_node`
+6. If no match → proceed with node-level transition evaluation
+
+#### Validation Rules
+
+- All `target_node` values must reference existing nodes
+- `active_from_nodes` entries must reference existing nodes
+- `excluded_from_nodes` entries must reference existing nodes
+- `confidence_threshold` must be between 0.0 and 1.0
+
+### Post-Call Analysis Configuration
+
+Configure post-call AI analysis with optional structured questionnaires for extracting specific data from call transcripts.
+
+#### Schema
+
+```json
+{
+  "workflow": {
+    "post_call_analysis": {
+      "enabled": true,
+      "questions": [
+        {
+          "name": "string (required)",
+          "description": "string",
+          "type": "string|number|enum|boolean",
+          "choices": [
+            {
+              "value": "string (required)",
+              "label": "string"
+            }
+          ],
+          "required": false
+        }
+      ],
+      "additional_instructions": "string"
+    }
+  }
+}
+```
+
+#### Post-Call Analysis Fields
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `enabled` | boolean | ❌ No | `true` | Enable/disable post-call analysis |
+| `questions` | array | ❌ No | `[]` | Structured questions to answer from transcript |
+| `additional_instructions` | string | ❌ No | `null` | Extra instructions for the analysis LLM |
+
+#### Question Fields
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `name` | string | ✅ Yes | - | Question identifier/text |
+| `description` | string | ❌ No | `""` | Additional context for the LLM |
+| `type` | string | ❌ No | `"string"` | Type: `"string"`, `"number"`, `"enum"`, `"boolean"` |
+| `choices` | array | ⚠️ Required for enum | `[]` | Valid choices for enum-type questions |
+| `required` | boolean | ❌ No | `false` | Whether this question must be answered |
+
+#### Choice Fields (for enum type)
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `value` | string | ✅ Yes | - | The answer value stored in database |
+| `label` | string | ❌ No | Same as value | Display label for the choice |
+
+#### Example: Healthcare SDOH Screening
+
+```json
+{
+  "workflow": {
+    "post_call_analysis": {
+      "enabled": true,
+      "questions": [
+        {
+          "name": "Do you currently have a steady place to live?",
+          "type": "enum",
+          "choices": [
+            {"value": "yes", "label": "Yes"},
+            {"value": "yes_worried", "label": "Yes, but worried about losing it"},
+            {"value": "no", "label": "No"}
+          ],
+          "required": true
+        },
+        {
+          "name": "Food security concerns",
+          "type": "boolean",
+          "description": "Did the caller express concerns about access to food?"
+        },
+        {
+          "name": "Number of risk factors identified",
+          "type": "number",
+          "description": "Count how many SDOH questions had concerning responses"
+        },
+        {
+          "name": "Caller's primary concern",
+          "type": "string",
+          "description": "Summarize the caller's main issue in 1-2 sentences"
+        }
+      ],
+      "additional_instructions": "Focus on social determinants of health. Be sensitive to indirect mentions of hardship."
+    }
+  }
+}
+```
+
+#### Database Storage
+
+Question responses are stored in the `post_call_question_responses` table:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `call_analysis_id` | UUID | FK to call_analysis record |
+| `question_name` | string | The question identifier |
+| `question_type` | enum | string, number, enum, boolean |
+| `response_value` | text | The extracted answer |
+| `response_confidence` | decimal | AI confidence (0.0-1.0) |
+
+#### Default Analysis (Always Included)
+
+Even without `questions`, post-call analysis extracts:
+- `sentiment`: positive, neutral, negative, mixed
+- `sentiment_score`: -1.0 to 1.0
+- `summary`: 2-3 sentence overview
+- `call_successful`: boolean
+- `success_confidence`: 0.0 to 1.0
+- `keywords_detected`: array of strings
+- `topics_discussed`: array of strings
 
 ---
 
@@ -1587,7 +1808,7 @@ This allows:
 | `enable_ssml_parsing` | boolean | ❌ No | `false` | Parse SSML tags |
 | `pronunciation_dictionaries_enabled` | boolean | ❌ No | `true` | Use pronunciation dictionaries |
 | `pronunciation_dictionary_ids` | array | ❌ No | `[]` | Dictionary IDs from ElevenLabs |
-| `aggregate_sentences` | boolean | ❌ No | `true` | Split text at sentence boundaries before TTS. Set to `false` for more consistent voice prosody across multi-sentence utterances |
+| `aggregate_sentences` | boolean | ❌ No | `true` | When `true` (default), splits text at sentence boundaries (periods, !, ?) before sending to TTS - each sentence is a separate TTS request. When `false`, buffers the entire LLM response and sends it as a single TTS request for more consistent voice prosody across multi-sentence utterances like "Thank you for calling. Have a wonderful day!" |
 
 ### Database Schema
 
@@ -2148,20 +2369,22 @@ Phone number management uses two tables:
 
 ### Recording Configuration
 
-Recording is now split between agent JSON and environment variables:
+Recording is now split between agent JSON and environment variables.
+
+**Default Behavior:** Recording is **enabled by default** for compliance purposes. To disable recording for a specific agent, explicitly set `enabled: false`.
 
 **Per-Agent Setting (workflow JSON):**
 ```json
 {
   "workflow": {
     "recording": {
-      "enabled": true
+      "enabled": false
     }
   }
 }
 ```
 
-Only `enabled` is configurable per-agent. This determines whether recording starts for calls to this agent.
+Only `enabled` is configurable per-agent. This determines whether recording starts for calls to this agent. If omitted, recording is enabled.
 
 **System-Wide Settings (.env file):**
 ```bash
@@ -2612,6 +2835,13 @@ This section provides a comprehensive reference for all workflow configuration t
 | `fts` | Full-Text Search | Keyword-based search using SQLite FTS5. Best for exact keyword matching, technical terms, proper nouns. |
 | `hybrid` | Hybrid Search | Combines vector and FTS results using Reciprocal Rank Fusion (RRF). Configurable weights (default: 60% vector, 40% FTS). |
 
+### Workflow Settings
+
+| Setting | Display Name | Description |
+|---------|--------------|-------------|
+| `global_intents` | Global Intents | Workflow-wide "always listening" intents that can trigger from any node. Use for topic switching, emergency exits, or cross-cutting concerns. |
+| `post_call_analysis` | Post-Call Analysis | Configure post-call AI analysis with optional structured questionnaires (SDOH, surveys, compliance checklists). |
+
 ### Database: workflow_config_types Table
 
 Client UI applications can query the `workflow_config_types` table for configuration options:
@@ -2628,7 +2858,7 @@ ORDER BY category, display_order;
 | Column | Type | Description |
 |--------|------|-------------|
 | `id` | UUID | Primary key |
-| `category` | ENUM | `node_type`, `transition_condition`, `action_type`, `search_mode` |
+| `category` | ENUM | `node_type`, `transition_condition`, `action_type`, `search_mode`, `workflow_setting` |
 | `value` | VARCHAR(100) | Type value (e.g., 'standard', 'timeout', 'log') |
 | `display_name` | VARCHAR(255) | Human-readable name for UI |
 | `description` | TEXT | Full description |
@@ -2651,4 +2881,7 @@ ORDER BY category, display_order;
 
 ---
 
-**Last Updated**: 2025-11-23 (Added CRITICAL warnings for TTS/LLM section requirements; documented proactive LLM generation behavior and two-node speak-then-listen pattern; fixed priority documentation)
+**Last Updated**: 2026-01-14 (Added Global Intents section for workflow-wide topic switching; Added Post-Call Analysis section with structured questionnaires; Added workflow_setting category to config types)
+
+**Previous Updates:**
+- 2025-11-23: Added CRITICAL warnings for TTS/LLM section requirements; documented proactive LLM generation behavior and two-node speak-then-listen pattern; fixed priority documentation

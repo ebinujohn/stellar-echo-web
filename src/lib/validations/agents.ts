@@ -301,6 +301,69 @@ const globalRagConfigSchema = z.object({
   fts_weight: z.number().min(0).max(1).optional(),
 });
 
+// ========================================
+// Global Intent Schemas
+// ========================================
+
+/**
+ * Single global intent definition
+ * Global intents are evaluated on every user input before node-level transitions
+ */
+const globalIntentSchema = z.object({
+  description: z.string().min(1, 'Description is required'),
+  examples: z.array(z.string()).optional().default([]),
+  target_node: z.string().min(1, 'Target node is required'),
+  priority: z.number().int().optional().default(0),
+  active_from_nodes: z.array(z.string()).nullable().optional(),
+  excluded_from_nodes: z.array(z.string()).nullable().optional(),
+});
+
+/**
+ * Global intent configuration
+ */
+const globalIntentConfigSchema = z.object({
+  enabled: z.boolean().optional().default(true),
+  confidence_threshold: z.number().min(0).max(1).optional().default(0.75),
+  context_messages: z.number().int().min(1).max(20).optional().default(4),
+});
+
+// ========================================
+// Post-Call Analysis Schemas
+// ========================================
+
+/**
+ * Choice option for enum-type questions
+ */
+const questionChoiceSchema = z.object({
+  value: z.string().min(1, 'Value is required'),
+  label: z.string().optional(),
+});
+
+/**
+ * Post-call analysis question
+ */
+const postCallQuestionSchema = z
+  .object({
+    name: z.string().min(1, 'Question name is required'),
+    description: z.string().optional(),
+    type: z.enum(['string', 'number', 'enum', 'boolean']).optional().default('string'),
+    choices: z.array(questionChoiceSchema).optional(),
+    required: z.boolean().optional().default(false),
+  })
+  .refine((data) => data.type !== 'enum' || (data.choices && data.choices.length > 0), {
+    message: 'Choices are required for enum-type questions',
+    path: ['choices'],
+  });
+
+/**
+ * Post-call analysis configuration
+ */
+const postCallAnalysisSchema = z.object({
+  enabled: z.boolean().optional().default(true),
+  questions: z.array(postCallQuestionSchema).optional().default([]),
+  additional_instructions: z.string().optional(),
+});
+
 /**
  * Workflow configuration schema
  * Note: llm and tts configs are inside workflow section per AGENT_JSON_SCHEMA.md
@@ -315,6 +378,11 @@ const workflowSchema = z.object({
   llm: llmConfigSchema.optional(), // LLM config lives in workflow section
   tts: ttsConfigSchema.optional(), // TTS tuning config lives in workflow section (per AGENT_JSON_SCHEMA.md)
   rag: globalRagConfigSchema.optional(), // RAG tuning overrides for agent-level settings
+  // Global intents - workflow-wide intent definitions
+  global_intents: z.record(z.string(), globalIntentSchema).optional(),
+  global_intent_config: globalIntentConfigSchema.optional(),
+  // Post-call analysis configuration
+  post_call_analysis: postCallAnalysisSchema.optional(),
   nodes: z.array(nodeSchema).min(1, 'At least one node is required'),
 });
 
@@ -420,6 +488,35 @@ export const workflowConfigSchema = workflowConfigSchemaBase.refine(
     path: ['workflow', 'nodes'],
   }
 ).refine(
+  (data) => {
+    // Validation: global_intents target_node, active_from_nodes, excluded_from_nodes must reference existing nodes
+    const nodeIds = new Set(data.workflow.nodes.map((node) => node.id));
+    const globalIntents = data.workflow.global_intents;
+    if (globalIntents) {
+      for (const intent of Object.values(globalIntents)) {
+        if (!nodeIds.has(intent.target_node)) {
+          return false;
+        }
+        if (intent.active_from_nodes) {
+          for (const nodeId of intent.active_from_nodes) {
+            if (!nodeIds.has(nodeId)) return false;
+          }
+        }
+        if (intent.excluded_from_nodes) {
+          for (const nodeId of intent.excluded_from_nodes) {
+            if (!nodeIds.has(nodeId)) return false;
+          }
+        }
+      }
+    }
+    return true;
+  },
+  {
+    message:
+      'Global intent target_node, active_from_nodes, and excluded_from_nodes must reference existing nodes',
+    path: ['workflow', 'global_intents'],
+  }
+).refine(
   (data: Record<string, unknown>) => {
     // Validation: tts at root level is deprecated - should be in workflow.tts
     // Allow empty object or just {enabled: boolean} for backwards compatibility
@@ -485,6 +582,13 @@ export type LlmOverride = z.infer<typeof llmOverrideSchema>;
 export type RagOverride = z.infer<typeof ragConfigSchema>;
 export type GlobalRagConfig = z.infer<typeof globalRagConfigSchema>;
 export type TtsConfig = z.infer<typeof ttsConfigSchema>;
+// Global intent types
+export type GlobalIntent = z.infer<typeof globalIntentSchema>;
+export type GlobalIntentConfig = z.infer<typeof globalIntentConfigSchema>;
+// Post-call analysis types
+export type QuestionChoice = z.infer<typeof questionChoiceSchema>;
+export type PostCallQuestion = z.infer<typeof postCallQuestionSchema>;
+export type PostCallAnalysis = z.infer<typeof postCallAnalysisSchema>;
 
 // ========================================
 // Validation Helpers
@@ -576,8 +680,8 @@ export function validateAgentConfig(config: unknown): ConfigValidationResult {
         const node = workflow.nodes[i] as Record<string, unknown>;
         const transitions = node.transitions as Array<{ condition: string }> | undefined;
         if (transitions) {
-          const hasIntentTransition = transitions.some(t =>
-            typeof t.condition === 'string' && t.condition.startsWith('intent:')
+          const hasIntentTransition = transitions.some(
+            (t) => typeof t.condition === 'string' && t.condition.startsWith('intent:')
           );
           if (hasIntentTransition && !node.intents) {
             errors.push({
@@ -588,6 +692,68 @@ export function validateAgentConfig(config: unknown): ConfigValidationResult {
           }
         }
       }
+    }
+
+    // Check global intents reference valid nodes (detailed messages)
+    if (workflow?.global_intents && typeof workflow.global_intents === 'object') {
+      const nodeIds = new Set(
+        Array.isArray(workflow.nodes)
+          ? (workflow.nodes as Array<Record<string, unknown>>).map((n) => n.id as string)
+          : []
+      );
+
+      for (const [intentId, intent] of Object.entries(
+        workflow.global_intents as Record<string, Record<string, unknown>>
+      )) {
+        if (intent.target_node && !nodeIds.has(intent.target_node as string)) {
+          errors.push({
+            path: ['workflow', 'global_intents', intentId, 'target_node'],
+            message: `Global intent "${intentId}" references non-existent node "${intent.target_node}"`,
+            code: 'invalid_reference',
+          });
+        }
+
+        if (Array.isArray(intent.active_from_nodes)) {
+          for (const nodeId of intent.active_from_nodes as string[]) {
+            if (!nodeIds.has(nodeId)) {
+              warnings.push({
+                path: ['workflow', 'global_intents', intentId, 'active_from_nodes'],
+                message: `Global intent "${intentId}" active_from_nodes references non-existent node "${nodeId}"`,
+                code: 'invalid_reference',
+              });
+            }
+          }
+        }
+
+        if (Array.isArray(intent.excluded_from_nodes)) {
+          for (const nodeId of intent.excluded_from_nodes as string[]) {
+            if (!nodeIds.has(nodeId)) {
+              warnings.push({
+                path: ['workflow', 'global_intents', intentId, 'excluded_from_nodes'],
+                message: `Global intent "${intentId}" excluded_from_nodes references non-existent node "${nodeId}"`,
+                code: 'invalid_reference',
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // Check post-call analysis enum questions have choices
+    const postCallAnalysis = workflow?.post_call_analysis as Record<string, unknown> | undefined;
+    if (postCallAnalysis?.questions && Array.isArray(postCallAnalysis.questions)) {
+      (postCallAnalysis.questions as Array<Record<string, unknown>>).forEach((question, index) => {
+        if (
+          question.type === 'enum' &&
+          (!question.choices || !(question.choices as unknown[]).length)
+        ) {
+          errors.push({
+            path: ['workflow', 'post_call_analysis', 'questions', String(index)],
+            message: `Question "${question.name}" is type "enum" but has no choices defined`,
+            code: 'missing_choices',
+          });
+        }
+      });
     }
   }
 

@@ -26,7 +26,19 @@ import { useLlmModelsDropdown } from '@/lib/hooks/use-llm-configs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Slider } from '@/components/ui/slider';
 import { ttsModels } from '@/lib/validations/voice-configs';
-import { useAgentDraft, SettingsDraft, TtsDraft, RagDraft } from './contexts/agent-draft-context';
+import {
+  useAgentDraft,
+  SettingsDraft,
+  TtsDraft,
+  RagDraft,
+  GlobalIntentDraft,
+  GlobalIntentConfigDraft,
+  PostCallAnalysisDraft,
+  PostCallQuestionDraft,
+} from './contexts/agent-draft-context';
+import { GlobalIntentsEditor } from './global-intents-editor';
+import { PostCallAnalysisEditor } from './post-call-analysis-editor';
+import { Brain, FileSearch } from 'lucide-react';
 
 // Safe hook to get draft context (returns null if not in provider)
 function useOptionalAgentDraft() {
@@ -68,6 +80,33 @@ interface SettingsConfig {
       vector_weight?: number;
       fts_weight?: number;
     };
+    // Global Intents - workflow-wide intent definitions
+    global_intents?: Record<string, {
+      description: string;
+      examples?: string[];
+      target_node: string;
+      priority?: number;
+      active_from_nodes?: string[] | null;
+      excluded_from_nodes?: string[] | null;
+    }>;
+    global_intent_config?: {
+      enabled?: boolean;
+      confidence_threshold?: number;
+      context_messages?: number;
+    };
+    // Post-Call Analysis - AI analysis on call transcripts
+    post_call_analysis?: {
+      enabled?: boolean;
+      questions?: Array<{
+        name: string;
+        description?: string;
+        type?: 'string' | 'number' | 'enum' | 'boolean';
+        choices?: Array<{ value: string; label?: string }>;
+        required?: boolean;
+      }>;
+      additional_instructions?: string;
+    };
+    nodes?: Array<{ id: string; name: string; type?: string }>;
     [key: string]: unknown;
   };
   tts?: { enabled?: boolean };
@@ -242,6 +281,69 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
     getInitialValue(draftContext?.settingsDraft?.autoHangupEnabled, currentConfig.auto_hangup?.enabled ?? true)
   );
 
+  // Global Intents (stored in workflow.global_intents and workflow.global_intent_config)
+  const workflowGlobalIntents = currentConfig.workflow?.global_intents;
+  const workflowGlobalIntentConfig = currentConfig.workflow?.global_intent_config;
+
+  // Convert JSON global intents to draft format
+  const convertGlobalIntentsToDraft = useCallback((): Record<string, GlobalIntentDraft> => {
+    if (!workflowGlobalIntents) return {};
+    const result: Record<string, GlobalIntentDraft> = {};
+    for (const [id, intent] of Object.entries(workflowGlobalIntents)) {
+      result[id] = {
+        description: intent.description,
+        examples: intent.examples || [],
+        targetNode: intent.target_node,
+        priority: intent.priority ?? 0,
+        activeFromNodes: intent.active_from_nodes ?? null,
+        excludedFromNodes: intent.excluded_from_nodes ?? null,
+      };
+    }
+    return result;
+  }, [workflowGlobalIntents]);
+
+  const defaultGlobalIntentConfig: GlobalIntentConfigDraft = {
+    enabled: true,
+    confidenceThreshold: 0.75,
+    contextMessages: 4,
+  };
+
+  const [globalIntents, setGlobalIntents] = useState<Record<string, GlobalIntentDraft>>(() =>
+    getInitialValue(draftContext?.settingsDraft?.globalIntents, convertGlobalIntentsToDraft())
+  );
+  const [globalIntentConfig, setGlobalIntentConfig] = useState<GlobalIntentConfigDraft>(() =>
+    getInitialValue(draftContext?.settingsDraft?.globalIntentConfig, {
+      enabled: workflowGlobalIntentConfig?.enabled ?? defaultGlobalIntentConfig.enabled,
+      confidenceThreshold: workflowGlobalIntentConfig?.confidence_threshold ?? defaultGlobalIntentConfig.confidenceThreshold,
+      contextMessages: workflowGlobalIntentConfig?.context_messages ?? defaultGlobalIntentConfig.contextMessages,
+    })
+  );
+
+  // Post-Call Analysis (stored in workflow.post_call_analysis)
+  const workflowPostCallAnalysis = currentConfig.workflow?.post_call_analysis;
+
+  // Convert JSON post-call analysis to draft format
+  const convertPostCallAnalysisToDraft = useCallback((): PostCallAnalysisDraft => {
+    return {
+      enabled: workflowPostCallAnalysis?.enabled ?? false,
+      questions: (workflowPostCallAnalysis?.questions || []).map((q): PostCallQuestionDraft => ({
+        name: q.name,
+        description: q.description || '',
+        type: q.type || 'string',
+        choices: (q.choices || []).map(c => ({ value: c.value, label: c.label || '' })),
+        required: q.required ?? false,
+      })),
+      additionalInstructions: workflowPostCallAnalysis?.additional_instructions || '',
+    };
+  }, [workflowPostCallAnalysis]);
+
+  const [postCallAnalysis, setPostCallAnalysis] = useState<PostCallAnalysisDraft>(() =>
+    getInitialValue(draftContext?.settingsDraft?.postCallAnalysis, convertPostCallAnalysisToDraft())
+  );
+
+  // Get available nodes for GlobalIntentsEditor (from workflow config)
+  const availableNodes = currentConfig.workflow?.nodes?.map(n => ({ id: n.id, name: n.name })) || [];
+
   // Track initial state for dirty detection
   const initialStateRef = useRef<string>('');
 
@@ -277,19 +379,51 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
     },
     voiceConfigId: selectedVoiceConfigId || null,
     autoHangupEnabled,
+    globalIntents,
+    globalIntentConfig,
+    postCallAnalysis,
   }), [
     globalPrompt, llmEnabled, llmModel, llmTemperature, llmMaxTokens,
     llmServiceTier, ttsEnabled, ttsModel, ttsStability, ttsSimilarityBoost,
     ttsStyle, ttsUseSpeakerBoost, ttsEnableSsmlParsing, ttsPronunciationEnabled,
     ttsPronunciationDictionaryIds, ttsAggregateSentences, ragEnabledState, selectedRagConfigId,
     ragOverrideEnabled, ragSearchMode, ragTopK, ragRrfK, ragVectorWeight, ragFtsWeight,
-    selectedVoiceConfigId, autoHangupEnabled
+    selectedVoiceConfigId, autoHangupEnabled, globalIntents, globalIntentConfig, postCallAnalysis
   ]);
 
   // Store initial state on mount
   useEffect(() => {
     // Read ttsEnabled from workflow.tts.enabled with fallback to root tts.enabled for backwards compatibility
     const initialTtsEnabled = currentConfig.workflow?.tts?.enabled ?? currentConfig.tts?.enabled ?? true;
+
+    // Convert global intents to draft format for initial state
+    const initialGlobalIntents: Record<string, GlobalIntentDraft> = {};
+    if (workflowGlobalIntents) {
+      for (const [id, intent] of Object.entries(workflowGlobalIntents)) {
+        initialGlobalIntents[id] = {
+          description: intent.description,
+          examples: intent.examples || [],
+          targetNode: intent.target_node,
+          priority: intent.priority ?? 0,
+          activeFromNodes: intent.active_from_nodes ?? null,
+          excludedFromNodes: intent.excluded_from_nodes ?? null,
+        };
+      }
+    }
+
+    // Convert post-call analysis to draft format for initial state
+    const initialPostCallAnalysis: PostCallAnalysisDraft = {
+      enabled: workflowPostCallAnalysis?.enabled ?? false,
+      questions: (workflowPostCallAnalysis?.questions || []).map((q): PostCallQuestionDraft => ({
+        name: q.name,
+        description: q.description || '',
+        type: q.type || 'string',
+        choices: (q.choices || []).map(c => ({ value: c.value, label: c.label || '' })),
+        required: q.required ?? false,
+      })),
+      additionalInstructions: workflowPostCallAnalysis?.additional_instructions || '',
+    };
+
     const initialSettings: SettingsDraft = {
       globalPrompt: initialGlobalPrompt || '',
       llmEnabled: workflowLlm?.enabled ?? true,
@@ -321,6 +455,13 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
       },
       voiceConfigId: initialVoiceConfigId || null,
       autoHangupEnabled: currentConfig.auto_hangup?.enabled ?? true,
+      globalIntents: initialGlobalIntents,
+      globalIntentConfig: {
+        enabled: workflowGlobalIntentConfig?.enabled ?? defaultGlobalIntentConfig.enabled,
+        confidenceThreshold: workflowGlobalIntentConfig?.confidence_threshold ?? defaultGlobalIntentConfig.confidenceThreshold,
+        contextMessages: workflowGlobalIntentConfig?.context_messages ?? defaultGlobalIntentConfig.contextMessages,
+      },
+      postCallAnalysis: initialPostCallAnalysis,
     };
     initialStateRef.current = JSON.stringify(initialSettings);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentional: capture initial state only once on mount
@@ -399,6 +540,48 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
         override_enabled: false,
       };
 
+      // Convert globalIntents draft to JSON format
+      const globalIntentsConfig: Record<string, {
+        description: string;
+        examples?: string[];
+        target_node: string;
+        priority?: number;
+        active_from_nodes?: string[] | null;
+        excluded_from_nodes?: string[] | null;
+      }> = {};
+      for (const [id, intent] of Object.entries(globalIntents)) {
+        globalIntentsConfig[id] = {
+          description: intent.description,
+          ...(intent.examples.length > 0 && { examples: intent.examples }),
+          target_node: intent.targetNode,
+          ...(intent.priority !== 0 && { priority: intent.priority }),
+          ...(intent.activeFromNodes !== null && { active_from_nodes: intent.activeFromNodes }),
+          ...(intent.excludedFromNodes !== null && { excluded_from_nodes: intent.excludedFromNodes }),
+        };
+      }
+
+      // Convert postCallAnalysis draft to JSON format
+      const postCallAnalysisConfig = {
+        enabled: postCallAnalysis.enabled,
+        ...(postCallAnalysis.questions.length > 0 && {
+          questions: postCallAnalysis.questions.map(q => ({
+            name: q.name,
+            ...(q.description && { description: q.description }),
+            ...(q.type !== 'string' && { type: q.type }),
+            ...(q.type === 'enum' && q.choices.length > 0 && {
+              choices: q.choices.map(c => ({
+                value: c.value,
+                ...(c.label && { label: c.label }),
+              })),
+            }),
+            ...(q.required && { required: q.required }),
+          })),
+        }),
+        ...(postCallAnalysis.additionalInstructions && {
+          additional_instructions: postCallAnalysis.additionalInstructions,
+        }),
+      };
+
       // Merge the form data with the existing config
       // LLM config goes in workflow.llm, TTS config goes in workflow.tts per AGENT_JSON_SCHEMA.md
       // Note: Root-level tts is removed - all TTS config must be in workflow.tts
@@ -410,6 +593,17 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
           llm: llmConfig,
           tts: ttsConfig, // TTS settings stored in workflow.tts (per AGENT_JSON_SCHEMA.md)
           rag: ragConfig, // RAG tuning overrides stored in workflow.rag
+          // Global Intents config (per AGENT_JSON_SCHEMA.md)
+          ...(Object.keys(globalIntentsConfig).length > 0 && { global_intents: globalIntentsConfig }),
+          ...(globalIntentConfig.enabled && {
+            global_intent_config: {
+              enabled: globalIntentConfig.enabled,
+              confidence_threshold: globalIntentConfig.confidenceThreshold,
+              context_messages: globalIntentConfig.contextMessages,
+            },
+          }),
+          // Post-Call Analysis config (per AGENT_JSON_SCHEMA.md)
+          ...(postCallAnalysis.enabled && { post_call_analysis: postCallAnalysisConfig }),
         },
         // Remove deprecated root-level fields that should be in workflow section
         tts: undefined,
@@ -1037,6 +1231,55 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
             </div>
             <Switch checked={autoHangupEnabled} onCheckedChange={setAutoHangupEnabled} />
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Global Intents */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Brain className="h-5 w-5" />
+            Global Intents
+            {Object.keys(globalIntents).length > 0 && (
+              <Badge variant="secondary">{Object.keys(globalIntents).length}</Badge>
+            )}
+          </CardTitle>
+          <CardDescription>
+            Define workflow-wide intents that can trigger transitions from any node.
+            These provide shortcuts to specific nodes based on user intent.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <GlobalIntentsEditor
+            intents={globalIntents}
+            config={globalIntentConfig}
+            availableNodes={availableNodes}
+            onIntentsChange={setGlobalIntents}
+            onConfigChange={setGlobalIntentConfig}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Post-Call Analysis */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileSearch className="h-5 w-5" />
+            Post-Call Analysis
+            {postCallAnalysis.questions.length > 0 && (
+              <Badge variant="secondary">{postCallAnalysis.questions.length} questions</Badge>
+            )}
+          </CardTitle>
+          <CardDescription>
+            Configure AI-powered analysis to run on call transcripts after each call ends.
+            Define custom questions to extract structured data from conversations.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <PostCallAnalysisEditor
+            config={postCallAnalysis}
+            onChange={setPostCallAnalysis}
+          />
         </CardContent>
       </Card>
 

@@ -144,6 +144,35 @@ interface ExtendedWorkflow {
     pronunciation_dictionary_ids?: string[];
     aggregate_sentences?: boolean;
   };
+  // Global intents - workflow-wide intent definitions
+  global_intents?: Record<
+    string,
+    {
+      description: string;
+      examples?: string[];
+      target_node: string;
+      priority?: number;
+      active_from_nodes?: string[] | null;
+      excluded_from_nodes?: string[] | null;
+    }
+  >;
+  global_intent_config?: {
+    enabled?: boolean;
+    confidence_threshold?: number;
+    context_messages?: number;
+  };
+  // Post-call analysis configuration
+  post_call_analysis?: {
+    enabled?: boolean;
+    questions?: Array<{
+      name: string;
+      description?: string;
+      type?: 'string' | 'number' | 'enum' | 'boolean';
+      choices?: Array<{ value: string; label?: string }>;
+      required?: boolean;
+    }>;
+    additional_instructions?: string;
+  };
   nodes: ExtendedConfigNode[];
 }
 
@@ -331,6 +360,24 @@ export function nodesToWorkflow(
     ...(() => {
       const extWorkflow = existingConfig?.workflow as ExtendedWorkflow | undefined;
       return extWorkflow?.tts ? { tts: extWorkflow.tts } : {};
+    })(),
+    // Preserve Global Intents config
+    ...(() => {
+      const extWorkflow = existingConfig?.workflow as ExtendedWorkflow | undefined;
+      return extWorkflow?.global_intents ? { global_intents: extWorkflow.global_intents } : {};
+    })(),
+    ...(() => {
+      const extWorkflow = existingConfig?.workflow as ExtendedWorkflow | undefined;
+      return extWorkflow?.global_intent_config
+        ? { global_intent_config: extWorkflow.global_intent_config }
+        : {};
+    })(),
+    // Preserve Post-Call Analysis config
+    ...(() => {
+      const extWorkflow = existingConfig?.workflow as ExtendedWorkflow | undefined;
+      return extWorkflow?.post_call_analysis
+        ? { post_call_analysis: extWorkflow.post_call_analysis }
+        : {};
     })(),
     nodes: configNodes,
   };

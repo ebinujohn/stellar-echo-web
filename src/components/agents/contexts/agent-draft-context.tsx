@@ -39,6 +39,55 @@ export interface RagDraft {
 }
 
 /**
+ * Draft state for a single global intent
+ */
+export interface GlobalIntentDraft {
+  description: string;
+  examples: string[];
+  targetNode: string;
+  priority: number;
+  activeFromNodes: string[] | null;
+  excludedFromNodes: string[] | null;
+}
+
+/**
+ * Draft state for global intent configuration
+ */
+export interface GlobalIntentConfigDraft {
+  enabled: boolean;
+  confidenceThreshold: number;
+  contextMessages: number;
+}
+
+/**
+ * Draft state for a post-call analysis question choice
+ */
+export interface QuestionChoiceDraft {
+  value: string;
+  label: string;
+}
+
+/**
+ * Draft state for a post-call analysis question
+ */
+export interface PostCallQuestionDraft {
+  name: string;
+  description: string;
+  type: 'string' | 'number' | 'enum' | 'boolean';
+  choices: QuestionChoiceDraft[];
+  required: boolean;
+}
+
+/**
+ * Draft state for post-call analysis
+ */
+export interface PostCallAnalysisDraft {
+  enabled: boolean;
+  questions: PostCallQuestionDraft[];
+  additionalInstructions: string;
+}
+
+/**
  * Draft state for the Settings form
  */
 export interface SettingsDraft {
@@ -56,6 +105,11 @@ export interface SettingsDraft {
   rag: RagDraft; // RAG tuning parameters (when ragOverrideEnabled is true)
   voiceConfigId: string | null;
   autoHangupEnabled: boolean;
+  // Global intents
+  globalIntents: Record<string, GlobalIntentDraft>;
+  globalIntentConfig: GlobalIntentConfigDraft;
+  // Post-call analysis
+  postCallAnalysis: PostCallAnalysisDraft;
 }
 
 /**
