@@ -132,6 +132,52 @@ const SelectItem = React.forwardRef<
 ))
 SelectItem.displayName = SelectPrimitive.Item.displayName
 
+interface SelectItemCardProps
+  extends React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item> {
+  title: string
+  description?: string | null
+}
+
+const SelectItemCard = React.forwardRef<
+  React.ElementRef<typeof SelectPrimitive.Item>,
+  SelectItemCardProps
+>(({ className, title, description, ...props }, ref) => (
+  <SelectPrimitive.Item
+    ref={ref}
+    className={cn(
+      // Base styles
+      "relative flex w-full cursor-default select-none flex-col items-start gap-1.5 rounded-md border-2 border-transparent px-3 py-3 pr-10 text-sm outline-none transition-all duration-150",
+      // Separator - subtle bottom border
+      "mb-1 last:mb-0 shadow-[0_1px_0_0_hsl(var(--border)/0.5)] last:shadow-none",
+      // Hover state - distinct background and border
+      "hover:bg-accent/80 hover:border-border",
+      // Focus state - more prominent
+      "focus:bg-accent focus:border-ring focus:shadow-sm",
+      // Selected/checked state - strongest visual treatment
+      "data-[state=checked]:border-primary data-[state=checked]:bg-primary/10 data-[state=checked]:shadow-sm",
+      // Disabled state
+      "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      className
+    )}
+    {...props}
+  >
+    <span className="absolute right-3 top-3.5 flex h-4 w-4 items-center justify-center">
+      <SelectPrimitive.ItemIndicator>
+        <CheckIcon className="h-4 w-4 text-primary" />
+      </SelectPrimitive.ItemIndicator>
+    </span>
+    <SelectPrimitive.ItemText asChild>
+      <span className="font-medium leading-tight">{title}</span>
+    </SelectPrimitive.ItemText>
+    {description && (
+      <span className="line-clamp-2 text-xs leading-snug text-muted-foreground/80">
+        {description}
+      </span>
+    )}
+  </SelectPrimitive.Item>
+))
+SelectItemCard.displayName = "SelectItemCard"
+
 const SelectSeparator = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Separator>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Separator>
@@ -152,6 +198,7 @@ export {
   SelectContent,
   SelectLabel,
   SelectItem,
+  SelectItemCard,
   SelectSeparator,
   SelectScrollUpButton,
   SelectScrollDownButton,

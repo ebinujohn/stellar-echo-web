@@ -9,6 +9,7 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectItemCard,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -783,16 +784,12 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
                     </SelectTrigger>
                     <SelectContent>
                       {voiceConfigs?.map((config) => (
-                        <SelectItem key={config.id} value={config.id}>
-                          <div className="flex flex-col">
-                            <span>{config.name}</span>
-                            {config.description && (
-                              <span className="text-xs text-muted-foreground">
-                                {config.description}
-                              </span>
-                            )}
-                          </div>
-                        </SelectItem>
+                        <SelectItemCard
+                          key={config.id}
+                          value={config.id}
+                          title={config.name}
+                          description={config.description}
+                        />
                       ))}
                     </SelectContent>
                   </Select>
@@ -828,12 +825,12 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
                     </SelectTrigger>
                     <SelectContent>
                       {ttsModels.map((m) => (
-                        <SelectItem key={m.value} value={m.value}>
-                          <div className="flex flex-col">
-                            <span>{m.label}</span>
-                            <span className="text-xs text-muted-foreground">{m.description}</span>
-                          </div>
-                        </SelectItem>
+                        <SelectItemCard
+                          key={m.value}
+                          value={m.value}
+                          title={m.label}
+                          description={m.description}
+                        />
                       ))}
                     </SelectContent>
                   </Select>
@@ -1007,16 +1004,12 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
                     </SelectTrigger>
                     <SelectContent>
                       {ragConfigs?.map((config) => (
-                        <SelectItem key={config.id} value={config.id}>
-                          <div className="flex flex-col">
-                            <span>{config.name}</span>
-                            {config.description && (
-                              <span className="text-xs text-muted-foreground">
-                                {config.description}
-                              </span>
-                            )}
-                          </div>
-                        </SelectItem>
+                        <SelectItemCard
+                          key={config.id}
+                          value={config.id}
+                          title={config.name}
+                          description={config.description}
+                        />
                       ))}
                     </SelectContent>
                   </Select>

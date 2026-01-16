@@ -22,7 +22,7 @@ import {
 import {
   Select,
   SelectContent,
-  SelectItem,
+  SelectItemCard,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -184,14 +184,12 @@ export function RagConfigForm() {
                 </SelectTrigger>
                 <SelectContent>
                   {searchModes.map((mode) => (
-                    <SelectItem key={mode.value} value={mode.value}>
-                      <div className="flex flex-col">
-                        <span>{mode.label}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {mode.description}
-                        </span>
-                      </div>
-                    </SelectItem>
+                    <SelectItemCard
+                      key={mode.value}
+                      value={mode.value}
+                      title={mode.label}
+                      description={mode.description}
+                    />
                   ))}
                 </SelectContent>
               </Select>
