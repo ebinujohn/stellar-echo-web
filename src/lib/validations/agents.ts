@@ -168,6 +168,7 @@ const baseNodeSchema = z.object({
  */
 const standardNodeSchemaBase = baseNodeSchema.extend({
   type: z.literal('standard'),
+  proactive: z.boolean().optional().default(false),
   system_prompt: z.string().optional(),
   static_text: z.string().optional(),
   rag: ragConfigSchema.optional(),
@@ -179,6 +180,7 @@ const standardNodeSchemaBase = baseNodeSchema.extend({
  */
 const retrieveVariableNodeSchemaBase = baseNodeSchema.extend({
   type: z.literal('retrieve_variable'),
+  proactive: z.boolean().optional().default(false),
   // Batch mode (recommended)
   variables: z.array(variableExtractionSchema).optional(),
   // Legacy mode (single variable)

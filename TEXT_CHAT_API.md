@@ -199,7 +199,7 @@ POST /api/chat/sessions
 ```json
 {
     "tenant_id": "6bc1814c-5705-5b6e-af99-104b91962282",
-    "agent_id": "0bbf8778-e44a-5bd1-9e77-70fdc6e83cad",
+    "agent_id": "a1b2c3d4-e5f6-4890-abcd-ef1234567890",
     "version": 2,
     "metadata": {
         "user_id": "user123",
@@ -232,14 +232,14 @@ POST /api/chat/sessions
             "from_node_name": "Fast Disclaimer",
             "to_node": "greeting",
             "to_node_name": "Welcome Greeting",
-            "condition": "skip_response"
+            "condition": "always"
         },
         {
             "from_node": "greeting",
             "from_node_name": "Welcome Greeting",
             "to_node": "collect_info",
             "to_node_name": "Collect User Information",
-            "condition": "skip_response"
+            "condition": "always"
         }
     ],
     "agent_config_version": 2,
@@ -258,7 +258,7 @@ POST /api/chat/sessions
 | `node_name` | Human-readable name of the current node |
 | `initial_node_id` | Starting node before automatic transitions |
 | `initial_node_name` | Human-readable name of the starting node |
-| `transitions` | List of automatic transitions during initialization (e.g., skip_response chains) |
+| `transitions` | List of automatic transitions during initialization (e.g., proactive node chains) |
 | `agent_config_version` | Agent config version number being used |
 | `is_active_version` | `true` if active version was used, `false` if specific version requested |
 | `initial_message` | Greeting if node has `static_text` or LLM response (null otherwise) |
@@ -441,7 +441,7 @@ Every transition in the workflow is represented with full context:
     "from_node_name": "Welcome Greeting",
     "to_node": "collect_info",
     "to_node_name": "Collect User Information",
-    "condition": "skip_response"
+    "condition": "always"
 }
 ```
 
@@ -454,8 +454,7 @@ Every transition in the workflow is represented with full context:
 | `condition` | string \| null | Condition that triggered the transition |
 
 **Common Conditions:**
-- `skip_response` - Automatic transition without waiting for user input
-- `always` - Unconditional transition after response
+- `always` - Automatic transition (with `proactive: true` = after bot speaks)
 - `user_responded` - User provided any input
 - `contains:keyword` - User message contains specific keyword
 - `intent:intent_name` - Intent classification matched
@@ -474,20 +473,20 @@ User: "My name is Jack and I want to learn about trading"
 Transitions:
 1. collect_info → extract_user_info (user_responded)
 2. extract_user_info → personalized_greeting (variables_extracted:first_name,topic)
-3. personalized_greeting → topic_selection (skip_response)
+3. personalized_greeting → topic_selection (always, proactive node)
 ```
 
 The `transitions` array captures this entire chain, while `transition` (singular) contains only the last one for backwards compatibility.
 
 **Initialization Transitions:**
 
-When a session is created, automatic `skip_response` transitions may occur before the first user message:
+When a session is created, automatic transitions from proactive nodes may occur before the first user message:
 
 ```
 Initial node: fast_disclaimer
 Transitions during init:
-1. fast_disclaimer → greeting (skip_response)
-2. greeting → collect_info (skip_response)
+1. fast_disclaimer → greeting (always, proactive node)
+2. greeting → collect_info (always, proactive node)
 Final node: collect_info
 ```
 
@@ -899,36 +898,36 @@ uv run python scripts/chat_cli.py -t <tenant_id> -a <agent_id> --url http://cust
 ============================================================
   Server: http://localhost:8000
   Tenant: 6bc1814c-5705-5b6e-af99-104b91962282
-  Agent:  0bbf8778-e44a-5bd1-9e77-70fdc6e83cad
+  Agent:  a1b2c3d4-e5f6-4890-abcd-ef1234567890
 ============================================================
 
   Creating session...
   ✓ Session ID: text_abc123def456
   ✓ Agent Config Version: 1 (active)
-  ✓ Starting node: Fast Disclaimer
+  ✓ Starting node: Static Greeting
   Startup transitions:
-    ➡️  Fast Disclaimer → Welcome Greeting (skip_response)
-    ➡️  Welcome Greeting → Collect User Information (skip_response)
-  ✓ Current node: Collect User Information
+    ➡️  Static Greeting → Dynamic Greeting (always)
+    ➡️  Dynamic Greeting → Wait for User Info (always)
+  ✓ Current node: Wait for User Info
 
   ┌─ Agent ───────────────────────────────────────────────────
-  │ Thank you for calling. Hello! I'm Ivan. Could you tell me
-  │ your first name, last name, and what topic you'd like to
-  │ explore today?
+  │ Thank you for calling MRI Eligibility Support.
+  │ This call may be recorded for quality and training purposes.
+  │ Hi, I'm Nancy from MRI Support. Could you please tell me
+  │ your first name and zip code?
   └─────────────────────────────────────────────────────────────
 
-  You: My name is Jack John and I am interested in Options Trading
+  You: My name is Jack and my zip code is 30301
 
   ┌─ Agent ───────────────────────────────────────────────────
-  │ Great to meet you, Jack John! I see you're interested in
-  │ Options Trading. What specific aspect would you like to
-  │ explore today?
+  │ Thank you, Jack! I'm here to help you with any questions
+  │ about MRI eligibility. What would you like to know?
   └─────────────────────────────────────────────────────────────
-  📍 Node: Topic Selection (topic_selection) | ⏱️ 523ms
-    ➡️  Collect User Information → Extract Variables (user_responded)
-    ➡️  Extract Variables → Personalized Greeting (variables_extracted:first_name,last_name,topic)
-    ➡️  Personalized Greeting → Topic Selection (skip_response)
-    📝 Extracted: first_name=Jack, last_name=John, topic=Options Trading
+  📍 Node: MRI Q&A Conversation (mri_qa_conversation) | ⏱️ 523ms
+    ➡️  Wait for User Info → Extract User Info (user_responded)
+    ➡️  Extract User Info → Personalized Greeting (variables_extracted:first_name,zip_code)
+    ➡️  Personalized Greeting → MRI Q&A Conversation (always)
+    📝 Extracted: first_name=Jack, zip_code=30301
 ```
 
 ---

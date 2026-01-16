@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Clock, Hash, Search, MessageSquare, SkipForward, Check, Variable, AlertCircle, Brain } from 'lucide-react';
+import { Clock, Hash, Search, MessageSquare, Check, Variable, AlertCircle, Brain } from 'lucide-react';
 
 // ========================================
 // Types
@@ -25,7 +25,6 @@ export type TransitionConditionType =
   | 'max_turns'
   | 'contains'
   | 'user_responded'
-  | 'skip_response'
   | 'always'
   | 'variables_extracted'
   | 'extraction_failed'
@@ -73,15 +72,6 @@ const CONDITION_CONFIGS: TransitionConditionConfig[] = [
     displayName: 'User Responded',
     description: 'After user speaks',
     icon: <MessageSquare className="h-3.5 w-3.5" />,
-    hasParameter: false,
-    isPatternBased: true,
-    applicableTo: ['standard'],
-  },
-  {
-    type: 'skip_response',
-    displayName: 'Skip Response',
-    description: 'Auto-advance after bot speaks',
-    icon: <SkipForward className="h-3.5 w-3.5" />,
     hasParameter: false,
     isPatternBased: true,
     applicableTo: ['standard'],
@@ -174,7 +164,7 @@ function parseCondition(condition: string): { type: TransitionConditionType; par
   }
 
   // Handle simple conditions without parameters
-  const simpleConditions: TransitionConditionType[] = ['always', 'user_responded', 'skip_response'];
+  const simpleConditions: TransitionConditionType[] = ['always', 'user_responded'];
   if (simpleConditions.includes(condition as TransitionConditionType)) {
     return { type: condition as TransitionConditionType, parameter: '' };
   }

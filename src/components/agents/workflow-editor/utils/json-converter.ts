@@ -8,6 +8,7 @@ import type { WorkflowConfig, WorkflowNode as ConfigNode, Transition } from '@/l
  */
 interface ExtendedConfigNode extends Omit<ConfigNode, 'transitions'> {
   _metadata?: { position?: { x: number; y: number } };
+  proactive?: boolean;
   system_prompt?: string;
   static_text?: string;
   variables?: Array<{
@@ -59,6 +60,7 @@ export interface WorkflowNodeData {
   id: string;
   type: 'standard' | 'retrieve_variable' | 'end_call' | 'agent_transfer';
   name: string;
+  proactive?: boolean;
   system_prompt?: string;
   static_text?: string;
   variables?: Array<{
@@ -202,6 +204,7 @@ export function workflowToNodes(config: WorkflowConfig): {
         id: node.id,
         type: node.type || 'standard',
         name: node.name,
+        proactive: extNode.proactive,
         system_prompt: extNode.system_prompt,
         static_text: extNode.static_text,
         variables: extNode.variables,
@@ -288,6 +291,7 @@ export function nodesToWorkflow(
     if (data.type === 'standard') {
       configNode = {
         ...configNode,
+        ...(data.proactive && { proactive: data.proactive }),
         ...(data.system_prompt && { system_prompt: data.system_prompt }),
         ...(data.static_text && { static_text: data.static_text }),
         ...(data.interruptions_enabled !== undefined && data.interruptions_enabled !== null && {
@@ -303,6 +307,7 @@ export function nodesToWorkflow(
     } else if (data.type === 'retrieve_variable') {
       configNode = {
         ...configNode,
+        ...(data.proactive && { proactive: data.proactive }),
         ...(data.variables && { variables: data.variables }),
         ...(data.variable_name && { variable_name: data.variable_name }),
         ...(data.extraction_prompt && { extraction_prompt: data.extraction_prompt }),

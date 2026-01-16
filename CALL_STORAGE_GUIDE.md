@@ -325,7 +325,7 @@ call_storage.record_transition(
     from_node_id="greeting",        # Optional source node
     to_node_id="main_menu",
     reason="workflow_transition",
-    condition="skip_response",      # Optional matched condition
+    condition="always",             # Optional matched condition
     turn_number=1,                  # Optional turn number
     from_node_name="Greeting",      # Optional display names
     to_node_name="Main Menu",

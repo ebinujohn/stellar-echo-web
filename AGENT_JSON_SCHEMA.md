@@ -550,6 +550,7 @@ Regular conversation node with system prompt and LLM processing.
   "id": "string",
   "type": "standard",
   "name": "string",
+  "proactive": false,
   "system_prompt": "string",
   "static_text": "string",
   "interruptions_enabled": true,
@@ -569,6 +570,7 @@ Regular conversation node with system prompt and LLM processing.
 | `id` | string | ✅ Yes | - | Unique node identifier |
 | `type` | string | ❌ No | `"standard"` | Node type (must be `"standard"`) |
 | `name` | string | ✅ Yes | - | Human-readable node name |
+| `proactive` | boolean | ❌ No | `false` | If true, node speaks (static_text or LLM) on entry before evaluating transitions |
 | `system_prompt` | string | ⚠️ Conditional | `""` | LLM system prompt (required if no `static_text`) |
 | `static_text` | string | ⚠️ Conditional | `null` | Static text bypass (required if no `system_prompt`) |
 | `interruptions_enabled` | boolean | ❌ No | `null` | Override global interruption setting |
@@ -587,12 +589,27 @@ Regular conversation node with system prompt and LLM processing.
 - Bypasses LLM completely
 - Text sent directly to TTS
 - Perfect for disclaimers, fixed greetings
-- Use with `skip_response` transition for instant progression
+- Use with `proactive: true` + `always` transition for instant progression
 
 **System Prompt** (LLM processing):
 - Dynamic response generation
 - Context-aware conversation
 - Variable substitution supported (`{{variable_name}}`)
+
+#### Proactive Output
+
+The `proactive` field controls whether a node speaks immediately upon entry:
+
+| `proactive` | Transition | Behavior |
+|-------------|------------|----------|
+| `true` | `always` | Speak → Continue immediately (auto-advance) |
+| `true` | `user_responded` | Speak → Wait for user (speak-then-listen) |
+| `false` | `user_responded` | Silent → Wait → LLM responds (default behavior) |
+| `false` | `always` | Silent → Continue immediately (processing node) |
+
+**Use Cases:**
+- `proactive: true` + `always` - Disclaimers, auto-advancing greetings
+- `proactive: true` + `user_responded` - Questions that prompt for user input
 
 #### Example: Standard Node with System Prompt
 
@@ -601,6 +618,7 @@ Regular conversation node with system prompt and LLM processing.
   "id": "greeting",
   "type": "standard",
   "name": "Welcome Greeting",
+  "proactive": true,
   "interruptions_enabled": false,
   "system_prompt": "Greet the user warmly. Introduce yourself as Ivan.\nAsk for their name and what topic they're interested in.",
   "transitions": [
@@ -609,7 +627,7 @@ Regular conversation node with system prompt and LLM processing.
       "target": "closing"
     },
     {
-      "condition": "skip_response",
+      "condition": "user_responded",
       "target": "collect_info"
     }
   ],
@@ -621,18 +639,19 @@ Regular conversation node with system prompt and LLM processing.
 }
 ```
 
-#### Example: Static Text Node
+#### Example: Static Text Node (Auto-Advance)
 
 ```json
 {
   "id": "fast_disclaimer",
   "type": "standard",
   "name": "Fast Disclaimer",
+  "proactive": true,
   "interruptions_enabled": false,
   "static_text": "Thank you for calling. This call may be recorded for quality purposes.",
   "transitions": [
     {
-      "condition": "skip_response",
+      "condition": "always",
       "target": "greeting"
     }
   ]
@@ -1288,8 +1307,7 @@ Transitions move between nodes based on conditions. Conditions are evaluated in 
 | **Max Turns** | `max_turns:N` | Turn count in node | `max_turns:5` (5 exchanges) |
 | **Contains** | `contains:keyword` | Case-insensitive keyword match | `contains:goodbye` |
 | **User Responded** | `user_responded` | User has spoken at least once | `user_responded` |
-| **Skip Response** | `skip_response` | Auto-advance after bot speaks | `skip_response` |
-| **Always** | `always` | Immediate transition | `always` |
+| **Always** | `always` | Immediate transition (with `proactive: true` = auto-advance after speaking) | `always` |
 | **Variables Extracted** | `variables_extracted:var1,var2` | All variables present and non-null | `variables_extracted:name,email` |
 | **Extraction Failed** | `extraction_failed:var1,var2` | Any variable missing or null | `extraction_failed:name,email` |
 | **Intent** | `intent:intent_id` | LLM batch classification (~100-150ms) | `intent:wants_basics` |
@@ -1328,66 +1346,66 @@ See [Intent-Based Transitions](#intent-based-transitions) under Standard Node fo
 }
 ```
 
-#### Skip Response (Auto-Advance)
+#### Proactive Output and Auto-Advance
 
-⚠️ **Important**: `skip_response` is **event-based**, not user-input-based. It fires when the bot finishes speaking, not on user input.
+The `proactive` field on nodes controls whether a node speaks immediately upon entry:
 
 ```json
 {
-  "condition": "skip_response",
-  "target": "next_node",
-  "priority": 0
+  "id": "greeting",
+  "proactive": true,
+  "system_prompt": "Greet the user and ask for their name.",
+  "transitions": [
+    {
+      "condition": "user_responded",
+      "target": "extract_name"
+    }
+  ]
 }
 ```
 
-**Timing Details:**
-1. Bot finishes speaking (TTS completes)
-2. 300ms technical delay to confirm no more audio chunks
-3. Automatically transition to target node
-4. User input during this time is **blocked** and added to history for next node
+**Behavior Matrix:**
 
-**Use Cases:**
-- Static text disclaimers that auto-advance
-- Fixed greeting messages
-- Automated confirmations
+| `proactive` | Transition | Behavior |
+|-------------|------------|----------|
+| `true` | `always` | Speak → Continue immediately (auto-advance) |
+| `true` | `user_responded` | Speak → Wait for user (speak-then-listen) |
+| `false` | `user_responded` | Silent → Wait → LLM responds (default) |
+| `false` | `always` | Silent → Continue immediately (processing node) |
 
-**Technical Constraints:**
-- Only one `skip_response` transition per node supported
-- Cancelled if user input triggers different transition
-- Cancelled if manually transitioning to different node
-
-#### Proactive LLM Generation (Speak-Then-Listen Pattern)
-
-**Key Behavior:** When transitioning to a node, if that node has a `skip_response` transition, the system triggers **proactive LLM generation**. This causes the bot to speak immediately upon entering the node without waiting for user input.
-
-**Why this matters:** Without `skip_response`, nodes wait for user input before generating LLM responses. This is the correct behavior for "listen-then-speak" nodes, but wrong for "speak-then-listen" nodes (like greetings or prompts).
-
-**Two-Node Pattern for Speak-Then-Listen:**
+**Auto-Advance Pattern (proactive: true + always):**
 
 ```json
 {
-  "nodes": [
+  "id": "disclaimer",
+  "proactive": true,
+  "static_text": "This call may be recorded.",
+  "transitions": [
     {
-      "id": "greeting",
-      "name": "Greeting",
-      "system_prompt": "Greet the user and ask for their name.",
-      "transitions": [
-        {
-          "condition": "skip_response",
-          "target": "listen_for_name"
-        }
-      ]
-    },
+      "condition": "always",
+      "target": "greeting"
+    }
+  ]
+}
+```
+
+**Timing Details (for `proactive: true` + `always`):**
+1. Bot finishes speaking (TTS completes)
+2. 300ms technical delay to confirm no more audio chunks
+3. Automatically transition to target node
+4. User input during this time is added to history for next node
+
+**Speak-Then-Listen Pattern (proactive: true + user_responded):**
+
+```json
+{
+  "id": "greeting",
+  "proactive": true,
+  "system_prompt": "Greet the user and ask for their name.",
+  "transitions": [
     {
-      "id": "listen_for_name",
-      "name": "Listen for Name",
-      "system_prompt": "Wait for the user to provide their name.",
-      "transitions": [
-        {
-          "condition": "user_responded",
-          "target": "extract_name"
-        }
-      ]
+      "condition": "user_responded",
+      "target": "extract_name"
     }
   ]
 }
@@ -1395,31 +1413,37 @@ See [Intent-Based Transitions](#intent-based-transitions) under Standard Node fo
 
 **How it works:**
 1. User enters `greeting` node
-2. System detects `skip_response` transition → triggers proactive LLM generation
+2. System detects `proactive: true` → triggers proactive LLM generation
 3. LLM generates greeting → TTS speaks it
-4. After speech completes → auto-transitions to `listen_for_name`
-5. `listen_for_name` has `user_responded` (not `skip_response`) → waits for user input
+4. After speech completes → waits for `user_responded` transition to fire
 
-**Common Mistake:** Using `always` instead of `skip_response`:
+**Common Mistake:** Using `always` without `proactive: true`:
 
 ```json
 // ❌ WRONG: Bot won't speak - transitions immediately without LLM generation
 {
-  "condition": "always",
-  "target": "next_node"
+  "proactive": false,
+  "transitions": [{"condition": "always", "target": "next_node"}]
 }
 
 // ✅ CORRECT: Bot speaks first, then transitions after speech completes
 {
-  "condition": "skip_response",
-  "target": "next_node"
+  "proactive": true,
+  "transitions": [{"condition": "always", "target": "next_node"}]
+}
+
+// ✅ ALSO CORRECT: Bot speaks first, then waits for user
+{
+  "proactive": true,
+  "transitions": [{"condition": "user_responded", "target": "next_node"}]
 }
 ```
 
 **Summary:**
-- `skip_response` = "Speak first, then transition"
-- `always` = "Transition immediately without speaking"
-- `user_responded` = "Wait for user input before doing anything"
+- `proactive: true` + `always` = "Speak first, then transition immediately"
+- `proactive: true` + `user_responded` = "Speak first, then wait for user"
+- `proactive: false` + `always` = "Transition immediately without speaking"
+- `proactive: false` + `user_responded` = "Wait for user input before doing anything" (default)
 
 #### Variable Extraction Success
 
@@ -1457,6 +1481,7 @@ Transitions are sorted by priority before evaluation. **Lower priority number = 
 
 ```json
 {
+  "proactive": true,
   "transitions": [
     {
       "condition": "contains:goodbye",
@@ -1474,7 +1499,7 @@ Transitions are sorted by priority before evaluation. **Lower priority number = 
       "priority": 2
     },
     {
-      "condition": "skip_response",
+      "condition": "always",
       "target": "next_node",
       "priority": 10
     }
@@ -1482,7 +1507,7 @@ Transitions are sorted by priority before evaluation. **Lower priority number = 
 }
 ```
 
-**Evaluation order:** goodbye → bye (both priority 1, array order preserved) → max_turns (priority 2) → skip_response (priority 10)
+**Evaluation order:** goodbye → bye (both priority 1, array order preserved) → max_turns (priority 2) → always (priority 10, auto-advances after bot speaks due to `proactive: true`)
 
 ---
 
@@ -2508,11 +2533,12 @@ Simplest valid configuration:
         "id": "disclaimer",
         "type": "standard",
         "name": "Disclaimer",
+        "proactive": true,
         "interruptions_enabled": false,
         "static_text": "This call may be recorded. The survey takes 2 minutes.",
         "transitions": [
           {
-            "condition": "skip_response",
+            "condition": "always",
             "target": "greeting"
           }
         ]
@@ -2521,6 +2547,7 @@ Simplest valid configuration:
         "id": "greeting",
         "type": "standard",
         "name": "Greeting",
+        "proactive": true,
         "system_prompt": "Greet the user warmly and ask for their name.",
         "transitions": [
           {
@@ -2583,11 +2610,12 @@ Simplest valid configuration:
         "id": "closing",
         "type": "standard",
         "name": "Closing",
+        "proactive": true,
         "interruptions_enabled": false,
         "system_prompt": "Thank {{user_name}} for their time and their {{rating}} rating.",
         "transitions": [
           {
-            "condition": "skip_response",
+            "condition": "always",
             "target": "end"
           }
         ]
@@ -2622,6 +2650,7 @@ Simplest valid configuration:
         "id": "greeting",
         "type": "standard",
         "name": "Greeting",
+        "proactive": true,
         "system_prompt": "Greet the user and ask what they'd like to learn about GLP-1 medications.",
         "rag": {
           "enabled": false
@@ -2667,6 +2696,7 @@ Simplest valid configuration:
         "id": "closing",
         "type": "standard",
         "name": "Closing",
+        "proactive": true,
         "interruptions_enabled": false,
         "system_prompt": "Thank the user and remind them to consult their healthcare provider.",
         "rag": {
@@ -2674,7 +2704,7 @@ Simplest valid configuration:
         },
         "transitions": [
           {
-            "condition": "skip_response",
+            "condition": "always",
             "target": "end"
           }
         ]
@@ -2803,8 +2833,7 @@ This section provides a comprehensive reference for all workflow configuration t
 | `max_turns` | `max_turns:{count}` | Triggers after N user inputs in current node. | standard |
 | `contains` | `contains:{keyword}` | Triggers if user input contains keyword (case-insensitive). | standard |
 | `user_responded` | `user_responded` | Triggers after any non-empty user input. | standard |
-| `skip_response` | `skip_response` | Event-based: fires ~300ms after bot stops speaking. User input buffered for next node. | standard |
-| `always` | `always` | Always evaluates to True (immediate transition). | standard, retrieve_variable |
+| `always` | `always` | Immediate transition. With `proactive: true`, fires ~300ms after bot stops speaking; without `proactive`, fires immediately. | standard, retrieve_variable |
 | `variables_extracted` | `variables_extracted:{var1,var2}` | True if ALL specified variables are present and non-null. | retrieve_variable |
 | `extraction_failed` | `extraction_failed:{var1,var2}` | True if ANY specified variable is missing or null. | retrieve_variable |
 

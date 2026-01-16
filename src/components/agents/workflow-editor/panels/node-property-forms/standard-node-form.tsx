@@ -47,6 +47,7 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
   );
   const [staticText, setStaticText] = useState(nodeData.static_text || '');
   const [systemPrompt, setSystemPrompt] = useState(nodeData.system_prompt || '');
+  const [proactive, setProactive] = useState(nodeData.proactive ?? false);
   const [interruptionsEnabled, setInterruptionsEnabled] = useState(
     nodeData.interruptions_enabled ?? true
   );
@@ -115,6 +116,7 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
   useEffect(() => {
     const updates: Partial<WorkflowNodeData> = {
       name,
+      proactive,
       interruptions_enabled: interruptionsEnabled,
       transitions,
       actions: {
@@ -178,6 +180,7 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     name,
+    proactive,
     mode,
     staticText,
     systemPrompt,
@@ -294,6 +297,19 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
               </Label>
             </div>
           </RadioGroup>
+        </div>
+
+        <Separator />
+
+        {/* Proactive Output */}
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5">
+            <Label>Proactive Output</Label>
+            <p className="text-xs text-muted-foreground">
+              Speak immediately on node entry before waiting for user input
+            </p>
+          </div>
+          <Switch checked={proactive} onCheckedChange={setProactive} />
         </div>
 
         <Separator />
