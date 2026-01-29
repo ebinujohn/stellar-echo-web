@@ -1,0 +1,9 @@
+# Auth state (contains session cookies)
+.auth/
+
+# Test results
+screenshots/
+
+# Playwright generates these
+*.webm
+*.png

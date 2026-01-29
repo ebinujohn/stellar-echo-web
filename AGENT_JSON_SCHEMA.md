@@ -34,6 +34,7 @@ This document provides a comprehensive specification of the JSON schema used for
 12. [RAG Configuration](#rag-configuration)
     - [Per-Node RAG Override](#per-node-rag-override)
 13. [Phone Number Pool (Database-Backed)](#phone-number-pool-database-backed)
+    - [Webhook Configuration](#webhook-configuration)
 14. [Logging Configuration](#logging-configuration)
 15. [Complete Examples](#complete-examples)
 16. [Validation Rules](#validation-rules)
@@ -2423,6 +2424,86 @@ RECORDING_CHANNELS=dual
 Track and channels are system-wide because they affect Twilio's recording infrastructure configuration.
 
 **Note**: Requires Twilio external S3 storage configuration. See `docs/RECORDING_CONFIG.md` for setup.
+
+### Webhook Configuration
+
+Webhooks deliver call lifecycle events to customer endpoints in **Retell AI-compatible format**. This enables seamless migration for customers familiar with Retell's API.
+
+**Per-Agent Setting (workflow JSON):**
+```json
+{
+  "workflow": {
+    "webhook": {
+      "enabled": true,
+      "url": "https://api.example.com/webhooks/calls",
+      "events": ["call_started", "call_ended", "call_analyzed"],
+      "timeout_seconds": 10,
+      "auth": {
+        "type": "bearer",
+        "secret": "your-webhook-secret-token"
+      },
+      "retry": {
+        "max_retries": 3,
+        "initial_delay_ms": 1000,
+        "backoff_multiplier": 2.0
+      },
+      "include_transcript": true,
+      "include_latency_metrics": true
+    }
+  }
+}
+```
+
+#### Webhook Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `false` | Enable/disable webhooks for this agent |
+| `url` | string | `""` | Webhook endpoint URL (HTTPS recommended) |
+| `events` | array | `["call_started", "call_ended", "call_analyzed"]` | Events to deliver |
+| `timeout_seconds` | integer | `10` | Request timeout (Retell-compatible default) |
+| `auth` | object | `{type: "none"}` | Authentication configuration |
+| `retry` | object | See below | Retry configuration |
+| `include_transcript` | boolean | `true` | Include transcript in `call_ended` payload |
+| `include_latency_metrics` | boolean | `true` | Include latency percentiles in `call_ended` payload |
+
+#### Authentication Options
+
+**No Authentication:**
+```json
+{ "auth": { "type": "none" } }
+```
+
+**Bearer Token:**
+```json
+{ "auth": { "type": "bearer", "secret": "your-token" } }
+```
+Sends `Authorization: Bearer your-token` header.
+
+**HMAC-SHA256 Signature:**
+```json
+{ "auth": { "type": "hmac", "secret": "your-secret-key" } }
+```
+Sends `X-Webhook-Signature: sha256=<signature>` and `X-Webhook-Timestamp` headers.
+
+#### Retry Configuration
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `max_retries` | integer | `3` | Maximum retry attempts after initial failure |
+| `initial_delay_ms` | integer | `1000` | Initial retry delay in milliseconds |
+| `max_delay_ms` | integer | `10000` | Maximum retry delay |
+| `backoff_multiplier` | float | `2.0` | Exponential backoff multiplier |
+
+#### Events
+
+| Event | Trigger | Key Payload Fields |
+|-------|---------|-------------------|
+| `call_started` | Call connects | call_id, agent_id, direction, from/to_number, timestamps |
+| `call_ended` | Call finalizes | Above + transcript, latency metrics, collected_dynamic_variables, disconnection_reason |
+| `call_analyzed` | Post-call analysis completes | call_id + sentiment, summary, success, custom_analysis_data |
+
+**Note**: See `docs/WEBHOOK_GUIDE.md` for complete payload reference and testing instructions.
 
 ### Configuration Management
 

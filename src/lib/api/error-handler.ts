@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { formatZodErrorSummary, extractFieldErrors } from '@/lib/utils/error-formatter';
 
 export interface ErrorResponseOptions {
   resourceName?: string;
@@ -14,18 +15,19 @@ export function handleApiError(error: unknown, options: ErrorResponseOptions = {
   // Auth error
   if (error instanceof Error && error.message === 'Unauthorized') {
     return NextResponse.json(
-      { success: false, error: 'Unauthorized' },
+      { success: false, error: 'Your session has expired. Please sign in again.' },
       { status: 401 }
     );
   }
 
-  // Zod validation error
+  // Zod validation error - include user-friendly summary
   if (error instanceof z.ZodError) {
     return NextResponse.json(
       {
         success: false,
-        error: 'Invalid input',
+        error: formatZodErrorSummary(error),
         details: error.issues,
+        fieldErrors: extractFieldErrors(error),
       },
       { status: 400 }
     );
@@ -52,10 +54,10 @@ export function handleApiError(error: unknown, options: ErrorResponseOptions = {
     );
   }
 
-  // Generic error
+  // Generic error - log details but return user-friendly message
   console.error('API Error:', error);
   return NextResponse.json(
-    { success: false, error: 'Internal server error' },
+    { success: false, error: 'Something went wrong on our end. Please try again later.' },
     { status: 500 }
   );
 }

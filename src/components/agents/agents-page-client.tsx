@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Activity, Clock, Edit, Trash2, ArrowRight } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Plus, Activity, Clock, Edit, Trash2, ArrowRight, Bot } from "lucide-react";
 import { useAgents } from "@/lib/hooks/use-agents";
 import { formatDateTime } from "@/lib/utils/formatters";
 import { CreateAgentDialog } from "./dialogs/create-agent-dialog";
@@ -73,19 +74,23 @@ export function AgentsPageClient() {
             </CardContent>
           </Card>
         ) : !agents || agents.length === 0 ? (
-          <Card className="col-span-full">
-            <CardContent className="pt-6">
-              <div className="text-center py-8">
-                <p className="text-muted-foreground mb-4">
-                  No agents found. Create your first agent to get started.
-                </p>
-                <Button onClick={() => setCreateDialogOpen(true)}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create First Agent
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="col-span-full">
+            <EmptyState
+              icon={Bot}
+              title="No agents yet"
+              description="Create your first voice AI agent to start handling calls. Agents can be customized with workflows, knowledge bases, and voice settings."
+              action={{
+                label: 'Create First Agent',
+                icon: Plus,
+                onClick: () => setCreateDialogOpen(true),
+              }}
+              tips={[
+                { text: 'Start with a simple workflow and expand from there' },
+                { text: 'Use global intents to handle common phrases across all nodes' },
+                { text: 'Test your agent with the built-in chat feature before going live' },
+              ]}
+            />
+          </div>
         ) : (
           agents.map((agent) => (
             <Card

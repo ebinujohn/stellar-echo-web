@@ -12,9 +12,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 4. **Never Auto-Commit** - DO NOT AUTO COMMIT unless explicitly asked
 5. **Run Quality Checks After Code Changes** - ALWAYS run quality tools after modifying code:
    ```bash
-   pnpm lint          # Check for linting errors
-   pnpm type-check    # Verify TypeScript types
+   pnpm check         # Quick: lint + type-check
    pnpm security      # Run Semgrep security scan
+   pnpm test          # Full: lint + type-check + E2E tests
    ```
    Fix any errors before considering the task complete.
 
@@ -37,8 +37,13 @@ pnpm lint             # Run ESLint
 pnpm type-check       # TypeScript checking
 pnpm format           # Run Prettier
 pnpm security         # Run Semgrep security scan
-pnpm test             # Run Vitest tests
-pnpm test:e2e         # Run Playwright E2E tests
+pnpm check            # Run lint + type-check (quick verification)
+pnpm test             # Run ALL tests (lint, type-check, E2E)
+pnpm test:e2e         # Run E2E tests (Chrome only, default)
+pnpm test:e2e:all     # Run E2E tests on ALL browsers
+pnpm test:e2e:ui      # Run E2E tests with interactive UI
+pnpm test:e2e:debug   # Run E2E tests in debug mode
+pnpm test:e2e:report  # View last E2E test report
 ```
 
 ### Docker Deployment
@@ -68,6 +73,7 @@ Health check endpoint: `GET /api/health` (used by container orchestration)
 | Prettier v3 | Code formatting | `prettier-plugin-tailwindcss` |
 | TypeScript | Type checking | `tsconfig.json` |
 | Semgrep | Static security analysis | `.semgrepconfig.yml` |
+| Playwright | E2E browser testing | `playwright.config.ts` |
 
 **Semgrep** checks for:
 - OWASP Top 10 vulnerabilities (SQL injection, XSS, secrets)
@@ -87,6 +93,11 @@ Required in `.env.local`:
 - Optional: `ADMIN_API_BASE_URL`, `ADMIN_API_KEY` - Orchestrator cache management
 - Optional: `NEXT_PUBLIC_SENTRY_DSN` - Sentry error tracking DSN
 - Optional: `NEXT_PUBLIC_SENTRY_ENABLED`, `SENTRY_ENABLED` - Enable Sentry in development
+
+**E2E Testing Variables** (optional, for Playwright tests):
+- `E2E_BASE_URL` - Base URL for E2E tests (default: `http://localhost:3000`)
+- `E2E_USER_EMAIL` - Test user email (default: `admin@example.com`)
+- `E2E_USER_PASSWORD` - Test user password (default: `password123`)
 
 ## Architecture
 
@@ -115,8 +126,26 @@ Required in `.env.local`:
 ### Components
 - **Feature components**: `src/components/[feature]/` (calls, dashboard, analytics, agents, settings)
 - **UI primitives**: `src/components/ui/` (shadcn/ui)
-- **Layout**: `src/components/layout/` (sidebar, navbar)
+- **Layout**: `src/components/layout/` (sidebar, navbar, dashboard-shell)
 - **Providers**: `src/components/providers/` (theme, query, sentry)
+
+#### Key UI Components
+
+**EmptyState** (`src/components/ui/empty-state.tsx`):
+- Reusable empty state with icon, title, description, CTAs, and tips
+- Presets available for common scenarios (agents, RAG, voice, phone, calls)
+
+**FormField** (`src/components/ui/form-field.tsx`):
+- `FormField` - Wrapper with label, error display, helper text
+- `FormInput` - Input with integrated validation display
+- `FormTextarea` - Textarea with validation display
+- `FormSelect` - Select wrapper with validation
+
+**Responsive Sidebar** (`src/components/layout/`):
+- `SidebarProvider` - Context for sidebar state management
+- Collapsible on desktop with localStorage persistence
+- Slide-out drawer on mobile with overlay
+- Keyboard shortcuts (Escape to close)
 
 ### Error Tracking (Sentry)
 - **Config files**: `sentry.client.config.ts`, `sentry.server.config.ts`, `sentry.edge.config.ts`
@@ -250,6 +279,17 @@ export const useResourceVersions = resourceVersions.useVersions;
 export const useActivateResourceVersion = resourceVersions.useActivateVersion;
 ```
 
+### Error Formatter (`src/lib/utils/error-formatter.ts`)
+- `formatError(error)` - Converts any error into user-friendly `FormattedError`
+- `formatZodErrorSummary(error)` - Creates summary message from Zod errors
+- `extractFieldErrors(error)` - Extracts field-level errors for form display
+- `getErrorMessage(error)` - Simple string error message
+- `getFieldError(error, fieldPath)` - Get error for specific field
+
+### Form Validation Hook (`src/lib/hooks/use-form-validation.ts`)
+- `useFormValidation(options)` - Full form validation with Zod schemas
+- `useFormErrors()` - Simple hook for API error display
+
 ### Formatters (`src/lib/utils/formatters.ts`)
 - `formatDateTime()`, `formatDuration()`, `formatLatency()`, `formatPhoneNumber()`
 - `formatPercentage()`, `formatNumber()`, `getStatusVariant()`, `getStatusColor()`
@@ -309,3 +349,109 @@ All metrics show min/avg/max values with interruption indicators.
 - `pnpm db:generate`
 - `pnpm type-check`
 - Use Context7 MCP for any library documentation. Use Playwright MCP for UI & UX testing and checking.
+
+## E2E Testing (Playwright)
+
+### Test Structure
+
+```
+e2e/
+├── fixtures/           # Test fixtures and auth setup
+│   └── auth.fixture.ts # Authenticated page fixture
+├── utils/              # Helper functions
+│   └── test-helpers.ts # Common test utilities
+├── auth/               # Authentication tests
+├── dashboard/          # Dashboard page tests
+├── calls/              # Calls page tests
+├── analytics/          # Analytics page tests
+├── agents/             # Agent CRUD and workflow tests
+├── settings/           # Settings pages (RAG, Voice, Phone)
+├── theme/              # Dark mode tests
+├── mobile/             # Mobile responsiveness tests
+├── global-setup.ts     # Authentication setup script
+└── env.d.ts            # TypeScript definitions
+```
+
+### Running E2E Tests
+
+```bash
+# Prerequisites: Start database and seed test user
+pnpm db:push && pnpm db:seed
+
+# Run E2E tests (Chrome only - default, fastest)
+pnpm test:e2e
+
+# Run E2E tests on ALL browsers (Chrome, Firefox, Safari, Mobile)
+pnpm test:e2e:all
+
+# Run with custom credentials
+E2E_USER_EMAIL=admin@example.com E2E_USER_PASSWORD=password123 pnpm test:e2e
+
+# Run specific test file
+pnpm test:e2e e2e/auth/login.spec.ts
+
+# Run additional browsers explicitly
+pnpm test:e2e --project=firefox
+pnpm test:e2e --project=webkit
+pnpm test:e2e --project="Mobile Chrome"
+pnpm test:e2e --project="Mobile Safari"
+
+# Run multiple browsers
+pnpm test:e2e --project=chromium --project=firefox
+
+# Interactive UI mode (recommended for development)
+pnpm test:e2e:ui
+
+# Debug mode with browser DevTools
+pnpm test:e2e:debug
+
+# View HTML report from last run
+pnpm test:e2e:report
+```
+
+### Test Configuration
+
+| Setting | Value | Description |
+|---------|-------|-------------|
+| Base URL | `http://localhost:3000` | Override with `E2E_BASE_URL` |
+| Default Browser | Chrome | Use `--project` for others |
+| All Browsers | Chrome, Firefox, Safari | `pnpm test:e2e:all` |
+| Retries | 0 (local), 2 (CI) | Automatic retries on failure |
+| Timeout | 30s per test | Configurable per test |
+| Screenshots | On failure only | Saved to `test-results/` |
+| Videos | Retained on failure | Saved to `test-results/` |
+
+### CI/CD Integration
+
+E2E tests run automatically on GitHub Actions:
+- Triggered on push to `main`/`develop` branches
+- Triggered on pull requests
+- Tests run in parallel across Chrome, Firefox, and Safari
+- Mobile viewport tests run separately
+- Test reports uploaded as artifacts
+
+### Writing New E2E Tests
+
+```typescript
+import { test, expect } from '../fixtures/auth.fixture';
+import { waitForSkeletonsToDisappear } from '../utils/test-helpers';
+
+test.describe('Feature Name', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/feature-page');
+  });
+
+  test('should do something', async ({ page }) => {
+    await waitForSkeletonsToDisappear(page);
+    await expect(page.locator('h1')).toContainText('Expected Title');
+  });
+});
+```
+
+### Debugging Failed Tests
+
+1. **View HTML Report**: `pnpm test:e2e:report`
+2. **Check Screenshots**: Look in `test-results/` for failure screenshots
+3. **Run in Debug Mode**: `pnpm test:e2e:debug` opens browser DevTools
+4. **Use UI Mode**: `pnpm test:e2e:ui` for step-by-step debugging
+5. **Check Traces**: Traces are recorded on retries, viewable in report

@@ -133,6 +133,22 @@ const GlobalIntentCard = memo(function GlobalIntentCard({
     !!(intent.activeFromNodes?.length || intent.excludedFromNodes?.length)
   );
 
+  // Compute mutually exclusive available nodes for each list
+  const excludedSet = useMemo(() => new Set(localExcludedFromNodes || []), [localExcludedFromNodes]);
+  const activeSet = useMemo(() => new Set(localActiveFromNodes || []), [localActiveFromNodes]);
+
+  // Nodes available for "Active From" = all nodes except those in "Excluded From"
+  const availableForActive = useMemo(
+    () => availableNodes.filter((node) => !excludedSet.has(node.id)),
+    [availableNodes, excludedSet]
+  );
+
+  // Nodes available for "Excluded From" = all nodes except those in "Active From"
+  const availableForExcluded = useMemo(
+    () => availableNodes.filter((node) => !activeSet.has(node.id)),
+    [availableNodes, activeSet]
+  );
+
   // Parse examples: split by newline, trim, filter empty
   const parseExamples = useCallback((text: string): string[] => {
     return text
@@ -363,7 +379,7 @@ const GlobalIntentCard = memo(function GlobalIntentCard({
             label="Active From Nodes"
             description="Only evaluate this intent when in these nodes (whitelist). Leave empty for all nodes."
             selectedNodes={localActiveFromNodes}
-            availableNodes={availableNodes}
+            availableNodes={availableForActive}
             onChange={handleActiveFromNodesChange}
           />
 
@@ -371,7 +387,7 @@ const GlobalIntentCard = memo(function GlobalIntentCard({
             label="Excluded From Nodes"
             description="Never evaluate this intent when in these nodes (blacklist)."
             selectedNodes={localExcludedFromNodes}
-            availableNodes={availableNodes}
+            availableNodes={availableForExcluded}
             onChange={handleExcludedFromNodesChange}
           />
         </CollapsibleContent>

@@ -33,6 +33,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { EmptyState } from '@/components/ui/empty-state';
 
 export function PhoneConfigList() {
   const router = useRouter();
@@ -189,21 +190,20 @@ export function PhoneConfigList() {
           ))}
         </div>
       ) : (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Phone className="h-12 w-12 text-muted-foreground/50" />
-            <h3 className="mt-4 text-lg font-medium">No phone numbers</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Add phone numbers to your pool and map them to agents for call routing.
-            </p>
-            <Link href="/settings/phone/new" className="mt-4">
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Phone Number
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={Phone}
+          title="No phone numbers"
+          description="Add phone numbers to your pool and map them to agents for inbound and outbound call routing."
+          action={{
+            label: 'Add Phone Number',
+            icon: Plus,
+            href: '/settings/phone/new',
+          }}
+          tips={[
+            { text: 'Each phone number can be mapped to one agent' },
+            { text: 'Use descriptive names to identify numbers easily' },
+          ]}
+        />
       )}
 
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>

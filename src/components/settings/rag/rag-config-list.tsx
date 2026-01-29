@@ -32,6 +32,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { EmptyState } from '@/components/ui/empty-state';
 
 export function RagConfigList() {
   const router = useRouter();
@@ -210,21 +211,27 @@ export function RagConfigList() {
           ))}
         </div>
       ) : (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Database className="h-12 w-12 text-muted-foreground/50" />
-            <h3 className="mt-4 text-lg font-medium">No RAG configurations</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Create your first RAG configuration to enable knowledge retrieval for agents.
-            </p>
-            <Link href="/settings/rag/new" className="mt-4">
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Configuration
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={Database}
+          title="No RAG configurations"
+          description="RAG (Retrieval Augmented Generation) configurations enable your agents to access knowledge bases for accurate, contextual responses."
+          action={{
+            label: 'Create Configuration',
+            icon: Plus,
+            href: '/settings/rag/new',
+          }}
+          secondaryAction={{
+            label: 'Deploy from S3',
+            icon: CloudDownload,
+            href: '/settings/rag/deploy',
+            variant: 'outline',
+          }}
+          tips={[
+            { text: 'Deploy knowledge bases from S3 for large document sets' },
+            { text: 'Use hybrid search mode for best results' },
+            { text: 'Adjust top_k to control how many documents are retrieved' },
+          ]}
+        />
       )}
 
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>

@@ -1,6 +1,5 @@
 import { requireAuth } from '@/lib/auth/session';
-import { Sidebar } from '@/components/layout/sidebar';
-import { Navbar } from '@/components/layout/navbar';
+import { DashboardShell } from '@/components/layout/dashboard-shell';
 import type { AuthUser } from '@/types';
 
 export default async function DashboardLayout({
@@ -20,21 +19,5 @@ export default async function DashboardLayout({
     tenantId: session.tenantId,
   };
 
-  return (
-    <div className="flex h-screen overflow-hidden">
-      {/* Sidebar */}
-      <Sidebar />
-
-      {/* Main content area */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Navbar */}
-        <Navbar user={user} />
-
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto bg-muted/10 p-6">
-          {children}
-        </main>
-      </div>
-    </div>
-  );
+  return <DashboardShell user={user}>{children}</DashboardShell>;
 }

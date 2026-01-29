@@ -17,7 +17,14 @@
     "format": "prettier --write .",
     "type-check": "tsc --noEmit",
     "security": "semgrep scan --config .semgrepconfig.yml --config p/typescript --config p/react",
-    "security:ci": "semgrep ci --config .semgrepconfig.yml --config p/typescript --config p/react"
+    "security:ci": "semgrep ci --config .semgrepconfig.yml --config p/typescript --config p/react",
+    "test": "pnpm lint && pnpm type-check && pnpm test:e2e",
+    "test:e2e": "playwright test --project=chromium",
+    "test:e2e:all": "playwright test",
+    "test:e2e:ui": "playwright test --project=chromium --ui",
+    "test:e2e:debug": "playwright test --project=chromium --debug",
+    "test:e2e:report": "playwright show-report",
+    "check": "pnpm lint && pnpm type-check"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.962.0",
@@ -36,6 +43,7 @@
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-tabs": "^1.1.13",
+    "@radix-ui/react-tooltip": "^1.1.8",
     "@sentry/nextjs": "^10.32.1",
     "@tanstack/react-query": "^5.90.16",
     "@tanstack/react-query-devtools": "^5.91.2",
@@ -64,6 +72,7 @@
     "zod": "^4.3.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.49.0",
     "@tailwindcss/postcss": "^4.1.18",
     "@types/dagre": "^0.7.53",
     "@types/node": "^25.0.3",

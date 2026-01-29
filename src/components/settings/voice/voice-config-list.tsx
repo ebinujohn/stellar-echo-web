@@ -32,6 +32,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { EmptyState } from '@/components/ui/empty-state';
 
 export function VoiceConfigList() {
   const router = useRouter();
@@ -176,21 +177,20 @@ export function VoiceConfigList() {
           ))}
         </div>
       ) : (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Volume2 className="h-12 w-12 text-muted-foreground/50" />
-            <h3 className="mt-4 text-lg font-medium">No voices in catalog</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Add a voice to the catalog to enable text-to-speech for agents.
-            </p>
-            <Link href="/settings/voice/new" className="mt-4">
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Voice
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={Volume2}
+          title="No voices in catalog"
+          description="Add voices to your catalog to enable natural text-to-speech for your agents. Each agent can use a different voice."
+          action={{
+            label: 'Add Voice',
+            icon: Plus,
+            href: '/settings/voice/new',
+          }}
+          tips={[
+            { text: 'Choose voices that match your brand persona' },
+            { text: 'Test voices with sample phrases before assigning to agents' },
+          ]}
+        />
       )}
 
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
