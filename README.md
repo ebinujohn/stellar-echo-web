@@ -497,7 +497,7 @@ src/
 │       └── formatters.ts               # Formatting utilities
 ├── types/                              # TypeScript types
 │   └── index.ts
-└── middleware.ts                       # Auth middleware
+└── proxy.ts                            # Auth proxy (Next.js 16)
 
 scripts/
 └── inspect-schema.ts                   # Database schema inspection

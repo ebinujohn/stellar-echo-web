@@ -103,7 +103,7 @@ Required in `.env.local`:
 
 ### Authentication & Authorization
 - **JWT-based auth** with HTTP-only cookies (15min access, 7-day refresh tokens)
-- **Middleware** at `src/middleware.ts` validates tokens, injects headers (`x-user-id`, `x-tenant-id`, `x-user-role`)
+- **Proxy** at `src/proxy.ts` validates tokens, injects headers (`x-user-id`, `x-tenant-id`, `x-user-role`)
 - **Session helpers** in `src/lib/auth/session.ts`: `requireAuth()`, `requireRole()`
 - **Multi-tenant isolation** enforced at database query level using `tenantId`
 

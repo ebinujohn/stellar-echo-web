@@ -19,9 +19,6 @@ const sentryWebpackPluginOptions = {
   // Set to `true` to suppress logs
   silent: !process.env.CI,
 
-  // Automatically tree-shake Sentry logger statements to reduce bundle size
-  disableLogger: true,
-
   // Upload source maps during production builds for better error stack traces
   // Note: Requires SENTRY_AUTH_TOKEN environment variable to be set
   sourceMaps: {
@@ -31,22 +28,29 @@ const sentryWebpackPluginOptions = {
 
   // Route browser requests to Sentry through a Next.js rewrite to circumvent ad-blockers.
   // This can increase your server load as well as your hosting bill.
-  // Note: Check that the configured route will not match with your Next.js middleware
+  // Note: Check that the configured route will not match with your Next.js proxy
   tunnelRoute: "/monitoring-tunnel",
 
   // Hides source maps from generated client bundles
   hideSourceMaps: true,
 
-  // Automatically instrument Next.js data fetching methods and API routes
-  autoInstrumentServerFunctions: true,
-
-  // Disable automatic instrumentation of middleware
-  // as it can cause issues with certain setups
-  autoInstrumentMiddleware: true,
-
   // Disable the Sentry webpack plugin in development mode to speed up builds
   // Source maps will still be generated but not uploaded
   widenClientFileUpload: true,
+
+  // Webpack-specific instrumentation options
+  webpack: {
+    // Automatically instrument Next.js data fetching methods and API routes
+    autoInstrumentServerFunctions: true,
+
+    // Automatically instrument Next.js middleware/proxy
+    autoInstrumentMiddleware: true,
+
+    // Tree-shake Sentry logger statements to reduce bundle size
+    treeshake: {
+      removeDebugLogging: true,
+    },
+  },
 };
 
 // Make sure adding Sentry options is the last code to run before exporting

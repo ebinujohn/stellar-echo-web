@@ -4,11 +4,11 @@ import { verifyToken, refreshAccessToken } from '@/lib/auth/jwt';
 import { getSessionCookie } from 'better-auth/cookies';
 
 /**
- * Middleware that handles both authentication systems:
+ * Proxy that handles both authentication systems:
  * - JWT (email/password users)
  * - Better Auth (Google OAuth users)
  */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Public routes - no auth required
