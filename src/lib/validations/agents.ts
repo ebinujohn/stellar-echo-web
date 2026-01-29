@@ -366,6 +366,45 @@ const postCallAnalysisSchema = z.object({
   additional_instructions: z.string().optional(),
 });
 
+// ========================================
+// Webhook Schemas
+// ========================================
+
+/**
+ * Webhook authentication schema
+ */
+const webhookAuthSchema = z.object({
+  type: z.enum(['none', 'bearer', 'hmac']).default('none'),
+  secret: z.string().optional(),
+});
+
+/**
+ * Webhook retry configuration schema
+ */
+const webhookRetrySchema = z.object({
+  max_retries: z.number().int().min(0).max(10).default(3),
+  initial_delay_ms: z.number().int().min(100).max(60000).default(1000),
+  max_delay_ms: z.number().int().min(1000).max(60000).default(10000),
+  backoff_multiplier: z.number().min(1).max(5).default(2.0),
+});
+
+/**
+ * Webhook configuration schema
+ * Configures webhook notifications for call lifecycle events
+ */
+const webhookConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  url: z.string().url('Must be a valid URL').optional().or(z.literal('')),
+  events: z
+    .array(z.enum(['call_started', 'call_ended', 'call_analyzed']))
+    .default(['call_started', 'call_ended', 'call_analyzed']),
+  timeout_seconds: z.number().int().min(1).max(30).default(10),
+  auth: webhookAuthSchema.optional(),
+  retry: webhookRetrySchema.optional(),
+  include_transcript: z.boolean().default(true),
+  include_latency_metrics: z.boolean().default(true),
+});
+
 /**
  * Workflow configuration schema
  * Note: llm and tts configs are inside workflow section per AGENT_JSON_SCHEMA.md
@@ -385,6 +424,8 @@ const workflowSchema = z.object({
   global_intent_config: globalIntentConfigSchema.optional(),
   // Post-call analysis configuration
   post_call_analysis: postCallAnalysisSchema.optional(),
+  // Webhook configuration for call lifecycle events
+  webhook: webhookConfigSchema.optional(),
   nodes: z.array(nodeSchema).min(1, 'At least one node is required'),
 });
 
@@ -591,6 +632,10 @@ export type GlobalIntentConfig = z.infer<typeof globalIntentConfigSchema>;
 export type QuestionChoice = z.infer<typeof questionChoiceSchema>;
 export type PostCallQuestion = z.infer<typeof postCallQuestionSchema>;
 export type PostCallAnalysis = z.infer<typeof postCallAnalysisSchema>;
+// Webhook types
+export type WebhookAuth = z.infer<typeof webhookAuthSchema>;
+export type WebhookRetry = z.infer<typeof webhookRetrySchema>;
+export type WebhookConfig = z.infer<typeof webhookConfigSchema>;
 
 // ========================================
 // Validation Helpers

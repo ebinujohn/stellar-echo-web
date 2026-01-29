@@ -88,6 +88,38 @@ export interface PostCallAnalysisDraft {
 }
 
 /**
+ * Draft state for webhook retry configuration
+ */
+export interface WebhookRetryDraft {
+  maxRetries: number;
+  initialDelayMs: number;
+  maxDelayMs: number;
+  backoffMultiplier: number;
+}
+
+/**
+ * Draft state for webhook authentication
+ */
+export interface WebhookAuthDraft {
+  type: 'none' | 'bearer' | 'hmac';
+  secret: string;
+}
+
+/**
+ * Draft state for webhook configuration
+ */
+export interface WebhookDraft {
+  enabled: boolean;
+  url: string;
+  events: Array<'call_started' | 'call_ended' | 'call_analyzed'>;
+  timeoutSeconds: number;
+  auth: WebhookAuthDraft;
+  retry: WebhookRetryDraft;
+  includeTranscript: boolean;
+  includeLatencyMetrics: boolean;
+}
+
+/**
  * Draft state for the Settings form
  */
 export interface SettingsDraft {
@@ -110,6 +142,8 @@ export interface SettingsDraft {
   globalIntentConfig: GlobalIntentConfigDraft;
   // Post-call analysis
   postCallAnalysis: PostCallAnalysisDraft;
+  // Webhooks
+  webhook: WebhookDraft;
 }
 
 /**

@@ -36,10 +36,12 @@ import {
   GlobalIntentConfigDraft,
   PostCallAnalysisDraft,
   PostCallQuestionDraft,
+  WebhookDraft,
 } from './contexts/agent-draft-context';
 import { GlobalIntentsEditor } from './global-intents-editor';
 import { PostCallAnalysisEditor } from './post-call-analysis-editor';
-import { Brain, FileSearch } from 'lucide-react';
+import { WebhooksEditor } from './webhooks-editor';
+import { Brain, FileSearch, Webhook } from 'lucide-react';
 
 // Safe hook to get draft context (returns null if not in provider)
 function useOptionalAgentDraft() {
@@ -106,6 +108,25 @@ interface SettingsConfig {
         required?: boolean;
       }>;
       additional_instructions?: string;
+    };
+    // Webhook configuration for call lifecycle events
+    webhook?: {
+      enabled?: boolean;
+      url?: string;
+      events?: Array<'call_started' | 'call_ended' | 'call_analyzed'>;
+      timeout_seconds?: number;
+      auth?: {
+        type?: 'none' | 'bearer' | 'hmac';
+        secret?: string;
+      };
+      retry?: {
+        max_retries?: number;
+        initial_delay_ms?: number;
+        max_delay_ms?: number;
+        backoff_multiplier?: number;
+      };
+      include_transcript?: boolean;
+      include_latency_metrics?: boolean;
     };
     nodes?: Array<{ id: string; name: string; type?: string }>;
     [key: string]: unknown;
@@ -342,6 +363,47 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
     getInitialValue(draftContext?.settingsDraft?.postCallAnalysis, convertPostCallAnalysisToDraft())
   );
 
+  // Webhook configuration (stored in workflow.webhook)
+  const workflowWebhook = currentConfig.workflow?.webhook;
+
+  // Convert JSON webhook to draft format
+  const convertWebhookToDraft = useCallback((): WebhookDraft => {
+    return {
+      enabled: workflowWebhook?.enabled ?? false,
+      url: workflowWebhook?.url ?? '',
+      events: workflowWebhook?.events ?? ['call_started', 'call_ended', 'call_analyzed'],
+      timeoutSeconds: workflowWebhook?.timeout_seconds ?? 10,
+      auth: {
+        type: workflowWebhook?.auth?.type ?? 'none',
+        secret: workflowWebhook?.auth?.secret ?? '',
+      },
+      retry: {
+        maxRetries: workflowWebhook?.retry?.max_retries ?? 3,
+        initialDelayMs: workflowWebhook?.retry?.initial_delay_ms ?? 1000,
+        maxDelayMs: workflowWebhook?.retry?.max_delay_ms ?? 10000,
+        backoffMultiplier: workflowWebhook?.retry?.backoff_multiplier ?? 2.0,
+      },
+      includeTranscript: workflowWebhook?.include_transcript ?? true,
+      includeLatencyMetrics: workflowWebhook?.include_latency_metrics ?? true,
+    };
+  }, [workflowWebhook]);
+
+  // Default webhook values (used for initial state comparison)
+  const defaultWebhook: WebhookDraft = {
+    enabled: false,
+    url: '',
+    events: ['call_started', 'call_ended', 'call_analyzed'],
+    timeoutSeconds: 10,
+    auth: { type: 'none', secret: '' },
+    retry: { maxRetries: 3, initialDelayMs: 1000, maxDelayMs: 10000, backoffMultiplier: 2.0 },
+    includeTranscript: true,
+    includeLatencyMetrics: true,
+  };
+
+  const [webhook, setWebhook] = useState<WebhookDraft>(() =>
+    getInitialValue(draftContext?.settingsDraft?.webhook, convertWebhookToDraft())
+  );
+
   // Get available nodes for GlobalIntentsEditor (from workflow config)
   const availableNodes = currentConfig.workflow?.nodes?.map(n => ({ id: n.id, name: n.name })) || [];
 
@@ -383,13 +445,14 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
     globalIntents,
     globalIntentConfig,
     postCallAnalysis,
+    webhook,
   }), [
     globalPrompt, llmEnabled, llmModel, llmTemperature, llmMaxTokens,
     llmServiceTier, ttsEnabled, ttsModel, ttsStability, ttsSimilarityBoost,
     ttsStyle, ttsUseSpeakerBoost, ttsEnableSsmlParsing, ttsPronunciationEnabled,
     ttsPronunciationDictionaryIds, ttsAggregateSentences, ragEnabledState, selectedRagConfigId,
     ragOverrideEnabled, ragSearchMode, ragTopK, ragRrfK, ragVectorWeight, ragFtsWeight,
-    selectedVoiceConfigId, autoHangupEnabled, globalIntents, globalIntentConfig, postCallAnalysis
+    selectedVoiceConfigId, autoHangupEnabled, globalIntents, globalIntentConfig, postCallAnalysis, webhook
   ]);
 
   // Store initial state on mount
@@ -424,6 +487,26 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
       })),
       additionalInstructions: workflowPostCallAnalysis?.additional_instructions || '',
     };
+
+    // Convert webhook to draft format for initial state
+    const initialWebhook: WebhookDraft = workflowWebhook ? {
+      enabled: workflowWebhook.enabled ?? false,
+      url: workflowWebhook.url ?? '',
+      events: workflowWebhook.events ?? ['call_started', 'call_ended', 'call_analyzed'],
+      timeoutSeconds: workflowWebhook.timeout_seconds ?? 10,
+      auth: {
+        type: workflowWebhook.auth?.type ?? 'none',
+        secret: workflowWebhook.auth?.secret ?? '',
+      },
+      retry: {
+        maxRetries: workflowWebhook.retry?.max_retries ?? 3,
+        initialDelayMs: workflowWebhook.retry?.initial_delay_ms ?? 1000,
+        maxDelayMs: workflowWebhook.retry?.max_delay_ms ?? 10000,
+        backoffMultiplier: workflowWebhook.retry?.backoff_multiplier ?? 2.0,
+      },
+      includeTranscript: workflowWebhook.include_transcript ?? true,
+      includeLatencyMetrics: workflowWebhook.include_latency_metrics ?? true,
+    } : defaultWebhook;
 
     const initialSettings: SettingsDraft = {
       globalPrompt: initialGlobalPrompt || '',
@@ -463,6 +546,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
         contextMessages: workflowGlobalIntentConfig?.context_messages ?? defaultGlobalIntentConfig.contextMessages,
       },
       postCallAnalysis: initialPostCallAnalysis,
+      webhook: initialWebhook,
     };
     initialStateRef.current = JSON.stringify(initialSettings);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentional: capture initial state only once on mount
@@ -583,6 +667,26 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
         }),
       };
 
+      // Convert webhook draft to JSON format
+      const webhookConfig = webhook.enabled ? {
+        enabled: true,
+        url: webhook.url,
+        events: webhook.events,
+        timeout_seconds: webhook.timeoutSeconds,
+        auth: webhook.auth.type !== 'none' ? {
+          type: webhook.auth.type,
+          secret: webhook.auth.secret,
+        } : { type: 'none' as const },
+        retry: {
+          max_retries: webhook.retry.maxRetries,
+          initial_delay_ms: webhook.retry.initialDelayMs,
+          max_delay_ms: webhook.retry.maxDelayMs,
+          backoff_multiplier: webhook.retry.backoffMultiplier,
+        },
+        include_transcript: webhook.includeTranscript,
+        include_latency_metrics: webhook.includeLatencyMetrics,
+      } : { enabled: false };
+
       // Merge the form data with the existing config
       // LLM config goes in workflow.llm, TTS config goes in workflow.tts per AGENT_JSON_SCHEMA.md
       // Note: Root-level tts is removed - all TTS config must be in workflow.tts
@@ -605,6 +709,8 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
           }),
           // Post-Call Analysis config (per AGENT_JSON_SCHEMA.md)
           ...(postCallAnalysis.enabled && { post_call_analysis: postCallAnalysisConfig }),
+          // Webhook config for call lifecycle events
+          ...(webhook.enabled && { webhook: webhookConfig }),
         },
         // Remove deprecated root-level fields that should be in workflow section
         tts: undefined,
@@ -1224,6 +1330,22 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
             </div>
             <Switch checked={autoHangupEnabled} onCheckedChange={setAutoHangupEnabled} />
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Webhooks */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Webhook className="h-5 w-5" />
+            Webhooks
+          </CardTitle>
+          <CardDescription>
+            Configure webhook notifications for call lifecycle events
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <WebhooksEditor config={webhook} onChange={setWebhook} />
         </CardContent>
       </Card>
 
