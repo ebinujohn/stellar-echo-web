@@ -10,6 +10,7 @@ import { StandardNodeForm } from './node-property-forms/standard-node-form';
 import { RetrieveVariableNodeForm } from './node-property-forms/retrieve-variable-node-form';
 import { EndCallNodeForm } from './node-property-forms/end-call-node-form';
 import { AgentTransferNodeForm } from './node-property-forms/agent-transfer-node-form';
+import { ApiCallNodeForm } from './node-property-forms/api-call-node-form';
 
 interface PropertiesPanelProps {
   selectedNode: Node<WorkflowNodeData> | null;
@@ -102,6 +103,15 @@ export function PropertiesPanel({
             nodeData={selectedNode.data}
             onUpdate={handleUpdate}
             currentAgentId={currentAgentId}
+          />
+        );
+      case 'api_call':
+        return (
+          <ApiCallNodeForm
+            key={selectedNode.id}
+            nodeData={selectedNode.data}
+            onUpdate={handleUpdate}
+            availableTargetNodes={availableTargetNodes}
           />
         );
       default:

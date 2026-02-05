@@ -34,6 +34,7 @@ interface ExtendedConfigNode extends Omit<ConfigNode, 'transitions'> {
     fts_weight?: number;
   };
   llm_override?: {
+    provider_id?: string;
     model_name?: string;
     temperature?: number;
     max_tokens?: number;
@@ -51,6 +52,28 @@ interface ExtendedConfigNode extends Omit<ConfigNode, 'transitions'> {
   target_agent_id?: string;
   transfer_context?: boolean;
   transfer_message?: string;
+  // API call node fields
+  api_call?: {
+    method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+    url: string;
+    headers?: Record<string, string>;
+    query_params?: Record<string, string>;
+    body?: Record<string, unknown>;
+    timeout_seconds?: number;
+    retry?: {
+      max_retries?: number;
+      initial_delay_ms?: number;
+      max_delay_ms?: number;
+      backoff_multiplier?: number;
+    };
+    response_extraction?: Array<{
+      path: string;
+      variable_name: string;
+      default_value?: string;
+    }>;
+    response_size_limit_bytes?: number;
+    allowed_hosts?: string[];
+  };
 }
 
 /**
@@ -58,7 +81,7 @@ interface ExtendedConfigNode extends Omit<ConfigNode, 'transitions'> {
  */
 export interface WorkflowNodeData {
   id: string;
-  type: 'standard' | 'retrieve_variable' | 'end_call' | 'agent_transfer';
+  type: 'standard' | 'retrieve_variable' | 'end_call' | 'agent_transfer' | 'api_call';
   name: string;
   proactive?: boolean;
   system_prompt?: string;
@@ -90,6 +113,7 @@ export interface WorkflowNodeData {
     fts_weight?: number;
   };
   llm_override?: {
+    provider_id?: string;
     model_name?: string;
     temperature?: number;
     max_tokens?: number;
@@ -109,6 +133,28 @@ export interface WorkflowNodeData {
   target_agent_id?: string;
   transfer_context?: boolean;
   transfer_message?: string;
+  // API call node fields
+  api_call?: {
+    method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+    url: string;
+    headers?: Record<string, string>;
+    query_params?: Record<string, string>;
+    body?: Record<string, unknown>;
+    timeout_seconds?: number;
+    retry?: {
+      max_retries?: number;
+      initial_delay_ms?: number;
+      max_delay_ms?: number;
+      backoff_multiplier?: number;
+    };
+    response_extraction?: Array<{
+      path: string;
+      variable_name: string;
+      default_value?: string;
+    }>;
+    response_size_limit_bytes?: number;
+    allowed_hosts?: string[];
+  };
 }
 
 /**
@@ -127,6 +173,7 @@ interface ExtendedWorkflow {
   recording?: { enabled?: boolean };
   llm?: {
     enabled?: boolean;
+    provider_id?: string;
     model_name?: string;
     temperature?: number;
     max_tokens?: number;
@@ -222,6 +269,8 @@ export function workflowToNodes(config: WorkflowConfig): {
         target_agent_id: extNode.target_agent_id,
         transfer_context: extNode.transfer_context,
         transfer_message: extNode.transfer_message,
+        // API call fields
+        api_call: extNode.api_call,
       },
     };
 
@@ -333,6 +382,17 @@ export function nodesToWorkflow(
         ...(data.transfer_message && { transfer_message: data.transfer_message }),
         ...(data.actions?.on_entry?.length && { actions: { on_entry: data.actions.on_entry } }),
       };
+    } else if (data.type === 'api_call') {
+      // API call nodes - make HTTP API calls
+      configNode = {
+        id: data.id,
+        type: 'api_call',
+        name: data.name,
+        ...(data.static_text && { static_text: data.static_text }),
+        ...(data.api_call && { api_call: data.api_call }),
+        ...(transitions.length > 0 && { transitions }),
+        ...(data.actions && { actions: data.actions }),
+      };
     }
 
     configNodes.push(configNode);
@@ -432,6 +492,8 @@ function getReactFlowNodeType(type: string): string {
       return 'endCallNode';
     case 'agent_transfer':
       return 'agentTransferNode';
+    case 'api_call':
+      return 'apiCallNode';
     default:
       return 'standardNode';
   }
@@ -501,6 +563,15 @@ export function validateWorkflowGraph(
     if (node.data.type === 'agent_transfer') {
       if (!node.data.target_agent_id) {
         errors.push(`Agent transfer node "${node.id}" must have a target agent selected`);
+      }
+    }
+  });
+
+  // Check that api_call nodes have a URL configured
+  nodes.forEach((node) => {
+    if (node.data.type === 'api_call') {
+      if (!node.data.api_call?.url) {
+        errors.push(`API call node "${node.id}" must have a URL configured`);
       }
     }
   });

@@ -63,6 +63,11 @@ export const QUERY_KEYS = {
     dropdown: ['llm-models', 'dropdown'] as const,
   },
 
+  llmProviders: {
+    all: ['llm-providers'] as const,
+    dropdown: ['llm-providers', 'dropdown'] as const,
+  },
+
   workflowConfigTypes: {
     all: ['workflow-config-types'] as const,
     byCategory: (category: string) => ['workflow-config-types', category] as const,

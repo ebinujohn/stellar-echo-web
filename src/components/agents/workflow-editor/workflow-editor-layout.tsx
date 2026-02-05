@@ -41,6 +41,7 @@ import {
   ArrowDownToLine,
   ArrowRightToLine,
   ArrowRightLeft,
+  Globe,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -626,6 +627,20 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
 
               <div>
                 <h4 className="text-xs font-medium text-muted-foreground uppercase mb-2">
+                  Integration
+                </h4>
+                <div className="space-y-2">
+                  <NodePaletteItem
+                    type="api_call"
+                    icon={<Globe className="h-5 w-5 text-green-500" />}
+                    label="API Call"
+                    description="Make HTTP API requests"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-xs font-medium text-muted-foreground uppercase mb-2">
                   Control Flow
                 </h4>
                 <div className="space-y-2">
@@ -683,6 +698,7 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
                 if (node.type === 'retrieveVariableNode') return '#f59e0b';
                 if (node.type === 'endCallNode') return '#ef4444';
                 if (node.type === 'agentTransferNode') return '#06b6d4';
+                if (node.type === 'apiCallNode') return '#22c55e';
                 return '#64748b';
               }}
             />
@@ -793,6 +809,8 @@ function getReactFlowNodeType(type: string): string {
       return 'endCallNode';
     case 'agent_transfer':
       return 'agentTransferNode';
+    case 'api_call':
+      return 'apiCallNode';
     default:
       return 'standardNode';
   }
@@ -830,6 +848,26 @@ function getDefaultNodeData(id: string, type: string): WorkflowNodeData {
         target_agent_id: '',
         transfer_context: false,
         transfer_message: '',
+      };
+    case 'api_call':
+      return {
+        id,
+        type: 'api_call',
+        name: 'New API Call',
+        static_text: '',
+        api_call: {
+          method: 'GET',
+          url: '',
+          headers: {},
+          timeout_seconds: 30,
+          retry: {
+            max_retries: 2,
+            initial_delay_ms: 500,
+            max_delay_ms: 5000,
+            backoff_multiplier: 2.0,
+          },
+          response_extraction: [],
+        },
       };
     default:
       return {

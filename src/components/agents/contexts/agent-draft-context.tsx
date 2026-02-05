@@ -125,6 +125,7 @@ export interface WebhookDraft {
 export interface SettingsDraft {
   globalPrompt: string;
   llmEnabled: boolean;
+  llmProviderId: string;
   llmModel: string;
   llmTemperature: number;
   llmMaxTokens: number;

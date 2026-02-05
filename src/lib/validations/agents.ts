@@ -123,6 +123,45 @@ const variableExtractionSchema = z.object({
 });
 
 /**
+ * API Call Node Schemas
+ */
+
+/**
+ * Response extraction config (for api_call nodes)
+ */
+const apiResponseExtractionSchema = z.object({
+  path: z.string().min(1, 'JSON path is required'),
+  variable_name: z.string().min(1, 'Variable name is required'),
+  default_value: z.string().optional(),
+});
+
+/**
+ * API retry configuration
+ */
+const apiRetrySchema = z.object({
+  max_retries: z.number().int().min(0).max(10).optional().default(2),
+  initial_delay_ms: z.number().int().min(100).max(60000).optional().default(500),
+  max_delay_ms: z.number().int().min(1000).max(60000).optional().default(5000),
+  backoff_multiplier: z.number().min(1).max(5).optional().default(2.0),
+});
+
+/**
+ * API call configuration
+ */
+const apiCallConfigSchema = z.object({
+  method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']).optional().default('GET'),
+  url: z.string().min(1, 'URL is required'),
+  headers: z.record(z.string(), z.string()).optional(),
+  query_params: z.record(z.string(), z.string()).optional(),
+  body: z.record(z.string(), z.unknown()).optional(),
+  timeout_seconds: z.number().int().min(1).max(120).optional().default(30),
+  retry: apiRetrySchema.optional(),
+  response_extraction: z.array(apiResponseExtractionSchema).optional(),
+  response_size_limit_bytes: z.number().int().min(1000).max(50000).optional().default(15000),
+  allowed_hosts: z.array(z.string()).optional(),
+});
+
+/**
  * RAG configuration schema (per-node override)
  */
 const ragConfigSchema = z.object({
@@ -144,8 +183,10 @@ const ragConfigSchema = z.object({
 /**
  * LLM override configuration schema (per-node override)
  * References llm_models.model_name for model selection
+ * References llm_providers.id for provider selection
  */
 const llmOverrideSchema = z.object({
+  provider_id: z.string().optional(), // References llm_providers.id for per-node provider override
   model_name: z.string().optional(), // References llm_models.model_name (e.g., "gpt4o-mini", "gpt4.1")
   temperature: z.number().min(0).max(2).optional(),
   max_tokens: z.number().int().min(1).max(10000).optional(),
@@ -214,6 +255,17 @@ const agentTransferNodeSchemaBase = z.object({
 });
 
 /**
+ * API call node schema
+ * Makes HTTP API calls during conversations, extracts response data into variables,
+ * and transitions based on API results
+ */
+const apiCallNodeSchemaBase = baseNodeSchema.extend({
+  type: z.literal('api_call'),
+  static_text: z.string().optional(), // Loading message shown while waiting for API
+  api_call: apiCallConfigSchema,
+});
+
+/**
  * Union of all node types (using discriminatedUnion with base schemas)
  */
 const nodeSchema = z.discriminatedUnion('type', [
@@ -221,6 +273,7 @@ const nodeSchema = z.discriminatedUnion('type', [
   retrieveVariableNodeSchemaBase,
   endCallNodeSchema,
   agentTransferNodeSchemaBase,
+  apiCallNodeSchemaBase,
 ]);
 
 /**
@@ -258,10 +311,12 @@ const retrieveVariableNodeSchema = retrieveVariableNodeSchemaBase.refine(
 /**
  * LLM configuration schema (workflow.llm section)
  * Note: model_name references llm_models.model_name (e.g., "gpt4.1", "gpt4o-mini")
+ * Note: provider_id references llm_providers.id for per-agent provider selection
  * Connection settings (base_url, api_version) are from environment variables
  */
 const llmConfigSchema = z.object({
   enabled: z.boolean().optional().default(true),
+  provider_id: z.string().optional(), // References llm_providers.id for per-agent provider selection
   model_name: z.string().optional(), // References llm_models.model_name
   temperature: z.number().min(0).max(2).optional().default(1.0),
   max_tokens: z.number().int().min(1).max(10000).optional().default(150),
@@ -503,8 +558,8 @@ export const workflowConfigSchema = workflowConfigSchemaBase.refine(
     // Validation: all transition targets must be valid node IDs
     const nodeIds = new Set(data.workflow.nodes.map((node) => node.id));
     for (const node of data.workflow.nodes) {
-      // Only standard and retrieve_variable nodes have transitions
-      if (node.type === 'standard' || node.type === 'retrieve_variable') {
+      // Standard, retrieve_variable, and api_call nodes have transitions
+      if (node.type === 'standard' || node.type === 'retrieve_variable' || node.type === 'api_call') {
         if (node.transitions) {
           for (const transition of node.transitions) {
             if (!nodeIds.has(transition.target)) {
@@ -620,6 +675,10 @@ export type StandardNode = z.infer<typeof standardNodeSchema>;
 export type RetrieveVariableNode = z.infer<typeof retrieveVariableNodeSchema>;
 export type EndCallNode = z.infer<typeof endCallNodeSchema>;
 export type AgentTransferNode = z.infer<typeof agentTransferNodeSchemaBase>;
+export type ApiCallNode = z.infer<typeof apiCallNodeSchemaBase>;
+export type ApiCallConfig = z.infer<typeof apiCallConfigSchema>;
+export type ApiResponseExtraction = z.infer<typeof apiResponseExtractionSchema>;
+export type ApiRetryConfig = z.infer<typeof apiRetrySchema>;
 export type Transition = z.infer<typeof transitionSchema>;
 export type LlmOverride = z.infer<typeof llmOverrideSchema>;
 export type RagOverride = z.infer<typeof ragConfigSchema>;

@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Clock, Hash, Search, MessageSquare, Check, Variable, AlertCircle, Brain } from 'lucide-react';
+import { Clock, Hash, Search, MessageSquare, Check, Variable, AlertCircle, Brain, CheckCircle2, XCircle, Globe } from 'lucide-react';
 
 // ========================================
 // Types
@@ -28,7 +28,11 @@ export type TransitionConditionType =
   | 'always'
   | 'variables_extracted'
   | 'extraction_failed'
-  | 'intent';
+  | 'intent'
+  | 'api_success'
+  | 'api_failed'
+  | 'api_status'
+  | 'api_response_contains';
 
 interface TransitionConditionConfig {
   type: TransitionConditionType;
@@ -41,13 +45,13 @@ interface TransitionConditionConfig {
   parameterPlaceholder?: string;
   parameterSuffix?: string;
   isPatternBased: boolean;
-  applicableTo: ('standard' | 'retrieve_variable')[];
+  applicableTo: ('standard' | 'retrieve_variable' | 'api_call')[];
 }
 
 interface TransitionConditionEditorProps {
   condition: string;
   onChange: (condition: string) => void;
-  nodeType?: 'standard' | 'retrieve_variable' | 'end_call';
+  nodeType?: 'standard' | 'retrieve_variable' | 'end_call' | 'api_call';
   availableIntents?: string[];
   availableVariables?: string[];
   className?: string;
@@ -149,6 +153,49 @@ const CONDITION_CONFIGS: TransitionConditionConfig[] = [
     isPatternBased: false,
     applicableTo: ['standard'],
   },
+  // API Call specific conditions
+  {
+    type: 'api_success',
+    displayName: 'API Success',
+    description: 'API returned 2xx status',
+    icon: <CheckCircle2 className="h-3.5 w-3.5" />,
+    hasParameter: false,
+    isPatternBased: true,
+    applicableTo: ['api_call'],
+  },
+  {
+    type: 'api_failed',
+    displayName: 'API Failed',
+    description: 'API error, timeout, or non-2xx',
+    icon: <XCircle className="h-3.5 w-3.5" />,
+    hasParameter: false,
+    isPatternBased: true,
+    applicableTo: ['api_call'],
+  },
+  {
+    type: 'api_status',
+    displayName: 'API Status Code',
+    description: 'Match specific HTTP status',
+    icon: <Hash className="h-3.5 w-3.5" />,
+    hasParameter: true,
+    parameterType: 'number',
+    parameterLabel: 'Status Code',
+    parameterPlaceholder: '404',
+    isPatternBased: true,
+    applicableTo: ['api_call'],
+  },
+  {
+    type: 'api_response_contains',
+    displayName: 'Response Contains',
+    description: 'Response body contains text',
+    icon: <Globe className="h-3.5 w-3.5" />,
+    hasParameter: true,
+    parameterType: 'string',
+    parameterLabel: 'Search Text',
+    parameterPlaceholder: 'error',
+    isPatternBased: true,
+    applicableTo: ['api_call'],
+  },
 ];
 
 // ========================================
@@ -164,7 +211,7 @@ function parseCondition(condition: string): { type: TransitionConditionType; par
   }
 
   // Handle simple conditions without parameters
-  const simpleConditions: TransitionConditionType[] = ['always', 'user_responded'];
+  const simpleConditions: TransitionConditionType[] = ['always', 'user_responded', 'api_success', 'api_failed'];
   if (simpleConditions.includes(condition as TransitionConditionType)) {
     return { type: condition as TransitionConditionType, parameter: '' };
   }
