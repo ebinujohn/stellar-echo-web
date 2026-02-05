@@ -24,6 +24,7 @@ import { useRagConfigsDropdown, useRagConfig } from '@/lib/hooks/use-rag-configs
 import { useVoiceConfigsDropdown } from '@/lib/hooks/use-voice-configs';
 import { useAgentPhoneConfigs } from '@/lib/hooks/use-phone-configs';
 import { useLlmModelsDropdown } from '@/lib/hooks/use-llm-configs';
+import { useLlmProvidersDropdown } from '@/lib/hooks/use-llm-providers';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Slider } from '@/components/ui/slider';
 import { ttsModels } from '@/lib/validations/voice-configs';
@@ -57,6 +58,7 @@ interface SettingsConfig {
   workflow?: {
     llm?: {
       enabled?: boolean;
+      provider_id?: string;
       model_name?: string;
       temperature?: number;
       max_tokens?: number;
@@ -164,6 +166,9 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
   // Fetch available LLM models for dropdown
   const { data: llmModels } = useLlmModelsDropdown();
 
+  // Fetch available LLM providers for dropdown
+  const { data: llmProviders } = useLlmProvidersDropdown();
+
   // Get initial values from draft or props
   const getInitialValue = <T,>(draftValue: T | undefined, propValue: T): T => {
     return draftContext?.settingsDraft ? (draftValue as T) : propValue;
@@ -231,6 +236,9 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
   const workflowLlm = currentConfig.workflow?.llm;
   const [llmEnabled, setLlmEnabled] = useState(() =>
     getInitialValue(draftContext?.settingsDraft?.llmEnabled, workflowLlm?.enabled ?? true)
+  );
+  const [llmProviderId, setLlmProviderId] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.llmProviderId, workflowLlm?.provider_id || '')
   );
   const [llmModel, setLlmModel] = useState(() =>
     getInitialValue(draftContext?.settingsDraft?.llmModel, workflowLlm?.model_name || 'gpt-4o-mini')
@@ -414,6 +422,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
   const getCurrentSettingsState = useCallback((): SettingsDraft => ({
     globalPrompt,
     llmEnabled,
+    llmProviderId,
     llmModel,
     llmTemperature,
     llmMaxTokens,
@@ -447,7 +456,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
     postCallAnalysis,
     webhook,
   }), [
-    globalPrompt, llmEnabled, llmModel, llmTemperature, llmMaxTokens,
+    globalPrompt, llmEnabled, llmProviderId, llmModel, llmTemperature, llmMaxTokens,
     llmServiceTier, ttsEnabled, ttsModel, ttsStability, ttsSimilarityBoost,
     ttsStyle, ttsUseSpeakerBoost, ttsEnableSsmlParsing, ttsPronunciationEnabled,
     ttsPronunciationDictionaryIds, ttsAggregateSentences, ragEnabledState, selectedRagConfigId,
@@ -511,6 +520,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
     const initialSettings: SettingsDraft = {
       globalPrompt: initialGlobalPrompt || '',
       llmEnabled: workflowLlm?.enabled ?? true,
+      llmProviderId: workflowLlm?.provider_id || '',
       llmModel: workflowLlm?.model_name || 'gpt-4o-mini',
       llmTemperature: workflowLlm?.temperature ?? 1.0,
       llmMaxTokens: workflowLlm?.max_tokens ?? 150,
@@ -605,8 +615,10 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
       };
 
       // Build LLM config for workflow.llm section
+      // provider_id is required per AGENT_JSON_SCHEMA.md - backend will validate
       const llmConfig = {
         enabled: llmEnabled,
+        provider_id: llmProviderId || undefined, // Required field - backend validates
         model_name: llmModel, // References llm_models.model_name
         temperature: parseFloat(String(llmTemperature)),
         max_tokens: parseInt(String(llmMaxTokens)),
@@ -789,6 +801,38 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
+            {/* Provider Selection - required field per AGENT_JSON_SCHEMA.md */}
+            <div className="space-y-2">
+              <Label htmlFor="llm-provider">Provider *</Label>
+              {llmProviders && llmProviders.length > 0 ? (
+                <>
+                  <Select value={llmProviderId} onValueChange={setLlmProviderId}>
+                    <SelectTrigger id="llm-provider">
+                      <SelectValue placeholder="Select a provider" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {llmProviders.map((provider) => (
+                        <SelectItem key={provider.id} value={provider.id}>
+                          {provider.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {!llmProviderId && (
+                    <p className="text-sm text-amber-600">Provider selection is required</p>
+                  )}
+                </>
+              ) : (
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    No LLM providers available. Configure the Admin API to enable provider selection.
+                  </AlertDescription>
+                </Alert>
+              )}
+              <p className="text-xs text-muted-foreground">LLM provider for this agent</p>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="llm-model">Model</Label>
               <Select value={llmModel} onValueChange={setLlmModel}>

@@ -24,6 +24,7 @@ import {
 import { Plus, Trash2, ChevronDown, ChevronRight, Database, Cpu } from 'lucide-react';
 import type { WorkflowNodeData } from '../../utils/json-converter';
 import { useLlmModelsDropdown } from '@/lib/hooks/use-llm-configs';
+import { useLlmProvidersDropdown } from '@/lib/hooks/use-llm-providers';
 import { useActionTypes } from '@/lib/hooks/use-workflow-config-types';
 import { AutocompleteInput } from '@/components/ui/autocomplete-input';
 import { TransitionConditionEditor } from './transition-condition-editor';
@@ -85,6 +86,7 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
   const [llmOverrideEnabled, setLlmOverrideEnabled] = useState(
     nodeData.llm_override !== undefined && nodeData.llm_override !== null
   );
+  const [llmProviderId, setLlmProviderId] = useState(nodeData.llm_override?.provider_id || '');
   const [llmModelName, setLlmModelName] = useState(nodeData.llm_override?.model_name || '');
   const [llmTemperature, setLlmTemperature] = useState(nodeData.llm_override?.temperature ?? 1.0);
   const [llmMaxTokens, setLlmMaxTokens] = useState(nodeData.llm_override?.max_tokens ?? 150);
@@ -97,8 +99,9 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
   );
   const [intentConfig, setIntentConfig] = useState(nodeData.intent_config || {});
 
-  // Fetch available LLM models
+  // Fetch available LLM models and providers
   const { data: llmModels = [] } = useLlmModelsDropdown();
+  const { data: llmProviders = [] } = useLlmProvidersDropdown();
 
   // Fetch workflow config types for autocomplete
   const { data: actionTypes = [], isLoading: actionsLoading } = useActionTypes();
@@ -158,6 +161,7 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
     // Add LLM configuration if override is enabled
     if (llmOverrideEnabled) {
       updates.llm_override = {
+        provider_id: llmProviderId || undefined,
         model_name: llmModelName || undefined,
         temperature: llmTemperature,
         max_tokens: llmMaxTokens,
@@ -197,6 +201,7 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
     ragVectorWeight,
     ragFtsWeight,
     llmOverrideEnabled,
+    llmProviderId,
     llmModelName,
     llmTemperature,
     llmMaxTokens,
@@ -748,6 +753,32 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
                     </p>
 
                     <div className="space-y-3">
+                      {/* Provider Override - only show if providers are available */}
+                      {llmProviders.length > 0 && (
+                        <div>
+                          <Label className="text-xs">Provider</Label>
+                          <Select
+                            value={llmProviderId || '__global_default__'}
+                            onValueChange={(value) => setLlmProviderId(value === '__global_default__' ? '' : value)}
+                          >
+                            <SelectTrigger className="h-8 mt-1.5">
+                              <SelectValue placeholder="Use global default" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__global_default__">Use global default</SelectItem>
+                              {llmProviders.map((provider) => (
+                                <SelectItem key={provider.id} value={provider.id}>
+                                  {provider.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Leave empty to use agent&apos;s default provider
+                          </p>
+                        </div>
+                      )}
+
                       <div>
                         <Label className="text-xs">Model</Label>
                         <Select
