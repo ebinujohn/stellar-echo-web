@@ -193,6 +193,29 @@ const llmOverrideSchema = z.object({
   service_tier: z.enum(['auto', 'default', 'flex']).optional(),
 });
 
+// ========================================
+// Node-Level Intent Schemas
+// ========================================
+
+/**
+ * Intent definition schema for node-level intents
+ * Per AGENT_JSON_SCHEMA.md lines 566-588
+ */
+const intentDefinitionSchema = z.object({
+  description: z.string().min(1, 'Description is required'),
+  examples: z.array(z.string()).optional(),
+});
+
+/**
+ * Node-level intent configuration
+ * Per AGENT_JSON_SCHEMA.md lines 671-772
+ */
+const nodeIntentConfigSchema = z.object({
+  confidence_threshold: z.number().min(0).max(1).optional().default(0.7),
+  context_scope: z.enum(['node', 'conversation']).optional().default('node'),
+  context_messages: z.number().int().min(1).max(20).optional().default(6),
+});
+
 /**
  * Base node schema (shared fields)
  */
@@ -206,6 +229,7 @@ const baseNodeSchema = z.object({
 
 /**
  * Standard node schema (raw, without refinements)
+ * Per AGENT_JSON_SCHEMA.md: Includes optional node-level intents and intent_config
  */
 const standardNodeSchemaBase = baseNodeSchema.extend({
   type: z.literal('standard'),
@@ -214,6 +238,9 @@ const standardNodeSchemaBase = baseNodeSchema.extend({
   static_text: z.string().optional(),
   rag: ragConfigSchema.optional(),
   llm_override: llmOverrideSchema.optional(),
+  // Node-level intents for intent-based transitions (per AGENT_JSON_SCHEMA.md lines 566-588)
+  intents: z.record(z.string(), intentDefinitionSchema).optional(),
+  intent_config: nodeIntentConfigSchema.optional(),
 });
 
 /**
@@ -414,11 +441,29 @@ const postCallQuestionSchema = z
 
 /**
  * Post-call analysis configuration
+ * Per AGENT_JSON_SCHEMA.md: provider_id is required when enabled
  */
 const postCallAnalysisSchema = z.object({
   enabled: z.boolean().optional().default(true),
+  provider_id: z.string().optional(), // Required when enabled - validated by backend
   questions: z.array(postCallQuestionSchema).optional().default([]),
   additional_instructions: z.string().optional(),
+});
+
+// ========================================
+// Extraction LLM Schema
+// ========================================
+
+/**
+ * Extraction LLM configuration schema (workflow.extraction_llm section)
+ * Per AGENT_JSON_SCHEMA.md: Separate LLM configuration for variable extraction and intent classification
+ * provider_id is required when enabled
+ */
+const extractionLlmSchema = z.object({
+  enabled: z.boolean().optional().default(false),
+  provider_id: z.string().optional(), // Required when enabled - validated by backend
+  temperature: z.number().min(0).max(2).optional(),
+  max_tokens: z.number().int().min(1).max(10000).optional(),
 });
 
 // ========================================
@@ -472,6 +517,7 @@ const workflowSchema = z.object({
   interruption_settings: interruptionSettingsSchema.optional(),
   recording: recordingSchema.optional(),
   llm: llmConfigSchema.optional(), // LLM config lives in workflow section
+  extraction_llm: extractionLlmSchema.optional(), // Extraction LLM for variable extraction/intent classification
   tts: ttsConfigSchema.optional(), // TTS tuning config lives in workflow section (per AGENT_JSON_SCHEMA.md)
   rag: globalRagConfigSchema.optional(), // RAG tuning overrides for agent-level settings
   // Global intents - workflow-wide intent definitions
@@ -695,6 +741,11 @@ export type PostCallAnalysis = z.infer<typeof postCallAnalysisSchema>;
 export type WebhookAuth = z.infer<typeof webhookAuthSchema>;
 export type WebhookRetry = z.infer<typeof webhookRetrySchema>;
 export type WebhookConfig = z.infer<typeof webhookConfigSchema>;
+// Extraction LLM types
+export type ExtractionLlmConfig = z.infer<typeof extractionLlmSchema>;
+// Node-level intent types
+export type IntentDefinition = z.infer<typeof intentDefinitionSchema>;
+export type NodeIntentConfig = z.infer<typeof nodeIntentConfigSchema>;
 
 // ========================================
 // Validation Helpers

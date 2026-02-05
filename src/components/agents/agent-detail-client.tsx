@@ -208,11 +208,19 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
     if (isSettingsDirty && settingsDraft) {
       const llmConfig = {
         enabled: settingsDraft.llmEnabled,
-        model_name: settingsDraft.llmModel,
+        ...(settingsDraft.llmProviderId && { provider_id: settingsDraft.llmProviderId }),
         temperature: settingsDraft.llmTemperature,
         max_tokens: settingsDraft.llmMaxTokens,
         service_tier: settingsDraft.llmServiceTier,
       };
+
+      // Build extraction LLM config from draft per AGENT_JSON_SCHEMA.md
+      const extractionLlmConfig = settingsDraft.extractionLlm.enabled ? {
+        enabled: true,
+        ...(settingsDraft.extractionLlm.providerId && { provider_id: settingsDraft.extractionLlm.providerId }),
+        temperature: settingsDraft.extractionLlm.temperature,
+        max_tokens: settingsDraft.extractionLlm.maxTokens,
+      } : { enabled: false };
 
       const ttsConfig = {
         enabled: settingsDraft.ttsEnabled,
@@ -230,6 +238,29 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
         aggregate_sentences: settingsDraft.tts.aggregateSentences,
       };
 
+      // Build post-call analysis config with provider_id per AGENT_JSON_SCHEMA.md
+      const postCallAnalysisConfig = settingsDraft.postCallAnalysis.enabled ? {
+        enabled: true,
+        ...(settingsDraft.postCallAnalysis.providerId && { provider_id: settingsDraft.postCallAnalysis.providerId }),
+        ...(settingsDraft.postCallAnalysis.questions.length > 0 && {
+          questions: settingsDraft.postCallAnalysis.questions.map(q => ({
+            name: q.name,
+            ...(q.description && { description: q.description }),
+            ...(q.type !== 'string' && { type: q.type }),
+            ...(q.type === 'enum' && q.choices.length > 0 && {
+              choices: q.choices.map(c => ({
+                value: c.value,
+                ...(c.label && { label: c.label }),
+              })),
+            }),
+            ...(q.required && { required: q.required }),
+          })),
+        }),
+        ...(settingsDraft.postCallAnalysis.additionalInstructions && {
+          additional_instructions: settingsDraft.postCallAnalysis.additionalInstructions,
+        }),
+      } : { enabled: false };
+
       const currentWorkflow = typeof configJson.workflow === 'object' && configJson.workflow !== null
         ? configJson.workflow as Record<string, unknown>
         : {};
@@ -238,7 +269,9 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
         workflow: {
           ...currentWorkflow,
           llm: llmConfig,
+          extraction_llm: extractionLlmConfig, // Extraction LLM for variable extraction/intent classification
           tts: ttsConfig,
+          post_call_analysis: postCallAnalysisConfig, // Post-call analysis with provider_id
         },
         tts: undefined,
         stt: undefined,
@@ -370,11 +403,19 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
     if (isSettingsDirty && settingsDraft) {
       const llmConfig = {
         enabled: settingsDraft.llmEnabled,
-        model_name: settingsDraft.llmModel,
+        ...(settingsDraft.llmProviderId && { provider_id: settingsDraft.llmProviderId }),
         temperature: settingsDraft.llmTemperature,
         max_tokens: settingsDraft.llmMaxTokens,
         service_tier: settingsDraft.llmServiceTier,
       };
+
+      // Build extraction LLM config from draft per AGENT_JSON_SCHEMA.md
+      const extractionLlmConfig = settingsDraft.extractionLlm.enabled ? {
+        enabled: true,
+        ...(settingsDraft.extractionLlm.providerId && { provider_id: settingsDraft.extractionLlm.providerId }),
+        temperature: settingsDraft.extractionLlm.temperature,
+        max_tokens: settingsDraft.extractionLlm.maxTokens,
+      } : { enabled: false };
 
       // Build TTS config from draft - tuning params in workflow.tts per AGENT_JSON_SCHEMA.md
       // Note: voice_name is NOT included - voice selection is via voiceConfigId FK
@@ -394,6 +435,29 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
         aggregate_sentences: settingsDraft.tts.aggregateSentences,
       };
 
+      // Build post-call analysis config with provider_id per AGENT_JSON_SCHEMA.md
+      const postCallAnalysisConfig = settingsDraft.postCallAnalysis.enabled ? {
+        enabled: true,
+        ...(settingsDraft.postCallAnalysis.providerId && { provider_id: settingsDraft.postCallAnalysis.providerId }),
+        ...(settingsDraft.postCallAnalysis.questions.length > 0 && {
+          questions: settingsDraft.postCallAnalysis.questions.map(q => ({
+            name: q.name,
+            ...(q.description && { description: q.description }),
+            ...(q.type !== 'string' && { type: q.type }),
+            ...(q.type === 'enum' && q.choices.length > 0 && {
+              choices: q.choices.map(c => ({
+                value: c.value,
+                ...(c.label && { label: c.label }),
+              })),
+            }),
+            ...(q.required && { required: q.required }),
+          })),
+        }),
+        ...(settingsDraft.postCallAnalysis.additionalInstructions && {
+          additional_instructions: settingsDraft.postCallAnalysis.additionalInstructions,
+        }),
+      } : { enabled: false };
+
       const existingWorkflow = configJson.workflow || {};
       configJson = {
         ...configJson,
@@ -401,7 +465,9 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
           ...existingWorkflow,
           // Note: global_prompt goes to DB column, not workflow JSON
           llm: llmConfig,
+          extraction_llm: extractionLlmConfig, // Extraction LLM for variable extraction/intent classification
           tts: ttsConfig, // TTS tuning params inside workflow per AGENT_JSON_SCHEMA.md
+          post_call_analysis: postCallAnalysisConfig, // Post-call analysis with provider_id
         },
         // Remove deprecated root-level fields
         tts: undefined,

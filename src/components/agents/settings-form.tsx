@@ -23,7 +23,6 @@ import { toast } from 'sonner';
 import { useRagConfigsDropdown, useRagConfig } from '@/lib/hooks/use-rag-configs';
 import { useVoiceConfigsDropdown } from '@/lib/hooks/use-voice-configs';
 import { useAgentPhoneConfigs } from '@/lib/hooks/use-phone-configs';
-import { useLlmModelsDropdown } from '@/lib/hooks/use-llm-configs';
 import { useLlmProvidersDropdown } from '@/lib/hooks/use-llm-providers';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Slider } from '@/components/ui/slider';
@@ -38,11 +37,12 @@ import {
   PostCallAnalysisDraft,
   PostCallQuestionDraft,
   WebhookDraft,
+  ExtractionLlmDraft,
 } from './contexts/agent-draft-context';
 import { GlobalIntentsEditor } from './global-intents-editor';
 import { PostCallAnalysisEditor } from './post-call-analysis-editor';
 import { WebhooksEditor } from './webhooks-editor';
-import { Brain, FileSearch, Webhook } from 'lucide-react';
+import { Brain, FileSearch, Webhook, Cpu } from 'lucide-react';
 
 // Safe hook to get draft context (returns null if not in provider)
 function useOptionalAgentDraft() {
@@ -59,10 +59,16 @@ interface SettingsConfig {
     llm?: {
       enabled?: boolean;
       provider_id?: string;
-      model_name?: string;
       temperature?: number;
       max_tokens?: number;
       service_tier?: 'auto' | 'default' | 'flex';
+    };
+    // Extraction LLM for variable extraction and intent classification
+    extraction_llm?: {
+      enabled?: boolean;
+      provider_id?: string;
+      temperature?: number;
+      max_tokens?: number;
     };
     tts?: {
       enabled?: boolean;
@@ -102,6 +108,7 @@ interface SettingsConfig {
     // Post-Call Analysis - AI analysis on call transcripts
     post_call_analysis?: {
       enabled?: boolean;
+      provider_id?: string; // Required when enabled - LLM provider for analysis
       questions?: Array<{
         name: string;
         description?: string;
@@ -162,9 +169,6 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
 
   // Fetch phone configs mapped to this agent
   const { data: agentPhoneConfigs } = useAgentPhoneConfigs(agentId);
-
-  // Fetch available LLM models for dropdown
-  const { data: llmModels } = useLlmModelsDropdown();
 
   // Fetch available LLM providers for dropdown
   const { data: llmProviders } = useLlmProvidersDropdown();
@@ -239,9 +243,6 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
   );
   const [llmProviderId, setLlmProviderId] = useState(() =>
     getInitialValue(draftContext?.settingsDraft?.llmProviderId, workflowLlm?.provider_id || '')
-  );
-  const [llmModel, setLlmModel] = useState(() =>
-    getInitialValue(draftContext?.settingsDraft?.llmModel, workflowLlm?.model_name || 'gpt-4o-mini')
   );
   const [llmTemperature, setLlmTemperature] = useState(() =>
     getInitialValue(draftContext?.settingsDraft?.llmTemperature, workflowLlm?.temperature ?? 1.0)
@@ -349,6 +350,33 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
     })
   );
 
+  // Extraction LLM (stored in workflow.extraction_llm)
+  const workflowExtractionLlm = currentConfig.workflow?.extraction_llm;
+
+  // Default extraction LLM values
+  const defaultExtractionLlm: ExtractionLlmDraft = {
+    enabled: false,
+    providerId: '',
+    temperature: 0.3, // Lower temperature for extraction tasks
+    maxTokens: 500,
+  };
+
+  const [extractionLlmEnabled, setExtractionLlmEnabled] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.extractionLlm?.enabled, workflowExtractionLlm?.enabled ?? defaultExtractionLlm.enabled)
+  );
+  const [extractionLlmProviderId, setExtractionLlmProviderId] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.extractionLlm?.providerId, workflowExtractionLlm?.provider_id ?? defaultExtractionLlm.providerId)
+  );
+  const [extractionLlmTemperature, setExtractionLlmTemperature] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.extractionLlm?.temperature, workflowExtractionLlm?.temperature ?? defaultExtractionLlm.temperature)
+  );
+  const [extractionLlmMaxTokens, setExtractionLlmMaxTokens] = useState(() =>
+    getInitialValue(draftContext?.settingsDraft?.extractionLlm?.maxTokens, workflowExtractionLlm?.max_tokens ?? defaultExtractionLlm.maxTokens)
+  );
+
+  // Fetch extraction LLM providers
+  const { data: extractionProviders } = useLlmProvidersDropdown({ usageType: 'extraction' });
+
   // Post-Call Analysis (stored in workflow.post_call_analysis)
   const workflowPostCallAnalysis = currentConfig.workflow?.post_call_analysis;
 
@@ -356,6 +384,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
   const convertPostCallAnalysisToDraft = useCallback((): PostCallAnalysisDraft => {
     return {
       enabled: workflowPostCallAnalysis?.enabled ?? false,
+      providerId: workflowPostCallAnalysis?.provider_id ?? '', // Provider for analysis LLM
       questions: (workflowPostCallAnalysis?.questions || []).map((q): PostCallQuestionDraft => ({
         name: q.name,
         description: q.description || '',
@@ -423,7 +452,6 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
     globalPrompt,
     llmEnabled,
     llmProviderId,
-    llmModel,
     llmTemperature,
     llmMaxTokens,
     llmServiceTier,
@@ -451,17 +479,25 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
     },
     voiceConfigId: selectedVoiceConfigId || null,
     autoHangupEnabled,
+    extractionLlm: {
+      enabled: extractionLlmEnabled,
+      providerId: extractionLlmProviderId,
+      temperature: extractionLlmTemperature,
+      maxTokens: extractionLlmMaxTokens,
+    },
     globalIntents,
     globalIntentConfig,
     postCallAnalysis,
     webhook,
   }), [
-    globalPrompt, llmEnabled, llmProviderId, llmModel, llmTemperature, llmMaxTokens,
+    globalPrompt, llmEnabled, llmProviderId, llmTemperature, llmMaxTokens,
     llmServiceTier, ttsEnabled, ttsModel, ttsStability, ttsSimilarityBoost,
     ttsStyle, ttsUseSpeakerBoost, ttsEnableSsmlParsing, ttsPronunciationEnabled,
     ttsPronunciationDictionaryIds, ttsAggregateSentences, ragEnabledState, selectedRagConfigId,
     ragOverrideEnabled, ragSearchMode, ragTopK, ragRrfK, ragVectorWeight, ragFtsWeight,
-    selectedVoiceConfigId, autoHangupEnabled, globalIntents, globalIntentConfig, postCallAnalysis, webhook
+    selectedVoiceConfigId, autoHangupEnabled,
+    extractionLlmEnabled, extractionLlmProviderId, extractionLlmTemperature, extractionLlmMaxTokens,
+    globalIntents, globalIntentConfig, postCallAnalysis, webhook
   ]);
 
   // Store initial state on mount
@@ -487,6 +523,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
     // Convert post-call analysis to draft format for initial state
     const initialPostCallAnalysis: PostCallAnalysisDraft = {
       enabled: workflowPostCallAnalysis?.enabled ?? false,
+      providerId: workflowPostCallAnalysis?.provider_id ?? '', // Provider for analysis LLM
       questions: (workflowPostCallAnalysis?.questions || []).map((q): PostCallQuestionDraft => ({
         name: q.name,
         description: q.description || '',
@@ -521,7 +558,6 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
       globalPrompt: initialGlobalPrompt || '',
       llmEnabled: workflowLlm?.enabled ?? true,
       llmProviderId: workflowLlm?.provider_id || '',
-      llmModel: workflowLlm?.model_name || 'gpt-4o-mini',
       llmTemperature: workflowLlm?.temperature ?? 1.0,
       llmMaxTokens: workflowLlm?.max_tokens ?? 150,
       llmServiceTier: workflowLlm?.service_tier || 'auto',
@@ -549,6 +585,12 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
       },
       voiceConfigId: initialVoiceConfigId || null,
       autoHangupEnabled: currentConfig.auto_hangup?.enabled ?? true,
+      extractionLlm: {
+        enabled: workflowExtractionLlm?.enabled ?? defaultExtractionLlm.enabled,
+        providerId: workflowExtractionLlm?.provider_id ?? defaultExtractionLlm.providerId,
+        temperature: workflowExtractionLlm?.temperature ?? defaultExtractionLlm.temperature,
+        maxTokens: workflowExtractionLlm?.max_tokens ?? defaultExtractionLlm.maxTokens,
+      },
       globalIntents: initialGlobalIntents,
       globalIntentConfig: {
         enabled: workflowGlobalIntentConfig?.enabled ?? defaultGlobalIntentConfig.enabled,
@@ -619,7 +661,6 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
       const llmConfig = {
         enabled: llmEnabled,
         provider_id: llmProviderId || undefined, // Required field - backend validates
-        model_name: llmModel, // References llm_models.model_name
         temperature: parseFloat(String(llmTemperature)),
         max_tokens: parseInt(String(llmMaxTokens)),
         service_tier: llmServiceTier,
@@ -658,8 +699,10 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
       }
 
       // Convert postCallAnalysis draft to JSON format
+      // Per AGENT_JSON_SCHEMA.md: provider_id is required when enabled
       const postCallAnalysisConfig = {
         enabled: postCallAnalysis.enabled,
+        ...(postCallAnalysis.providerId && { provider_id: postCallAnalysis.providerId }),
         ...(postCallAnalysis.questions.length > 0 && {
           questions: postCallAnalysis.questions.map(q => ({
             name: q.name,
@@ -678,6 +721,15 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
           additional_instructions: postCallAnalysis.additionalInstructions,
         }),
       };
+
+      // Build extraction LLM config for workflow.extraction_llm section
+      // Per AGENT_JSON_SCHEMA.md: provider_id is required when enabled
+      const extractionLlmConfig = extractionLlmEnabled ? {
+        enabled: true,
+        ...(extractionLlmProviderId && { provider_id: extractionLlmProviderId }),
+        temperature: extractionLlmTemperature,
+        max_tokens: extractionLlmMaxTokens,
+      } : { enabled: false };
 
       // Convert webhook draft to JSON format
       const webhookConfig = webhook.enabled ? {
@@ -708,6 +760,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
           ...currentConfig.workflow,
           global_prompt: globalPrompt || undefined,
           llm: llmConfig,
+          extraction_llm: extractionLlmConfig, // Extraction LLM for variable extraction/intent classification
           tts: ttsConfig, // TTS settings stored in workflow.tts (per AGENT_JSON_SCHEMA.md)
           rag: ragConfig, // RAG tuning overrides stored in workflow.rag
           // Global Intents config (per AGENT_JSON_SCHEMA.md)
@@ -831,23 +884,6 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
                 </Alert>
               )}
               <p className="text-xs text-muted-foreground">LLM provider for this agent</p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="llm-model">Model</Label>
-              <Select value={llmModel} onValueChange={setLlmModel}>
-                <SelectTrigger id="llm-model">
-                  <SelectValue placeholder="Select a model" />
-                </SelectTrigger>
-                <SelectContent>
-                  {llmModels?.map((model) => (
-                    <SelectItem key={model.modelName} value={model.modelName}>
-                      {model.displayName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">Select an LLM model</p>
             </div>
 
             <div className="space-y-2">
@@ -1350,6 +1386,107 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
                     </AlertDescription>
                   </Alert>
                 )}
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Extraction LLM Configuration */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Cpu className="h-5 w-5" />
+            Extraction LLM
+          </CardTitle>
+          <CardDescription>
+            Configure a separate LLM for variable extraction and intent classification.
+            Uses lower temperature for more precise extraction tasks.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Enable Toggle */}
+          <div className="flex items-center justify-between rounded-lg border p-4">
+            <div className="space-y-0.5">
+              <Label className="text-base">Enable Extraction LLM</Label>
+              <p className="text-sm text-muted-foreground">
+                Use a dedicated LLM for variable extraction and intent classification
+              </p>
+            </div>
+            <Switch checked={extractionLlmEnabled} onCheckedChange={setExtractionLlmEnabled} />
+          </div>
+
+          {extractionLlmEnabled && (
+            <>
+              <Separator />
+
+              <div className="space-y-4">
+                {/* Provider Selection */}
+                <div className="space-y-2">
+                  <Label htmlFor="extraction-llm-provider">Provider *</Label>
+                  {extractionProviders && extractionProviders.length > 0 ? (
+                    <>
+                      <Select value={extractionLlmProviderId} onValueChange={setExtractionLlmProviderId}>
+                        <SelectTrigger id="extraction-llm-provider">
+                          <SelectValue placeholder="Select an extraction provider" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {extractionProviders.map((provider) => (
+                            <SelectItem key={provider.id} value={provider.id}>
+                              {provider.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {!extractionLlmProviderId && (
+                        <p className="text-sm text-amber-600">Provider selection is required when extraction LLM is enabled</p>
+                      )}
+                    </>
+                  ) : (
+                    <Alert>
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertDescription>
+                        No extraction LLM providers available. Configure the Admin API to enable provider selection.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    LLM provider optimized for extraction and classification tasks.
+                  </p>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="extraction-llm-temperature">Temperature</Label>
+                    <Input
+                      id="extraction-llm-temperature"
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="2"
+                      value={extractionLlmTemperature}
+                      onChange={(e) => setExtractionLlmTemperature(parseFloat(e.target.value))}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Lower values (0.0-0.5) recommended for precise extraction
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="extraction-llm-max-tokens">Max Tokens</Label>
+                    <Input
+                      id="extraction-llm-max-tokens"
+                      type="number"
+                      min="1"
+                      max="10000"
+                      value={extractionLlmMaxTokens}
+                      onChange={(e) => setExtractionLlmMaxTokens(parseInt(e.target.value))}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Maximum response length for extraction tasks
+                    </p>
+                  </div>
+                </div>
               </div>
             </>
           )}

@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Select,
   SelectContent,
@@ -19,8 +20,9 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import { Plus, Trash2, ChevronDown, ChevronRight, FileSearch } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, FileSearch, AlertTriangle } from 'lucide-react';
 import { QuestionChoicesEditor } from './question-choices-editor';
+import { useLlmProvidersDropdown } from '@/lib/hooks/use-llm-providers';
 import type {
   PostCallAnalysisDraft,
   PostCallQuestionDraft,
@@ -211,10 +213,22 @@ const QuestionCard = memo(function QuestionCard({
 export function PostCallAnalysisEditor({ config, onChange }: PostCallAnalysisEditorProps) {
   const [isOpen, setIsOpen] = useState(config.enabled || config.questions.length > 0);
 
+  // Fetch LLM providers filtered by 'analysis' usage type
+  // Per ADMIN_API.md: providers have usage_types array and can be filtered
+  const { data: analysisProviders } = useLlmProvidersDropdown({ usageType: 'analysis' });
+
   // Toggle enabled state
   const handleEnabledChange = useCallback(
     (enabled: boolean) => {
       onChange({ ...config, enabled });
+    },
+    [config, onChange]
+  );
+
+  // Update provider ID
+  const handleProviderChange = useCallback(
+    (providerId: string) => {
+      onChange({ ...config, providerId });
     },
     [config, onChange]
   );
@@ -273,6 +287,40 @@ export function PostCallAnalysisEditor({ config, onChange }: PostCallAnalysisEdi
 
       {config.enabled && (
         <>
+          {/* Provider Selection - required when enabled per AGENT_JSON_SCHEMA.md */}
+          <div className="space-y-2">
+            <Label className="text-sm">Analysis Provider *</Label>
+            {analysisProviders && analysisProviders.length > 0 ? (
+              <>
+                <Select value={config.providerId} onValueChange={handleProviderChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select an LLM provider for analysis" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {analysisProviders.map((provider) => (
+                      <SelectItem key={provider.id} value={provider.id}>
+                        {provider.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {!config.providerId && (
+                  <p className="text-sm text-amber-600">Provider selection is required for post-call analysis</p>
+                )}
+              </>
+            ) : (
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  No analysis LLM providers available. Configure the Admin API to enable provider selection.
+                </AlertDescription>
+              </Alert>
+            )}
+            <p className="text-xs text-muted-foreground">
+              LLM provider used to analyze call transcripts and extract structured data.
+            </p>
+          </div>
+
           {/* Additional Instructions */}
           <div className="space-y-2">
             <Label className="text-sm">Additional Instructions</Label>

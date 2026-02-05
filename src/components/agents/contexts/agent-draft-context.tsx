@@ -80,11 +80,24 @@ export interface PostCallQuestionDraft {
 
 /**
  * Draft state for post-call analysis
+ * Per AGENT_JSON_SCHEMA.md: provider_id is required when enabled
  */
 export interface PostCallAnalysisDraft {
   enabled: boolean;
+  providerId: string; // Required when enabled - references LLM provider for analysis
   questions: PostCallQuestionDraft[];
   additionalInstructions: string;
+}
+
+/**
+ * Draft state for extraction LLM configuration
+ * Per AGENT_JSON_SCHEMA.md: Separate LLM for variable extraction and intent classification
+ */
+export interface ExtractionLlmDraft {
+  enabled: boolean;
+  providerId: string; // Required when enabled - references LLM provider for extraction
+  temperature: number;
+  maxTokens: number;
 }
 
 /**
@@ -126,7 +139,6 @@ export interface SettingsDraft {
   globalPrompt: string;
   llmEnabled: boolean;
   llmProviderId: string;
-  llmModel: string;
   llmTemperature: number;
   llmMaxTokens: number;
   llmServiceTier: string;
@@ -138,6 +150,8 @@ export interface SettingsDraft {
   rag: RagDraft; // RAG tuning parameters (when ragOverrideEnabled is true)
   voiceConfigId: string | null;
   autoHangupEnabled: boolean;
+  // Extraction LLM (for variable extraction and intent classification)
+  extractionLlm: ExtractionLlmDraft;
   // Global intents
   globalIntents: Record<string, GlobalIntentDraft>;
   globalIntentConfig: GlobalIntentConfigDraft;

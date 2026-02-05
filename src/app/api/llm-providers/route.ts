@@ -64,9 +64,16 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const format = searchParams.get('format');
+    const usageType = searchParams.get('usage_type'); // Filter by usage type: conversation, extraction, analysis
 
-    // Build the request to admin API
-    const path = '/admin/llm-providers';
+    // Build the request to admin API with optional usage_type filter
+    // Per ADMIN_API.md: /admin/llm-providers?usage_type=extraction
+    const queryParams = new URLSearchParams();
+    if (usageType) {
+      queryParams.append('usage_type', usageType);
+    }
+    const queryString = queryParams.toString();
+    const path = `/admin/llm-providers${queryString ? `?${queryString}` : ''}`;
     const method = 'GET';
     const body = '';
 
