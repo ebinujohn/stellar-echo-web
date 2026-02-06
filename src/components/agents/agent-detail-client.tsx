@@ -215,10 +215,10 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
       };
 
       // Build extraction LLM config from draft per AGENT_JSON_SCHEMA.md
+      // Note: temperature intentionally omitted - extraction LLM uses model built-in defaults
       const extractionLlmConfig = settingsDraft.extractionLlm.enabled ? {
         enabled: true,
         ...(settingsDraft.extractionLlm.providerId && { provider_id: settingsDraft.extractionLlm.providerId }),
-        temperature: settingsDraft.extractionLlm.temperature,
         max_tokens: settingsDraft.extractionLlm.maxTokens,
       } : { enabled: false };
 
@@ -410,10 +410,10 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
       };
 
       // Build extraction LLM config from draft per AGENT_JSON_SCHEMA.md
+      // Note: temperature intentionally omitted - extraction LLM uses model built-in defaults
       const extractionLlmConfig = settingsDraft.extractionLlm.enabled ? {
         enabled: true,
         ...(settingsDraft.extractionLlm.providerId && { provider_id: settingsDraft.extractionLlm.providerId }),
-        temperature: settingsDraft.extractionLlm.temperature,
         max_tokens: settingsDraft.extractionLlm.maxTokens,
       } : { enabled: false };
 

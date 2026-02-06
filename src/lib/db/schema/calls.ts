@@ -6,6 +6,9 @@ import { relations } from 'drizzle-orm';
 // Call direction enum - 'inbound' for calls received, 'outbound' for calls initiated
 export const callDirectionEnum = pgEnum('call_direction_enum', ['inbound', 'outbound']);
 
+// Question type enum for post-call analysis questions
+export const questionTypeEnum = pgEnum('question_type_enum', ['string', 'number', 'enum', 'boolean']);
+
 export const calls = pgTable('calls', {
   callId: uuid('call_id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
@@ -118,6 +121,17 @@ export const callAnalysis = pgTable('call_analysis', {
   errorMessage: text('error_message'),
 });
 
+export const postCallQuestionResponses = pgTable('post_call_question_responses', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  callAnalysisId: uuid('call_analysis_id').notNull().references(() => callAnalysis.id, { onDelete: 'cascade' }),
+  questionName: text('question_name').notNull(),
+  questionType: questionTypeEnum('question_type').notNull(),
+  responseValue: text('response_value'),
+  responseConfidence: decimal('response_confidence', { precision: 5, scale: 2 }),
+}, (table) => ({
+  analysisIdx: index('post_call_question_responses_analysis_idx').on(table.callAnalysisId),
+}));
+
 export const callRagRetrievals = pgTable('call_rag_retrievals', {
   retrievalId: uuid('retrieval_id').primaryKey().defaultRandom(),
   callId: uuid('call_id').notNull().references(() => calls.callId, { onDelete: 'cascade' }),
@@ -183,6 +197,21 @@ export const callsRelations = relations(calls, ({ one, many }) => ({
   interruptions: many(callUserInterruptions),
 }));
 
+export const callAnalysisRelations = relations(callAnalysis, ({ one, many }) => ({
+  call: one(calls, {
+    fields: [callAnalysis.callId],
+    references: [calls.callId],
+  }),
+  questionResponses: many(postCallQuestionResponses),
+}));
+
+export const postCallQuestionResponsesRelations = relations(postCallQuestionResponses, ({ one }) => ({
+  analysis: one(callAnalysis, {
+    fields: [postCallQuestionResponses.callAnalysisId],
+    references: [callAnalysis.id],
+  }),
+}));
+
 export const callMessagesRelations = relations(callMessages, ({ one }) => ({
   call: one(calls, {
     fields: [callMessages.callId],
@@ -205,6 +234,7 @@ export type CallTransition = typeof callTransitions.$inferSelect;
 export type CallTranscript = typeof callTranscripts.$inferSelect;
 export type CallMetricsSummary = typeof callMetricsSummary.$inferSelect;
 export type CallAnalysis = typeof callAnalysis.$inferSelect;
+export type PostCallQuestionResponse = typeof postCallQuestionResponses.$inferSelect;
 export type CallRagRetrieval = typeof callRagRetrievals.$inferSelect;
 export type CallExtractedVariable = typeof callExtractedVariables.$inferSelect;
 export type CallUserInterruption = typeof callUserInterruptions.$inferSelect;

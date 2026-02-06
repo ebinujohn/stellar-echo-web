@@ -16,6 +16,7 @@ interface AdminLlmProvider {
   model_name: string;
   base_url: string | null;
   has_api_key: boolean;
+  usage_types: string[];
 }
 
 /**
@@ -36,6 +37,7 @@ interface LlmProviderDropdownItem {
   providerType: string;
   modelId: string;
   modelName: string;
+  usageTypes: string[];
 }
 
 /**
@@ -67,19 +69,19 @@ export async function GET(request: Request) {
     const usageType = searchParams.get('usage_type'); // Filter by usage type: conversation, extraction, analysis
 
     // Build the request to admin API with optional usage_type filter
-    // Per ADMIN_API.md: /admin/llm-providers?usage_type=extraction
+    // Per ADMIN_API.md: Sign only the path (no query params). Query params are sent in the URL only.
     const queryParams = new URLSearchParams();
     if (usageType) {
       queryParams.append('usage_type', usageType);
     }
     const queryString = queryParams.toString();
-    const path = `/admin/llm-providers${queryString ? `?${queryString}` : ''}`;
+    const signPath = '/admin/llm-providers';
     const method = 'GET';
     const body = '';
 
-    const signedHeaders = generateSignedHeaders(adminApiKey, method, path, body);
+    const signedHeaders = generateSignedHeaders(adminApiKey, method, signPath, body);
 
-    const adminUrl = `${adminApiBaseUrl}${path}`;
+    const adminUrl = `${adminApiBaseUrl}${signPath}${queryString ? `?${queryString}` : ''}`;
 
     log.debug({ adminUrl }, 'Fetching LLM providers from admin API');
 
@@ -124,6 +126,7 @@ export async function GET(request: Request) {
         providerType: p.type, // Map type → providerType for UI
         modelId: p.model_id,
         modelName: p.model_name,
+        usageTypes: p.usage_types ?? [],
       }));
 
       return NextResponse.json({
@@ -141,6 +144,7 @@ export async function GET(request: Request) {
       modelName: p.model_name,
       baseUrl: p.base_url,
       hasApiKey: p.has_api_key,
+      usageTypes: p.usage_types ?? [],
     }));
 
     return NextResponse.json({

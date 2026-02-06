@@ -3,7 +3,8 @@ import {
   calls,
   callTranscripts,
   callMetricsSummary,
-  callAnalysis
+  callAnalysis,
+  postCallQuestionResponses,
 } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { tenantFilter, type QueryContext } from './utils';
@@ -96,14 +97,23 @@ export interface CallMetrics {
   totalInterruptions: number | null;
 }
 
+export interface QuestionResponseData {
+  questionName: string;
+  questionType: string;
+  responseValue: string | null;
+  responseConfidence: number | null;
+}
+
 export interface CallAnalysisData {
   callId: string;
   sentiment: string | null;
   sentimentScore: number | null;
   summary: string | null;
+  callSuccessful: boolean | null;
+  successConfidence: number | null;
   keyTopics: string[] | null;
   keywords: string[] | null;
-  actionItems: string[] | null;
+  questionResponses: QuestionResponseData[];
 }
 
 export interface TranscriptEntry {
@@ -310,14 +320,26 @@ export async function getCallAnalysis(callId: string, ctx: QueryContext): Promis
 
   if (!analysis) return null;
 
+  // Fetch post-call question responses if any
+  const responses = await db.query.postCallQuestionResponses.findMany({
+    where: eq(postCallQuestionResponses.callAnalysisId, analysis.id),
+  });
+
   return {
     callId: analysis.callId,
     sentiment: analysis.sentiment,
     sentimentScore: analysis.sentimentScore ? Number(analysis.sentimentScore) : null,
     summary: analysis.summary,
+    callSuccessful: analysis.callSuccessful,
+    successConfidence: analysis.successConfidence ? Number(analysis.successConfidence) : null,
     keyTopics: analysis.topicsDiscussed,
     keywords: analysis.keywordsDetected,
-    actionItems: [], // Not available in schema
+    questionResponses: responses.map((r) => ({
+      questionName: r.questionName,
+      questionType: r.questionType,
+      responseValue: r.responseValue,
+      responseConfidence: r.responseConfidence ? Number(r.responseConfidence) : null,
+    })),
   };
 }
 

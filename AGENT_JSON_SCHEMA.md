@@ -23,6 +23,7 @@ This document provides a comprehensive specification of the JSON schema used for
    - [Retrieve Variable Node](#retrieve-variable-node)
    - [End Call Node](#end-call-node)
    - [Agent Transfer Node](#agent-transfer-node)
+   - [API Call Node](#api-call-node)
 6. [Variable Substitution](#variable-substitution)
 7. [Transition Conditions](#transition-conditions)
 8. [Actions](#actions)
@@ -70,8 +71,12 @@ All agents **must** use node-based workflows. Traditional single-prompt mode has
 > **Note:** Configuration management summary:
 >
 > **Agent JSON (`workflow` section):**
-> - **LLM**: `workflow.llm` section with model_name, temperature, max_tokens (model_name resolved via `llm_models` table)
+> - **LLM**: `workflow.llm.provider_id` references entry in `llm_providers.json` (includes credentials, model, defaults)
 > - **TTS Tuning**: `workflow.tts` section with stability, similarity_boost, etc. (voice selection via `voice_config_id` FK in database)
+>
+> **LLM Providers (`config/llm_providers.json`):**
+> - Contains both credentials AND model configuration per provider
+> - Loaded from file (dev) or AWS Parameter Store (prod)
 >
 > **Database:**
 > - **Voice Selection**: `agent_config_versions.voice_config_id` FK links to `voice_configs` table
@@ -79,13 +84,11 @@ All agents **must** use node-based workflows. Traditional single-prompt mode has
 > **Database-backed:**
 > - **RAG**: `rag_configs` and `rag_config_versions` tables
 > - **Voice Catalog**: `voice_configs` table (system-level, maps voice_name → voice_id)
-> - **LLM Model Catalog**: `llm_models` table (system-level, maps model_name → actual_model_id)
 > - **Phone Numbers**: `phone_configs` table (phone number pool) + `phone_mappings` table
 >
 > **Environment variables (.env):**
 > - **STT**: `DEEPGRAM_MODEL`, `AUDIO_SAMPLE_RATE`, EOT thresholds
 > - **Recording Settings**: `RECORDING_TRACK`, `RECORDING_CHANNELS` (when recording enabled per-agent)
-> - **LLM Connection**: `OPENAI_BASE_URL`, `OPENAI_API_VERSION`, `OPENAI_API_KEY`
 >
 > See respective sections for details.
 
@@ -421,6 +424,7 @@ Configure post-call AI analysis with optional structured questionnaires for extr
   "workflow": {
     "post_call_analysis": {
       "enabled": true,
+      "provider_id": "azure-gpt-5-mini",
       "questions": [
         {
           "name": "string (required)",
@@ -446,6 +450,7 @@ Configure post-call AI analysis with optional structured questionnaires for extr
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `enabled` | boolean | ❌ No | `true` | Enable/disable post-call analysis |
+| `provider_id` | string | ⚠️ When enabled | - | LLM provider ID for analysis (must have `"analysis"` in usage_types) |
 | `questions` | array | ❌ No | `[]` | Structured questions to answer from transcript |
 | `additional_instructions` | string | ❌ No | `null` | Extra instructions for the analysis LLM |
 
@@ -1257,6 +1262,224 @@ Combine with intent detection for user-driven transfers:
 
 ---
 
+### API Call Node
+
+Executes HTTP API calls during conversation flow, extracts response data into variables, and transitions based on API result. Similar to Retell AI's custom functions but integrated into the node-based workflow system.
+
+#### Schema
+
+```json
+{
+  "id": "string",
+  "type": "api_call",
+  "name": "string",
+  "static_text": "string",
+  "api_call": {
+    "method": "GET",
+    "url": "string",
+    "headers": { ... },
+    "query_params": { ... },
+    "body": { ... },
+    "timeout_seconds": 30,
+    "retry": {
+      "max_retries": 2,
+      "initial_delay_ms": 500,
+      "max_delay_ms": 5000,
+      "backoff_multiplier": 2.0
+    },
+    "response_extraction": [
+      {
+        "path": "string",
+        "variable_name": "string",
+        "default_value": "string"
+      }
+    ],
+    "response_size_limit_bytes": 15000,
+    "allowed_hosts": ["string"]
+  },
+  "transitions": [ ... ],
+  "actions": { ... }
+}
+```
+
+#### Fields
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `id` | string | ✅ Yes | - | Unique node identifier |
+| `type` | string | ✅ Yes | - | Must be exactly `"api_call"` |
+| `name` | string | ✅ Yes | - | Human-readable name |
+| `static_text` | string | ❌ No | `null` | Optional loading message delivered before API call |
+| `api_call` | object | ✅ Yes | - | API call configuration (see below) |
+| `transitions` | array | ✅ Yes | - | Transition rules (typically `api_success`/`api_failed`) |
+| `actions` | object | ❌ No | `{}` | Actions to execute on entry |
+
+**Not Supported:**
+- `system_prompt` - API call nodes don't generate LLM responses
+- `rag` - No knowledge base access during API execution
+
+#### API Call Configuration
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `method` | string | ❌ No | `"GET"` | HTTP method: `GET`, `POST`, `PUT`, `PATCH`, `DELETE` |
+| `url` | string | ✅ Yes | - | Request URL (supports `{{variable}}` substitution) |
+| `headers` | object | ❌ No | `{}` | Request headers (supports variable substitution) |
+| `query_params` | object | ❌ No | `{}` | URL query parameters (supports variable substitution) |
+| `body` | object | ❌ No | `null` | Request body for POST/PUT/PATCH (JSON, supports variable substitution) |
+| `timeout_seconds` | int | ❌ No | `30` | Request timeout in seconds (max 120) |
+| `retry` | object | ❌ No | see below | Retry configuration |
+| `response_extraction` | array | ❌ No | `[]` | List of values to extract from response |
+| `response_size_limit_bytes` | int | ❌ No | `15000` | Max response body size in bytes |
+| `allowed_hosts` | array | ❌ No | `null` | Optional host allowlist for security |
+
+#### Retry Configuration
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `max_retries` | int | `2` | Maximum retry attempts after initial failure |
+| `initial_delay_ms` | int | `500` | Initial delay before first retry |
+| `max_delay_ms` | int | `5000` | Maximum delay between retries |
+| `backoff_multiplier` | float | `2.0` | Exponential backoff multiplier |
+
+**Retry formula:** `delay = min(initial_delay * (backoff_multiplier ^ attempt), max_delay)`
+
+#### Response Extraction Configuration
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `path` | string | ✅ Yes | Dot notation path into JSON response |
+| `variable_name` | string | ✅ Yes | Variable name to store extracted value |
+| `default_value` | string | ❌ No | Fallback value if path not found or null |
+
+**Path examples:**
+- `data.user.name` → `response["data"]["user"]["name"]`
+- `items.0.id` → `response["items"][0]["id"]`
+- `meta.total_count` → `response["meta"]["total_count"]`
+
+#### Behavior
+
+1. **Loading Message**: If `static_text` is provided, it's delivered immediately (for user feedback)
+2. **Variable Substitution**: `{{variable}}` placeholders in URL, headers, query params, and body are replaced
+3. **HTTP Execution**: Request is made with retry logic and timeout
+4. **Response Processing**: JSON response is parsed, values extracted into variables
+5. **Internal Variables Set**:
+   - `__api_success`: boolean - true if 2xx status
+   - `__api_failed`: boolean - true if error/timeout/non-2xx
+   - `__api_status_code`: int - HTTP status code
+   - `__api_response_body`: string - response body (truncated if large)
+   - `__api_error`: string - error message if failed
+6. **Transition Evaluation**: Conditions like `api_success`, `api_failed` are evaluated
+
+#### API-Specific Transition Conditions
+
+| Condition | Description |
+|-----------|-------------|
+| `api_success` | API returned 2xx status code |
+| `api_failed` | API returned non-2xx, timed out, or error |
+| `api_status:CODE` | API returned specific status code (e.g., `api_status:404`) |
+| `api_response_contains:VALUE` | Response body contains text (case-insensitive) |
+
+#### Example: GET Request
+
+```json
+{
+  "id": "fetch_patient_data",
+  "type": "api_call",
+  "name": "Fetch Patient Data",
+  "static_text": "Please hold while I retrieve your information...",
+  "api_call": {
+    "method": "GET",
+    "url": "https://api.example.com/patients/{{patient_id}}",
+    "headers": {
+      "Authorization": "Bearer {{api_token}}",
+      "Content-Type": "application/json"
+    },
+    "query_params": {
+      "include": "medications,allergies"
+    },
+    "timeout_seconds": 30,
+    "retry": {
+      "max_retries": 2,
+      "initial_delay_ms": 500,
+      "backoff_multiplier": 2.0
+    },
+    "response_extraction": [
+      {
+        "path": "data.patient.first_name",
+        "variable_name": "patient_first_name",
+        "default_value": "Patient"
+      },
+      {
+        "path": "data.patient.medications",
+        "variable_name": "patient_medications"
+      }
+    ]
+  },
+  "transitions": [
+    { "condition": "api_success", "target": "show_patient_info", "priority": 0 },
+    { "condition": "api_status:404", "target": "patient_not_found", "priority": 1 },
+    { "condition": "api_failed", "target": "api_error", "priority": 2 }
+  ]
+}
+```
+
+#### Example: POST Request
+
+```json
+{
+  "id": "create_appointment",
+  "type": "api_call",
+  "name": "Create Appointment",
+  "api_call": {
+    "method": "POST",
+    "url": "https://api.example.com/appointments",
+    "headers": {
+      "Authorization": "Bearer {{api_token}}",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "patient_id": "{{patient_id}}",
+      "date": "{{selected_date}}",
+      "time": "{{selected_time}}",
+      "provider_id": "{{provider_id}}"
+    },
+    "response_extraction": [
+      { "path": "data.confirmation_code", "variable_name": "confirmation_code" },
+      { "path": "data.appointment_id", "variable_name": "appointment_id" }
+    ]
+  },
+  "transitions": [
+    { "condition": "api_success", "target": "confirm_appointment", "priority": 0 },
+    { "condition": "api_status:409", "target": "slot_unavailable", "priority": 1 },
+    { "condition": "api_failed", "target": "booking_error", "priority": 2 }
+  ]
+}
+```
+
+#### Security Considerations
+
+| Feature | Description |
+|---------|-------------|
+| **Host Allowlist** | Use `allowed_hosts` to restrict URLs to approved domains only |
+| **Timeout Limits** | Max 120 seconds to prevent resource exhaustion |
+| **Response Size** | Max 50KB (system limit) to prevent memory issues |
+| **Log Masking** | Headers containing "auth" or "key" are masked in logs |
+| **Variable Isolation** | Internal vars (`__api_*`) prefixed to avoid collision with user vars |
+
+#### Error Handling
+
+| Scenario | Behavior |
+|----------|----------|
+| Network timeout | Retries with exponential backoff, then fails |
+| HTTP 4xx/5xx | Sets `__api_failed=true`, `__api_status_code` available |
+| Invalid JSON response | Response stored as raw text, extraction skipped |
+| Missing extraction path | Uses `default_value` or skips variable |
+| URL validation failure | Fails immediately, no HTTP request made |
+| Host not in allowlist | Fails immediately, no HTTP request made |
+
+---
+
 ## Transition Conditions
 
 Transitions move between nodes based on conditions. Conditions are evaluated in priority order (lower number = higher priority, like "1st priority", "2nd priority").
@@ -1312,6 +1535,10 @@ Transitions move between nodes based on conditions. Conditions are evaluated in 
 | **Variables Extracted** | `variables_extracted:var1,var2` | All variables present and non-null | `variables_extracted:name,email` |
 | **Extraction Failed** | `extraction_failed:var1,var2` | Any variable missing or null | `extraction_failed:name,email` |
 | **Intent** | `intent:intent_id` | LLM batch classification (~100-150ms) | `intent:wants_basics` |
+| **API Success** | `api_success` | API returned 2xx status (api_call nodes) | `api_success` |
+| **API Failed** | `api_failed` | API error/timeout/non-2xx (api_call nodes) | `api_failed` |
+| **API Status** | `api_status:CODE` | API returned specific status (api_call nodes) | `api_status:404` |
+| **API Contains** | `api_response_contains:text` | Response body contains text (api_call nodes) | `api_response_contains:error` |
 
 #### 2. Intent-Based Conditions (LLM Batch Classification)
 
@@ -1599,15 +1826,14 @@ Actions support variable substitution with `{{variable_name}}`:
 
 ## LLM Configuration (JSON-based)
 
-LLM configuration is stored in the agent's JSON config (`workflow.llm` section), with model name resolution via the `llm_models` database table.
+LLM configuration references a provider entry in `llm_providers.json` which contains both credentials AND model configuration.
 
-> ⚠️ **CRITICAL**: The `workflow.llm` section **MUST exist** in the agent JSON for LLM responses to work. If this section is entirely missing, LLM will be **disabled** and the bot will not generate dynamic responses. At minimum, include:
+> ⚠️ **CRITICAL**: The `workflow.llm` section with `provider_id` **MUST exist** in the agent JSON for LLM responses to work. If this section is missing or `provider_id` is not set, the agent will fail to load.
 > ```json
 > {
 >   "workflow": {
 >     "llm": {
->       "enabled": true,
->       "model_name": "gpt4.1"
+>       "provider_id": "azure-gpt-5-2"
 >     }
 >   }
 > }
@@ -1615,27 +1841,38 @@ LLM configuration is stored in the agent's JSON config (`workflow.llm` section),
 
 ### Architecture
 
-**Agent JSON (`workflow.llm` section):**
-- Agent-level LLM settings in the workflow JSON
-- Includes model_name, temperature, max_tokens, service_tier
-- Simple and direct configuration without database overhead
+**Provider Registry (`config/llm_providers.json`):**
+- Contains both credentials AND model configuration
+- Each provider entry has: `type`, `api_key`, `model_id`, `model_name`, defaults
+- Loaded at startup from file (dev) or AWS Parameter Store (prod)
 
-**System-Level Model Catalog (`llm_models` table):**
-- Maps friendly `model_name` to actual API `model_id`
-- Examples: `gpt4.1` → `gpt-4.1`, `gpt4o-mini` → `gpt-4o-mini`
-- ConfigManager resolves model_name at runtime
+**Agent JSON (`workflow.llm` section):**
+- References a provider via `provider_id`
+- Optionally overrides `temperature`, `max_tokens`, `service_tier`
+- Simple and direct - no database resolution needed
 
 ### Agent JSON Schema
 
+**Simple (use provider defaults):**
 ```json
 {
   "workflow": {
     "llm": {
-      "enabled": true,
-      "model_name": "gpt4.1",
-      "temperature": 1.0,
-      "max_tokens": 150,
-      "service_tier": "auto"
+      "provider_id": "azure-gpt-5-2"
+    },
+    "nodes": [...]
+  }
+}
+```
+
+**With optional overrides:**
+```json
+{
+  "workflow": {
+    "llm": {
+      "provider_id": "azure-gpt-5-2",
+      "temperature": 0.7,
+      "max_tokens": 200
     },
     "nodes": [...]
   }
@@ -1647,34 +1884,37 @@ LLM configuration is stored in the agent's JSON config (`workflow.llm` section),
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `enabled` | boolean | ❌ No | `true` | Enable/disable LLM for this agent |
-| `model_name` | string | ✅ Yes | - | Friendly model name (e.g., "gpt4.1", "gpt4o-mini") |
-| `temperature` | float | ❌ No | `1.0` | Response randomness (0.0-2.0) |
-| `max_tokens` | integer | ❌ No | `150` | Maximum tokens in response |
-| `service_tier` | string | ❌ No | `"auto"` | OpenAI service tier ("auto", "default", "flex") |
+| `provider_id` | string | ✅ **Yes** | - | Provider ID from `llm_providers.json` or Parameter Store |
+| `temperature` | float | ❌ No | Provider default | Override response randomness (0.0-2.0) |
+| `max_tokens` | integer | ❌ No | Provider default | Override maximum tokens in response |
+| `service_tier` | string | ❌ No | Provider default | Override service tier ("auto", "default", "flex") |
 
-### Database Schema (Model Catalog)
+### Provider Configuration
 
-```sql
--- System-level model definitions (maps friendly names to API model IDs)
-llm_models:
-  - model_name (unique): Friendly name (e.g., "gpt4.1", "gpt4o-mini")
-  - provider: LLM provider (e.g., "openai", "azure")
-  - actual_model_id: Real API model ID (e.g., "gpt-4.1", "gpt-4o-mini")
-  - default_temperature: Default temperature (0.0-2.0)
-  - default_max_tokens: Default max tokens
-  - default_service_tier: Default service tier
+Provider entries in `llm_providers.json` contain credentials and model:
+
+```json
+{
+  "azure-gpt-5-2": {
+    "type": "azure",
+    "display_name": "Azure GPT-5.2",
+    "api_key": "your-key",
+    "base_url": "https://your-resource.openai.azure.com",
+    "api_version": "2024-12-01-preview",
+    "model_id": "gpt-5.2",
+    "model_name": "GPT 5.2",
+    "temperature": 1.0,
+    "max_tokens": 150,
+    "service_tier": "auto"
+  }
+}
 ```
 
-### Environment Variables
-
-Connection settings come from environment variables:
-- `OPENAI_API_KEY` - API key for OpenAI/Azure
-- `OPENAI_BASE_URL` - Custom API endpoint (for Azure)
-- `OPENAI_API_VERSION` - API version (for Azure)
+**See also:** [LLM Providers Guide](./LLM_PROVIDERS.md) for complete setup instructions.
 
 ### Per-Node LLM Override
 
-Individual nodes can override the agent's default LLM settings using `llm_override`:
+Individual nodes can override parameters using `llm_override`:
 
 ```json
 {
@@ -1685,7 +1925,6 @@ Individual nodes can override the agent's default LLM settings using `llm_overri
       "name": "Quick Response",
       "system_prompt": "Give a brief answer.",
       "llm_override": {
-        "model_name": "gpt4o-mini",
         "temperature": 0.5,
         "max_tokens": 100
       }
@@ -1696,7 +1935,6 @@ Individual nodes can override the agent's default LLM settings using `llm_overri
       "name": "Complex Analysis",
       "system_prompt": "Analyze the situation carefully.",
       "llm_override": {
-        "model_name": "gpt4.1",
         "temperature": 0.8,
         "max_tokens": 300
       }
@@ -1709,27 +1947,40 @@ Individual nodes can override the agent's default LLM settings using `llm_overri
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `model_name` | string | ❌ No | Agent default | Override model (references llm_models.model_name) |
 | `temperature` | float | ❌ No | Agent default | Override temperature (0.0-2.0) |
 | `max_tokens` | integer | ❌ No | Agent default | Override max tokens |
 | `service_tier` | string | ❌ No | Agent default | Override service tier ("auto", "default", "flex") |
 
-### Available Models (Default Seed)
-
-| Model Name | Provider | Actual Model ID | Description |
-|------------|----------|-----------------|-------------|
-| `gpt4.1` | openai | gpt-4.1 | Advanced reasoning model with broad capabilities |
-| `gpt4o-mini` | openai | gpt-4o-mini | Fast and cost-effective for simple tasks |
-
-> **Note**: Administrators can add new models to `llm_models` table. They become immediately available for use in agent configurations.
-
 ### Extraction LLM Configuration
 
-Variable extraction and intent classification use a separate configuration:
+Variable extraction and intent classification use a separate LLM configuration via `extraction_llm`:
 
-- Controlled by `EXTRACTION_LLM_*` environment variables
-- Falls back to `OPENAI_*` environment variables
-- Default model: `gpt-4o-mini`, temperature: `0.0`
+```json
+{
+  "workflow": {
+    "llm": {
+      "provider_id": "azure-gpt-5-2"
+    },
+    "extraction_llm": {
+      "enabled": true,
+      "provider_id": "azure-gpt-5-mini"
+    }
+  }
+}
+```
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `enabled` | boolean | ❌ No | `false` | Enable separate extraction LLM |
+| `provider_id` | string | ⚠️ When enabled | - | Provider ID with `"extraction"` in `usage_types` |
+| `max_tokens` | integer | ❌ No | Provider default | Override max tokens |
+
+**Why use a separate extraction LLM?**
+- **Cost efficiency**: Use a cheaper/faster model (e.g., GPT-5-mini) for extraction tasks
+- **Model defaults**: Extraction LLM does not pass temperature -- models use their built-in defaults
+- **Performance**: Smaller models have lower latency for simple classification tasks
+
+If `extraction_llm` is not configured, the main conversation LLM is used for extraction.
 
 ### Service Tier
 
@@ -1755,7 +2006,7 @@ Temperature controls response randomness:
 | `1.0` - `1.5` | Creative - varied responses | Personalized greetings, sales calls |
 | `1.5` - `2.0` | Very creative - highly unpredictable | Brainstorming (NOT for critical tasks) |
 
-**Note**: Variable extraction and intent classification always use `temperature: 0.0` internally, regardless of this setting.
+**Note**: Temperature only applies to the conversation LLM. Extraction and analysis LLMs do not pass temperature -- they use the model's built-in defaults.
 
 ---
 
@@ -2917,6 +3168,10 @@ This section provides a comprehensive reference for all workflow configuration t
 | `always` | `always` | Immediate transition. With `proactive: true`, fires ~300ms after bot stops speaking; without `proactive`, fires immediately. | standard, retrieve_variable |
 | `variables_extracted` | `variables_extracted:{var1,var2}` | True if ALL specified variables are present and non-null. | retrieve_variable |
 | `extraction_failed` | `extraction_failed:{var1,var2}` | True if ANY specified variable is missing or null. | retrieve_variable |
+| `api_success` | `api_success` | API returned 2xx status code. | api_call |
+| `api_failed` | `api_failed` | API returned non-2xx, timed out, or error. | api_call |
+| `api_status` | `api_status:{code}` | API returned specific status code. | api_call |
+| `api_response_contains` | `api_response_contains:{text}` | Response body contains text (case-insensitive). | api_call |
 
 #### Intent-Based Conditions (LLM Batch Classification, ~100-150ms)
 

@@ -39,7 +39,9 @@ message = timestamp + nonce + method + path + body_hash
 signature = HMAC-SHA256(api_key, message)
 ```
 
-**Important:** For **GET requests**, use an empty string (`""` or `b""`) as the request body when computing the hash.
+**Important:**
+- For **GET requests**, use an empty string (`""` or `b""`) as the request body when computing the hash.
+- The `path` component used in signature computation is the **URL path only** (e.g., `/admin/llm-providers`), **without** query parameters. Query parameters (e.g., `?usage_type=extraction`) are sent as part of the HTTP request URL but are **not** included in the HMAC signature.
 
 | Request Type | Body for Hash Computation | Body Hash |
 |--------------|---------------------------|-----------|
@@ -123,6 +125,12 @@ uv run python scripts/admin_api_client.py refresh-phone-mapping --phone-number +
 uv run python scripts/admin_api_client.py refresh-rag
 uv run python scripts/admin_api_client.py refresh-voice
 uv run python scripts/admin_api_client.py refresh-llm-model
+
+# LLM Provider management
+uv run python scripts/admin_api_client.py list-llm-providers
+uv run python scripts/admin_api_client.py list-llm-providers --usage-type extraction
+uv run python scripts/admin_api_client.py reload-llm-providers
+uv run python scripts/admin_api_client.py get-llm-provider --provider-id azure-gpt-5-2
 
 # Custom base URL
 uv run python scripts/admin_api_client.py health --base-url https://api.example.com
@@ -327,6 +335,154 @@ POST /admin/cache/refresh/all
   }
 }
 ```
+
+---
+
+## LLM Provider Management
+
+Endpoints for managing LLM provider configurations. Each provider entry contains **both credentials AND model configuration**. Providers are configured via `config/llm_providers.json` (local development) or AWS Parameter Store (production).
+
+See [LLM Providers Guide](./LLM_PROVIDERS.md) for configuration details.
+
+### List LLM Providers
+
+List all configured LLM providers with their metadata and model info (API keys are never returned).
+
+```
+GET /admin/llm-providers
+GET /admin/llm-providers?usage_type=extraction
+```
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `usage_type` | string | No | Filter by usage type: `conversation`, `extraction`, or `analysis` |
+
+**Response:**
+```json
+{
+  "providers": [
+    {
+      "provider_id": "azure-gpt-5-2",
+      "type": "azure",
+      "display_name": "Azure GPT-5.2",
+      "model_id": "gpt-5.2",
+      "model_name": "GPT 5.2",
+      "base_url": "https://your-resource.openai.azure.com",
+      "has_api_key": true,
+      "usage_types": ["conversation"]
+    },
+    {
+      "provider_id": "azure-gpt-5-mini",
+      "type": "azure",
+      "display_name": "Azure GPT-5 Mini",
+      "model_id": "gpt-5-mini",
+      "model_name": "GPT 5 Mini",
+      "base_url": "https://your-resource.openai.azure.com",
+      "has_api_key": true,
+      "usage_types": ["extraction", "analysis"]
+    }
+  ],
+  "count": 2,
+  "source": "file"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `providers` | array | List of provider metadata (includes model info) |
+| `providers[].usage_types` | array | Allowed usage types: `conversation`, `extraction`, `analysis` |
+| `count` | integer | Number of providers loaded (after filtering) |
+| `source` | string | Credential source: `file`, `parameter_store`, or `none` |
+
+---
+
+### Reload LLM Providers
+
+Hot-reload LLM provider configurations from the current source (file or Parameter Store). Useful after updating credentials or model settings without restarting the service.
+
+```
+POST /admin/llm-providers/reload
+```
+
+**Request Body:** `{}` (empty JSON object)
+
+**Response:**
+```json
+{
+  "success": true,
+  "count": 3,
+  "source": "parameter_store",
+  "provider_ids": ["azure-gpt-5-2", "openai-gpt4", "anthropic-claude"]
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `success` | boolean | Whether reload succeeded |
+| `count` | integer | Number of providers loaded |
+| `source` | string | Credential source used |
+| `provider_ids` | array | List of loaded provider IDs |
+
+**Note:** Existing connections continue with old credentials until naturally closed. New agent loads will use updated credentials and model settings.
+
+---
+
+### Get LLM Provider Details
+
+Get details for a specific LLM provider including model configuration (API key is never returned).
+
+```
+GET /admin/llm-providers/{provider_id}
+```
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `provider_id` | string | Provider ID (e.g., "azure-gpt-5-2") |
+
+**Response:**
+```json
+{
+  "provider_id": "azure-gpt-5-2",
+  "type": "azure",
+  "display_name": "Azure GPT-5.2",
+  "model_id": "gpt-5.2",
+  "model_name": "GPT 5.2",
+  "base_url": "https://your-resource.openai.azure.com",
+  "api_version": "2024-12-01-preview",
+  "organization_id": null,
+  "service_tier": "auto",
+  "temperature": 1.0,
+  "max_tokens": 150,
+  "has_api_key": true,
+  "usage_types": ["conversation"]
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `provider_id` | string | Provider identifier |
+| `type` | string | Provider type: `openai`, `azure`, or `anthropic` |
+| `display_name` | string | Human-readable provider name |
+| `model_id` | string | Actual API model ID (e.g., "gpt-5.2") |
+| `model_name` | string | Human-readable model name |
+| `usage_types` | array | Allowed usage types: `conversation`, `extraction`, `analysis` |
+| `base_url` | string | API endpoint URL (null for standard OpenAI) |
+| `api_version` | string | API version (Azure only) |
+| `organization_id` | string | Organization ID (OpenAI only) |
+| `service_tier` | string | Default service tier |
+| `temperature` | float | Default temperature (only applies when provider is used for conversation) |
+| `max_tokens` | int | Default max tokens |
+| `has_api_key` | boolean | Whether API key is configured |
+
+**Error Responses:**
+
+| Status Code | Scenario | Detail |
+|-------------|----------|--------|
+| 404 Not Found | Provider not found | `"Provider 'xxx' not found | Available: [...]"` |
 
 ---
 
@@ -733,12 +889,13 @@ def compute_signature(api_key: str, timestamp: str, nonce: str, method: str, pat
     return hmac.new(api_key.encode(), message.encode(), hashlib.sha256).hexdigest()
 
 
-def make_request(method: str, path: str, body: dict | None = None) -> dict:
+def make_request(method: str, path: str, body: dict | None = None, params: dict | None = None) -> dict:
     timestamp = str(int(time.time()))
     nonce = generate_nonce()
     # IMPORTANT: For GET requests, use empty bytes b"" for the body hash
     # For POST requests, serialize the body dict to JSON bytes
     body_bytes = json.dumps(body).encode() if body else b""
+    # IMPORTANT: Sign only the path (no query params). The server uses request.url.path.
     signature = compute_signature(API_KEY, timestamp, nonce, method, path, body_bytes)
 
     headers = {
@@ -750,7 +907,7 @@ def make_request(method: str, path: str, body: dict | None = None) -> dict:
 
     with httpx.Client() as client:
         if method == "GET":
-            response = client.get(f"{BASE_URL}{path}", headers=headers)
+            response = client.get(f"{BASE_URL}{path}", headers=headers, params=params)
         else:
             response = client.post(f"{BASE_URL}{path}", headers=headers, content=body_bytes)
 
@@ -763,6 +920,10 @@ print(make_request("GET", "/admin/health"))
 # Get call status (GET with path parameter - no body)
 call_id = "550e8400-e29b-41d4-a716-446655440000"
 print(make_request("GET", f"/admin/calls/{call_id}/status"))
+
+# List LLM providers (GET with query params - params are NOT signed)
+print(make_request("GET", "/admin/llm-providers"))
+print(make_request("GET", "/admin/llm-providers", params={"usage_type": "extraction"}))
 
 # Refresh all caches
 print(make_request("POST", "/admin/cache/refresh/all", {}))
@@ -847,15 +1008,22 @@ function computeSignature(apiKey, timestamp, nonce, method, path, body) {
   return crypto.createHmac("sha256", apiKey).update(message).digest("hex");
 }
 
-async function makeRequest(method, path, body = null) {
+async function makeRequest(method, path, body = null, params = null) {
   const timestamp = Math.floor(Date.now() / 1000).toString();
   const nonce = generateNonce();
   // IMPORTANT: For GET requests, use empty string "" for the body hash
   // For POST requests, serialize the body object to JSON
   const bodyStr = body ? JSON.stringify(body) : "";
+  // IMPORTANT: Sign only the path (no query params). The server uses request.url.path.
   const signature = computeSignature(API_KEY, timestamp, nonce, method, path, bodyStr);
 
-  const response = await fetch(`${BASE_URL}${path}`, {
+  // Append query params to URL (they are NOT part of the signature)
+  let url = `${BASE_URL}${path}`;
+  if (params) {
+    url += "?" + new URLSearchParams(params).toString();
+  }
+
+  const response = await fetch(url, {
     method,
     headers: {
       "X-Timestamp": timestamp,
@@ -875,6 +1043,9 @@ makeRequest("GET", "/admin/health").then(console.log);
 // Get call status (GET with path parameter - no body)
 const callId = "550e8400-e29b-41d4-a716-446655440000";
 makeRequest("GET", `/admin/calls/${callId}/status`).then(console.log);
+
+// List LLM providers with query params (params are NOT signed)
+makeRequest("GET", "/admin/llm-providers", null, { usage_type: "extraction" }).then(console.log);
 
 // Refresh all caches (POST with empty object body)
 makeRequest("POST", "/admin/cache/refresh/all", {}).then(console.log);

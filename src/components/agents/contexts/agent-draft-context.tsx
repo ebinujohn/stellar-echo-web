@@ -96,8 +96,8 @@ export interface PostCallAnalysisDraft {
 export interface ExtractionLlmDraft {
   enabled: boolean;
   providerId: string; // Required when enabled - references LLM provider for extraction
-  temperature: number;
   maxTokens: number;
+  // Note: temperature intentionally omitted - extraction LLM uses model built-in defaults
 }
 
 /**

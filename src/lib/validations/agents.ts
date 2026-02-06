@@ -462,8 +462,9 @@ const postCallAnalysisSchema = z.object({
 const extractionLlmSchema = z.object({
   enabled: z.boolean().optional().default(false),
   provider_id: z.string().optional(), // Required when enabled - validated by backend
-  temperature: z.number().min(0).max(2).optional(),
   max_tokens: z.number().int().min(1).max(10000).optional(),
+  // Note: temperature is intentionally omitted per AGENT_JSON_SCHEMA.md
+  // Extraction LLM does not pass temperature - models use their built-in defaults
 });
 
 // ========================================

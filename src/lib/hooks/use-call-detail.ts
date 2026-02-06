@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { apiFetch } from './factories/create-api-hooks';
+import { apiFetch, ApiError } from './factories/create-api-hooks';
 import { QUERY_KEYS } from './constants/query-keys';
 import { STALE_TIMES } from './constants/stale-times';
 import type {
@@ -31,7 +31,20 @@ export function useCallMetrics(callId: string) {
 export function useCallAnalysis(callId: string) {
   return useQuery({
     queryKey: QUERY_KEYS.calls.analysis(callId),
-    queryFn: () => apiFetch<CallAnalysisData>(`/api/calls/${callId}/analysis`),
+    queryFn: async (): Promise<CallAnalysisData | null> => {
+      const response = await fetch(`/api/calls/${callId}/analysis`);
+      if (response.status === 404) return null;
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        throw new ApiError(
+          errorBody.error || 'Failed to fetch analysis',
+          errorBody.details,
+          errorBody.warnings
+        );
+      }
+      const json = await response.json();
+      return json.data as CallAnalysisData;
+    },
     enabled: !!callId,
     staleTime: STALE_TIMES.CALL_DETAIL,
   });

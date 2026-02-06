@@ -354,10 +354,10 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
   const workflowExtractionLlm = currentConfig.workflow?.extraction_llm;
 
   // Default extraction LLM values
+  // Note: temperature intentionally omitted - extraction LLM uses model built-in defaults
   const defaultExtractionLlm: ExtractionLlmDraft = {
     enabled: false,
     providerId: '',
-    temperature: 0.3, // Lower temperature for extraction tasks
     maxTokens: 500,
   };
 
@@ -366,9 +366,6 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
   );
   const [extractionLlmProviderId, setExtractionLlmProviderId] = useState(() =>
     getInitialValue(draftContext?.settingsDraft?.extractionLlm?.providerId, workflowExtractionLlm?.provider_id ?? defaultExtractionLlm.providerId)
-  );
-  const [extractionLlmTemperature, setExtractionLlmTemperature] = useState(() =>
-    getInitialValue(draftContext?.settingsDraft?.extractionLlm?.temperature, workflowExtractionLlm?.temperature ?? defaultExtractionLlm.temperature)
   );
   const [extractionLlmMaxTokens, setExtractionLlmMaxTokens] = useState(() =>
     getInitialValue(draftContext?.settingsDraft?.extractionLlm?.maxTokens, workflowExtractionLlm?.max_tokens ?? defaultExtractionLlm.maxTokens)
@@ -482,7 +479,6 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
     extractionLlm: {
       enabled: extractionLlmEnabled,
       providerId: extractionLlmProviderId,
-      temperature: extractionLlmTemperature,
       maxTokens: extractionLlmMaxTokens,
     },
     globalIntents,
@@ -496,7 +492,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
     ttsPronunciationDictionaryIds, ttsAggregateSentences, ragEnabledState, selectedRagConfigId,
     ragOverrideEnabled, ragSearchMode, ragTopK, ragRrfK, ragVectorWeight, ragFtsWeight,
     selectedVoiceConfigId, autoHangupEnabled,
-    extractionLlmEnabled, extractionLlmProviderId, extractionLlmTemperature, extractionLlmMaxTokens,
+    extractionLlmEnabled, extractionLlmProviderId, extractionLlmMaxTokens,
     globalIntents, globalIntentConfig, postCallAnalysis, webhook
   ]);
 
@@ -588,7 +584,6 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
       extractionLlm: {
         enabled: workflowExtractionLlm?.enabled ?? defaultExtractionLlm.enabled,
         providerId: workflowExtractionLlm?.provider_id ?? defaultExtractionLlm.providerId,
-        temperature: workflowExtractionLlm?.temperature ?? defaultExtractionLlm.temperature,
         maxTokens: workflowExtractionLlm?.max_tokens ?? defaultExtractionLlm.maxTokens,
       },
       globalIntents: initialGlobalIntents,
@@ -724,10 +719,10 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
 
       // Build extraction LLM config for workflow.extraction_llm section
       // Per AGENT_JSON_SCHEMA.md: provider_id is required when enabled
+      // Note: temperature intentionally omitted - extraction LLM uses model built-in defaults
       const extractionLlmConfig = extractionLlmEnabled ? {
         enabled: true,
         ...(extractionLlmProviderId && { provider_id: extractionLlmProviderId }),
-        temperature: extractionLlmTemperature,
         max_tokens: extractionLlmMaxTokens,
       } : { enabled: false };
 
@@ -1455,37 +1450,19 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
                   </p>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="extraction-llm-temperature">Temperature</Label>
-                    <Input
-                      id="extraction-llm-temperature"
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      max="2"
-                      value={extractionLlmTemperature}
-                      onChange={(e) => setExtractionLlmTemperature(parseFloat(e.target.value))}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Lower values (0.0-0.5) recommended for precise extraction
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="extraction-llm-max-tokens">Max Tokens</Label>
-                    <Input
-                      id="extraction-llm-max-tokens"
-                      type="number"
-                      min="1"
-                      max="10000"
-                      value={extractionLlmMaxTokens}
-                      onChange={(e) => setExtractionLlmMaxTokens(parseInt(e.target.value))}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Maximum response length for extraction tasks
-                    </p>
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="extraction-llm-max-tokens">Max Tokens</Label>
+                  <Input
+                    id="extraction-llm-max-tokens"
+                    type="number"
+                    min="1"
+                    max="10000"
+                    value={extractionLlmMaxTokens}
+                    onChange={(e) => setExtractionLlmMaxTokens(parseInt(e.target.value))}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Maximum response length for extraction tasks. Temperature uses model defaults.
+                  </p>
                 </div>
               </div>
             </>

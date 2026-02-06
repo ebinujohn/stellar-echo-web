@@ -14,6 +14,7 @@ interface LlmProvider {
   modelName: string;
   baseUrl: string | null;
   hasApiKey: boolean;
+  usageTypes: string[];
 }
 
 /**
@@ -25,6 +26,7 @@ interface LlmProviderDropdownItem {
   providerType: string;
   modelId: string;
   modelName: string;
+  usageTypes: string[];
 }
 
 /**
