@@ -15,9 +15,10 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { ExternalLink, Database, Volume2, Phone, AlertTriangle, MessageSquare } from 'lucide-react';
+import { ExternalLink, Database, Volume2, Phone, AlertTriangle, MessageSquare, BrainCircuit, PhoneOff, ChevronDown } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { useRagConfigsDropdown, useRagConfig } from '@/lib/hooks/use-rag-configs';
@@ -157,6 +158,18 @@ interface SettingsFormProps {
 
 export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlobalPrompt, ragEnabled: initialRagEnabled, ragConfigId: initialRagConfigId, voiceConfigId: initialVoiceConfigId, onSave }: SettingsFormProps) {
   const [, setIsSaving] = useState(false);
+
+  // Collapsible section state - all collapsed by default
+  const [openSections, setOpenSections] = useState<Set<string>>(new Set());
+
+  const toggleSection = useCallback((section: string) => {
+    setOpenSections(prev => {
+      const next = new Set(prev);
+      if (next.has(section)) next.delete(section);
+      else next.add(section);
+      return next;
+    });
+  }, []);
 
   // Get draft context (optional - component can work without it)
   const draftContext = useOptionalAgentDraft();
@@ -803,140 +816,186 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
     <div className="flex flex-col">
       {/* Note: Save button removed - use "Save All Changes" in page header to save all tabs together */}
 
-      <form onSubmit={handleSubmit} className="space-y-6 pb-6">
+      <form onSubmit={handleSubmit} className="space-y-8 pb-8">
         {/* Global Prompt */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <MessageSquare className="h-5 w-5" />
-              Global Prompt
-            </CardTitle>
-            <CardDescription>
-              System prompt applied to all nodes in the workflow. Node-specific prompts take precedence.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Textarea
-              id="global-prompt"
-              placeholder="Enter a global system prompt for the agent..."
-              value={globalPrompt}
-              onChange={(e) => setGlobalPrompt(e.target.value)}
-              className="min-h-[120px]"
-            />
-            <p className="text-xs text-muted-foreground mt-2">
-              This prompt is included in every LLM call. Individual node prompts are appended to this.
-            </p>
-          </CardContent>
+          <Collapsible open={openSections.has('global-prompt')} onOpenChange={() => toggleSection('global-prompt')}>
+            <CardHeader>
+              <CollapsibleTrigger asChild>
+                <div className="flex cursor-pointer items-center justify-between">
+                  <CardTitle className="flex items-center gap-3 text-lg">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                      <MessageSquare className="h-5 w-5 text-primary" />
+                    </div>
+                    Global Prompt
+                  </CardTitle>
+                  <ChevronDown
+                    className={`h-5 w-5 text-muted-foreground transition-transform duration-200 ${
+                      !openSections.has('global-prompt') ? '-rotate-90' : ''
+                    }`}
+                  />
+                </div>
+              </CollapsibleTrigger>
+              <CardDescription>
+                System prompt applied to all nodes in the workflow. Node-specific prompts take precedence.
+              </CardDescription>
+            </CardHeader>
+            <CollapsibleContent>
+              <CardContent>
+                <Textarea
+                  id="global-prompt"
+                  placeholder="Enter a global system prompt for the agent..."
+                  value={globalPrompt}
+                  onChange={(e) => setGlobalPrompt(e.target.value)}
+                  className="min-h-[120px]"
+                />
+                <p className="text-xs text-muted-foreground mt-2">
+                  This prompt is included in every LLM call. Individual node prompts are appended to this.
+                </p>
+              </CardContent>
+            </CollapsibleContent>
+          </Collapsible>
         </Card>
 
         {/* LLM Settings */}
         <Card>
-        <CardHeader>
-          <CardTitle>LLM Configuration</CardTitle>
-          <CardDescription>
-            Configure the language model settings for your agent
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between rounded-lg border p-4">
-            <div className="space-y-0.5">
-              <Label className="text-base">Enable LLM</Label>
-              <p className="text-sm text-muted-foreground">
-                Enable or disable the language model for this agent
-              </p>
-            </div>
-            <Switch checked={llmEnabled} onCheckedChange={setLlmEnabled} />
-          </div>
+          <Collapsible open={openSections.has('llm')} onOpenChange={() => toggleSection('llm')}>
+            <CardHeader>
+              <CollapsibleTrigger asChild>
+                <div className="flex cursor-pointer items-center justify-between">
+                  <CardTitle className="flex items-center gap-3 text-lg">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                      <BrainCircuit className="h-5 w-5 text-primary" />
+                    </div>
+                    LLM Configuration
+                  </CardTitle>
+                  <ChevronDown
+                    className={`h-5 w-5 text-muted-foreground transition-transform duration-200 ${
+                      !openSections.has('llm') ? '-rotate-90' : ''
+                    }`}
+                  />
+                </div>
+              </CollapsibleTrigger>
+              <CardDescription>
+                Configure the language model settings for your agent
+              </CardDescription>
+            </CardHeader>
+            <CollapsibleContent>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-0.5">
+                    <Label className="text-base">Enable LLM</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Enable or disable the language model for this agent
+                    </p>
+                  </div>
+                  <Switch checked={llmEnabled} onCheckedChange={setLlmEnabled} />
+                </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            {/* Provider Selection - required field per AGENT_JSON_SCHEMA.md */}
-            <div className="space-y-2">
-              <Label htmlFor="llm-provider">Provider *</Label>
-              {llmProviders && llmProviders.length > 0 ? (
-                <>
-                  <Select value={llmProviderId} onValueChange={setLlmProviderId}>
-                    <SelectTrigger id="llm-provider">
-                      <SelectValue placeholder="Select a provider" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {llmProviders.map((provider) => (
-                        <SelectItem key={provider.id} value={provider.id}>
-                          {provider.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {!llmProviderId && (
-                    <p className="text-sm text-amber-600">Provider selection is required</p>
-                  )}
-                </>
-              ) : (
-                <Alert>
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription>
-                    No LLM providers available. Configure the Admin API to enable provider selection.
-                  </AlertDescription>
-                </Alert>
-              )}
-              <p className="text-xs text-muted-foreground">LLM provider for this agent</p>
-            </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  {/* Provider Selection - required field per AGENT_JSON_SCHEMA.md */}
+                  <div className="space-y-2">
+                    <Label htmlFor="llm-provider">Provider *</Label>
+                    {llmProviders && llmProviders.length > 0 ? (
+                      <>
+                        <Select value={llmProviderId} onValueChange={setLlmProviderId}>
+                          <SelectTrigger id="llm-provider">
+                            <SelectValue placeholder="Select a provider" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {llmProviders.map((provider) => (
+                              <SelectItem key={provider.id} value={provider.id}>
+                                {provider.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {!llmProviderId && (
+                          <p className="text-sm text-amber-600">Provider selection is required</p>
+                        )}
+                      </>
+                    ) : (
+                      <Alert>
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertDescription>
+                          No LLM providers available. Configure the Admin API to enable provider selection.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                    <p className="text-xs text-muted-foreground">LLM provider for this agent</p>
+                  </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="llm-service-tier">Service Tier</Label>
-              <Select value={llmServiceTier} onValueChange={(v) => setLlmServiceTier(v as 'auto' | 'default' | 'flex')}>
-                <SelectTrigger id="llm-service-tier">
-                  <SelectValue placeholder="Select tier" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="auto">Auto</SelectItem>
-                  <SelectItem value="default">Default</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">OpenAI service tier</p>
-            </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="llm-service-tier">Service Tier</Label>
+                    <Select value={llmServiceTier} onValueChange={(v) => setLlmServiceTier(v as 'auto' | 'default' | 'flex')}>
+                      <SelectTrigger id="llm-service-tier">
+                        <SelectValue placeholder="Select tier" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="auto">Auto</SelectItem>
+                        <SelectItem value="default">Default</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">OpenAI service tier</p>
+                  </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="llm-temperature">Temperature</Label>
-              <Input
-                id="llm-temperature"
-                type="number"
-                step="0.1"
-                min="0"
-                max="2"
-                value={llmTemperature}
-                onChange={(e) => setLlmTemperature(parseFloat(e.target.value))}
-              />
-              <p className="text-xs text-muted-foreground">0.0 - 2.0 (lower is more deterministic)</p>
-            </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="llm-temperature">Temperature</Label>
+                    <Input
+                      id="llm-temperature"
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="2"
+                      value={llmTemperature}
+                      onChange={(e) => setLlmTemperature(parseFloat(e.target.value))}
+                    />
+                    <p className="text-xs text-muted-foreground">0.0 - 2.0 (lower is more deterministic)</p>
+                  </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="llm-max-tokens">Max Tokens</Label>
-              <Input
-                id="llm-max-tokens"
-                type="number"
-                min="1"
-                max="10000"
-                value={llmMaxTokens}
-                onChange={(e) => setLlmMaxTokens(parseInt(e.target.value))}
-              />
-              <p className="text-xs text-muted-foreground">Maximum response length</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+                  <div className="space-y-2">
+                    <Label htmlFor="llm-max-tokens">Max Tokens</Label>
+                    <Input
+                      id="llm-max-tokens"
+                      type="number"
+                      min="1"
+                      max="10000"
+                      value={llmMaxTokens}
+                      onChange={(e) => setLlmMaxTokens(parseInt(e.target.value))}
+                    />
+                    <p className="text-xs text-muted-foreground">Maximum response length</p>
+                  </div>
+                </div>
+              </CardContent>
+            </CollapsibleContent>
+          </Collapsible>
+        </Card>
 
       {/* TTS/Voice Settings */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Volume2 className="h-5 w-5" />
-            Voice/TTS Configuration
-          </CardTitle>
-          <CardDescription>
-            Select a voice and configure TTS settings for this agent
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        <Collapsible open={openSections.has('voice-tts')} onOpenChange={() => toggleSection('voice-tts')}>
+          <CardHeader>
+            <CollapsibleTrigger asChild>
+              <div className="flex cursor-pointer items-center justify-between">
+                <CardTitle className="flex items-center gap-3 text-lg">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                    <Volume2 className="h-5 w-5 text-primary" />
+                  </div>
+                  Voice/TTS Configuration
+                </CardTitle>
+                <ChevronDown
+                  className={`h-5 w-5 text-muted-foreground transition-transform duration-200 ${
+                    !openSections.has('voice-tts') ? '-rotate-90' : ''
+                  }`}
+                />
+              </div>
+            </CollapsibleTrigger>
+            <CardDescription>
+              Select a voice and configure TTS settings for this agent
+            </CardDescription>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent className="space-y-4">
           {/* TTS Enable Toggle */}
           <div className="flex items-center justify-between rounded-lg border p-4">
             <div className="space-y-0.5">
@@ -1022,7 +1081,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
 
               {/* Voice Quality Settings */}
               <div className="space-y-4">
-                <h4 className="text-sm font-medium">Voice Quality</h4>
+                <h4 className="text-sm font-semibold text-foreground tracking-wide uppercase">Voice Quality</h4>
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -1080,7 +1139,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
 
               {/* Voice Features */}
               <div className="space-y-4">
-                <h4 className="text-sm font-medium">Features</h4>
+                <h4 className="text-sm font-semibold text-foreground tracking-wide uppercase">Features</h4>
 
                 <div className="flex items-center justify-between rounded-lg border p-4">
                   <div className="space-y-0.5">
@@ -1139,25 +1198,40 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
               </div>
             </>
           )}
-        </CardContent>
+            </CardContent>
+          </CollapsibleContent>
+        </Collapsible>
       </Card>
 
       {/* RAG Configuration */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Database className="h-5 w-5" />
-            RAG Configuration
-          </CardTitle>
-          <CardDescription>
-            Select a RAG configuration for this agent. Manage configurations in{' '}
-            <Link href="/settings/rag" className="underline">
-              Settings
-            </Link>
-            .
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        <Collapsible open={openSections.has('rag')} onOpenChange={() => toggleSection('rag')}>
+          <CardHeader>
+            <CollapsibleTrigger asChild>
+              <div className="flex cursor-pointer items-center justify-between">
+                <CardTitle className="flex items-center gap-3 text-lg">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                    <Database className="h-5 w-5 text-primary" />
+                  </div>
+                  RAG Configuration
+                </CardTitle>
+                <ChevronDown
+                  className={`h-5 w-5 text-muted-foreground transition-transform duration-200 ${
+                    !openSections.has('rag') ? '-rotate-90' : ''
+                  }`}
+                />
+              </div>
+            </CollapsibleTrigger>
+            <CardDescription>
+              Select a RAG configuration for this agent. Manage configurations in{' '}
+              <Link href="/settings/rag" className="underline">
+                Settings
+              </Link>
+              .
+            </CardDescription>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent className="space-y-4">
           {/* RAG Enable Toggle */}
           <div className="flex items-center justify-between rounded-lg border p-4">
             <div className="space-y-0.5">
@@ -1252,7 +1326,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
                     <Separator />
 
                     <div className="space-y-4">
-                      <h4 className="text-sm font-medium">Search Settings</h4>
+                      <h4 className="text-sm font-semibold text-foreground tracking-wide uppercase">Search Settings</h4>
 
                       <div className="grid gap-4 md:grid-cols-2">
                         <div className="space-y-2">
@@ -1309,7 +1383,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
                         <Separator />
 
                         <div className="space-y-4">
-                          <h4 className="text-sm font-medium">Hybrid Search Weights</h4>
+                          <h4 className="text-sm font-semibold text-foreground tracking-wide uppercase">Hybrid Search Weights</h4>
 
                           {/* Weight validation warning */}
                           {Math.abs((ragVectorWeight + ragFtsWeight) - 1.0) > 0.01 && (
@@ -1384,22 +1458,37 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
               </div>
             </>
           )}
-        </CardContent>
+            </CardContent>
+          </CollapsibleContent>
+        </Collapsible>
       </Card>
 
       {/* Extraction LLM Configuration */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Cpu className="h-5 w-5" />
-            Extraction LLM
-          </CardTitle>
-          <CardDescription>
-            Configure a separate LLM for variable extraction and intent classification.
-            Uses lower temperature for more precise extraction tasks.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        <Collapsible open={openSections.has('extraction-llm')} onOpenChange={() => toggleSection('extraction-llm')}>
+          <CardHeader>
+            <CollapsibleTrigger asChild>
+              <div className="flex cursor-pointer items-center justify-between">
+                <CardTitle className="flex items-center gap-3 text-lg">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                    <Cpu className="h-5 w-5 text-primary" />
+                  </div>
+                  Extraction LLM
+                </CardTitle>
+                <ChevronDown
+                  className={`h-5 w-5 text-muted-foreground transition-transform duration-200 ${
+                    !openSections.has('extraction-llm') ? '-rotate-90' : ''
+                  }`}
+                />
+              </div>
+            </CollapsibleTrigger>
+            <CardDescription>
+              Configure a separate LLM for variable extraction and intent classification.
+              Uses lower temperature for more precise extraction tasks.
+            </CardDescription>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent className="space-y-4">
           {/* Enable Toggle */}
           <div className="flex items-center justify-between rounded-lg border p-4">
             <div className="space-y-0.5">
@@ -1467,111 +1556,189 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
               </div>
             </>
           )}
-        </CardContent>
+            </CardContent>
+          </CollapsibleContent>
+        </Collapsible>
       </Card>
 
       {/* Auto Hangup */}
       <Card>
-        <CardHeader>
-          <CardTitle>Auto Hangup</CardTitle>
-          <CardDescription>
-            Automatically end calls when appropriate
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between rounded-lg border p-4">
-            <div className="space-y-0.5">
-              <Label className="text-base">Enable Auto Hangup</Label>
-              <p className="text-sm text-muted-foreground">
-                Automatically end calls at completion
-              </p>
-            </div>
-            <Switch checked={autoHangupEnabled} onCheckedChange={setAutoHangupEnabled} />
-          </div>
-        </CardContent>
+        <Collapsible open={openSections.has('auto-hangup')} onOpenChange={() => toggleSection('auto-hangup')}>
+          <CardHeader>
+            <CollapsibleTrigger asChild>
+              <div className="flex cursor-pointer items-center justify-between">
+                <CardTitle className="flex items-center gap-3 text-lg">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                    <PhoneOff className="h-5 w-5 text-primary" />
+                  </div>
+                  Auto Hangup
+                </CardTitle>
+                <ChevronDown
+                  className={`h-5 w-5 text-muted-foreground transition-transform duration-200 ${
+                    !openSections.has('auto-hangup') ? '-rotate-90' : ''
+                  }`}
+                />
+              </div>
+            </CollapsibleTrigger>
+            <CardDescription>
+              Automatically end calls when appropriate
+            </CardDescription>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent>
+              <div className="flex items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <Label className="text-base">Enable Auto Hangup</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Automatically end calls at completion
+                  </p>
+                </div>
+                <Switch checked={autoHangupEnabled} onCheckedChange={setAutoHangupEnabled} />
+              </div>
+            </CardContent>
+          </CollapsibleContent>
+        </Collapsible>
       </Card>
 
       {/* Webhooks */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Webhook className="h-5 w-5" />
-            Webhooks
-          </CardTitle>
-          <CardDescription>
-            Configure webhook notifications for call lifecycle events
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <WebhooksEditor config={webhook} onChange={setWebhook} />
-        </CardContent>
+        <Collapsible open={openSections.has('webhooks')} onOpenChange={() => toggleSection('webhooks')}>
+          <CardHeader>
+            <CollapsibleTrigger asChild>
+              <div className="flex cursor-pointer items-center justify-between">
+                <CardTitle className="flex items-center gap-3 text-lg">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                    <Webhook className="h-5 w-5 text-primary" />
+                  </div>
+                  Webhooks
+                </CardTitle>
+                <ChevronDown
+                  className={`h-5 w-5 text-muted-foreground transition-transform duration-200 ${
+                    !openSections.has('webhooks') ? '-rotate-90' : ''
+                  }`}
+                />
+              </div>
+            </CollapsibleTrigger>
+            <CardDescription>
+              Configure webhook notifications for call lifecycle events
+            </CardDescription>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent>
+              <WebhooksEditor config={webhook} onChange={setWebhook} />
+            </CardContent>
+          </CollapsibleContent>
+        </Collapsible>
       </Card>
 
       {/* Global Intents */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Brain className="h-5 w-5" />
-            Global Intents
-            {Object.keys(globalIntents).length > 0 && (
-              <Badge variant="secondary">{Object.keys(globalIntents).length}</Badge>
-            )}
-          </CardTitle>
-          <CardDescription>
-            Define workflow-wide intents that can trigger transitions from any node.
-            These provide shortcuts to specific nodes based on user intent.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <GlobalIntentsEditor
-            intents={globalIntents}
-            config={globalIntentConfig}
-            availableNodes={availableNodes}
-            onIntentsChange={setGlobalIntents}
-            onConfigChange={setGlobalIntentConfig}
-          />
-        </CardContent>
+        <Collapsible open={openSections.has('global-intents')} onOpenChange={() => toggleSection('global-intents')}>
+          <CardHeader>
+            <CollapsibleTrigger asChild>
+              <div className="flex cursor-pointer items-center justify-between">
+                <CardTitle className="flex items-center gap-3 text-lg">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                    <Brain className="h-5 w-5 text-primary" />
+                  </div>
+                  Global Intents
+                  {Object.keys(globalIntents).length > 0 && (
+                    <Badge variant="secondary">{Object.keys(globalIntents).length}</Badge>
+                  )}
+                </CardTitle>
+                <ChevronDown
+                  className={`h-5 w-5 text-muted-foreground transition-transform duration-200 ${
+                    !openSections.has('global-intents') ? '-rotate-90' : ''
+                  }`}
+                />
+              </div>
+            </CollapsibleTrigger>
+            <CardDescription>
+              Define workflow-wide intents that can trigger transitions from any node.
+              These provide shortcuts to specific nodes based on user intent.
+            </CardDescription>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent>
+              <GlobalIntentsEditor
+                intents={globalIntents}
+                config={globalIntentConfig}
+                availableNodes={availableNodes}
+                onIntentsChange={setGlobalIntents}
+                onConfigChange={setGlobalIntentConfig}
+              />
+            </CardContent>
+          </CollapsibleContent>
+        </Collapsible>
       </Card>
 
       {/* Post-Call Analysis */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileSearch className="h-5 w-5" />
-            Post-Call Analysis
-            {postCallAnalysis.questions.length > 0 && (
-              <Badge variant="secondary">{postCallAnalysis.questions.length} questions</Badge>
-            )}
-          </CardTitle>
-          <CardDescription>
-            Configure AI-powered analysis to run on call transcripts after each call ends.
-            Define custom questions to extract structured data from conversations.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <PostCallAnalysisEditor
-            config={postCallAnalysis}
-            onChange={setPostCallAnalysis}
-          />
-        </CardContent>
+        <Collapsible open={openSections.has('post-call-analysis')} onOpenChange={() => toggleSection('post-call-analysis')}>
+          <CardHeader>
+            <CollapsibleTrigger asChild>
+              <div className="flex cursor-pointer items-center justify-between">
+                <CardTitle className="flex items-center gap-3 text-lg">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                    <FileSearch className="h-5 w-5 text-primary" />
+                  </div>
+                  Post-Call Analysis
+                  {postCallAnalysis.questions.length > 0 && (
+                    <Badge variant="secondary">{postCallAnalysis.questions.length} questions</Badge>
+                  )}
+                </CardTitle>
+                <ChevronDown
+                  className={`h-5 w-5 text-muted-foreground transition-transform duration-200 ${
+                    !openSections.has('post-call-analysis') ? '-rotate-90' : ''
+                  }`}
+                />
+              </div>
+            </CollapsibleTrigger>
+            <CardDescription>
+              Configure AI-powered analysis to run on call transcripts after each call ends.
+              Define custom questions to extract structured data from conversations.
+            </CardDescription>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent>
+              <PostCallAnalysisEditor
+                config={postCallAnalysis}
+                onChange={setPostCallAnalysis}
+              />
+            </CardContent>
+          </CollapsibleContent>
+        </Collapsible>
       </Card>
 
       {/* Phone Numbers (Read-only) */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Phone className="h-5 w-5" />
-            Phone Numbers
-          </CardTitle>
-          <CardDescription>
-            Phone numbers mapped to this agent for call routing. Manage mappings in{' '}
-            <Link href="/settings/phone" className="underline">
-              Settings
-            </Link>
-            .
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+        <Collapsible open={openSections.has('phone-numbers')} onOpenChange={() => toggleSection('phone-numbers')}>
+          <CardHeader>
+            <CollapsibleTrigger asChild>
+              <div className="flex cursor-pointer items-center justify-between">
+                <CardTitle className="flex items-center gap-3 text-lg">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                    <Phone className="h-5 w-5 text-primary" />
+                  </div>
+                  Phone Numbers
+                </CardTitle>
+                <ChevronDown
+                  className={`h-5 w-5 text-muted-foreground transition-transform duration-200 ${
+                    !openSections.has('phone-numbers') ? '-rotate-90' : ''
+                  }`}
+                />
+              </div>
+            </CollapsibleTrigger>
+            <CardDescription>
+              Phone numbers mapped to this agent for call routing. Manage mappings in{' '}
+              <Link href="/settings/phone" className="underline">
+                Settings
+              </Link>
+              .
+            </CardDescription>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent>
           {agentPhoneConfigs && agentPhoneConfigs.length > 0 ? (
             <div className="space-y-2">
               {agentPhoneConfigs.map((phoneConfig) => (
@@ -1608,7 +1775,9 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
               </Link>
             </div>
           )}
-        </CardContent>
+            </CardContent>
+          </CollapsibleContent>
+        </Collapsible>
       </Card>
     </form>
     </div>

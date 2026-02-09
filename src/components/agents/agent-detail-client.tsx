@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Separator } from '@/components/ui/separator';
+
 import {
   ArrowLeft,
   Settings,
@@ -23,7 +23,12 @@ import {
   Save,
   Database,
   MessageSquare,
+  BrainCircuit,
+  Volume2,
+  PhoneOff,
+  Network,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useAgent, useCreateVersion, useAgentVersions } from '@/lib/hooks/use-agents';
 import { ApiError } from '@/lib/hooks/factories/create-api-hooks';
 import { useAgentPhoneConfigs } from '@/lib/hooks/use-phone-configs';
@@ -61,7 +66,8 @@ interface AgentActiveVersion {
       tts?: {
         enabled?: boolean;
       };
-      nodes?: unknown[];
+      nodes?: Array<{ id: string; name: string; type?: string }>;
+      initial_node?: string;
     };
     tts?: {
       enabled?: boolean;
@@ -74,6 +80,55 @@ interface AgentActiveVersion {
   ragConfigId: string | null;
   voiceConfigId: string | null;
   createdAt: Date;
+}
+
+const NODE_TYPE_LABELS: Record<string, string> = {
+  standard: 'Conversation',
+  retrieve_variable: 'Variable',
+  end_call: 'End Call',
+  agent_transfer: 'Transfer',
+  api_call: 'API Call',
+};
+
+function SettingsOverviewItem({
+  icon: Icon,
+  title,
+  enabled,
+  detail,
+  onConfigure,
+}: {
+  icon: LucideIcon;
+  title: string;
+  enabled: boolean;
+  detail: string;
+  onConfigure: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-lg border p-3">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+        <Icon className="h-5 w-5 text-primary" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium">{title}</span>
+          <Badge
+            variant="secondary"
+            className={
+              enabled
+                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 text-xs'
+                : 'text-xs'
+            }
+          >
+            {enabled ? 'Enabled' : 'Disabled'}
+          </Badge>
+        </div>
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">{detail}</p>
+      </div>
+      <Button variant="ghost" size="icon" onClick={onConfigure} className="h-8 w-8 shrink-0">
+        <Settings className="h-4 w-4" />
+      </Button>
+    </div>
+  );
 }
 
 // Inner component that uses the context
@@ -604,6 +659,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
             {agent.description && (
               <p className="text-muted-foreground mt-1">{agent.description}</p>
             )}
+            <p className="mt-0.5 font-mono text-xs text-muted-foreground">{agent.id}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -768,132 +824,102 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
             </Card>
           )}
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Agent Information</CardTitle>
-                <CardDescription>Basic information about this agent</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <div className="text-sm font-medium text-muted-foreground">Agent ID</div>
-                  <div className="text-sm font-mono mt-1">{agent.id}</div>
-                </div>
-                <Separator />
-                <div>
-                  <div className="text-sm font-medium text-muted-foreground">Name</div>
-                  <div className="text-sm mt-1">{agent.name}</div>
-                </div>
-                {agent.description && (
-                  <>
-                    <Separator />
-                    <div>
-                      <div className="text-sm font-medium text-muted-foreground">
-                        Description
-                      </div>
-                      <div className="text-sm mt-1">{agent.description}</div>
-                    </div>
-                  </>
-                )}
-                <Separator />
-                <div>
-                  <div className="text-sm font-medium text-muted-foreground">Tenant ID</div>
-                  <div className="text-sm font-mono mt-1">{agent.tenantId}</div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Active Configuration</CardTitle>
-                <CardDescription>Current workflow version details</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {agent.activeVersion ? (
-                  <>
-                    <div>
-                      <div className="text-sm font-medium text-muted-foreground">Version</div>
-                      <div className="text-sm mt-1 flex items-center gap-2">
-                        <Badge variant="default">v{agent.activeVersion.version}</Badge>
-                        <CheckCircle2 className="h-4 w-4 text-green-500" />
-                      </div>
-                    </div>
-                    <Separator />
-                    <div>
-                      <div className="text-sm font-medium text-muted-foreground">
-                        Created By
-                      </div>
-                      <div className="text-sm mt-1">
-                        {agent.activeVersion.createdBy || 'Unknown'}
-                      </div>
-                    </div>
-                    <Separator />
-                    <div>
-                      <div className="text-sm font-medium text-muted-foreground">
-                        Created At
-                      </div>
-                      <div className="text-sm mt-1">
-                        {formatDateTime(agent.activeVersion.createdAt)}
-                      </div>
-                    </div>
-                    {agent.activeVersion.notes && (
-                      <>
-                        <Separator />
-                        <div>
-                          <div className="text-sm font-medium text-muted-foreground">
-                            Notes
-                          </div>
-                          <div className="text-sm mt-1">{agent.activeVersion.notes}</div>
-                        </div>
-                      </>
-                    )}
-                  </>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    No active version configured
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
+          {/* Active Configuration */}
           <Card>
             <CardHeader>
-              <CardTitle>Workflow Summary</CardTitle>
-              <CardDescription>Overview of the current workflow configuration</CardDescription>
+              <CardTitle className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                  <FileCode className="h-5 w-5 text-primary" />
+                </div>
+                Active Configuration
+              </CardTitle>
             </CardHeader>
             <CardContent>
               {agent.activeVersion ? (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-sm font-medium text-muted-foreground">
-                        Initial Node
-                      </div>
-                      <div className="text-sm mt-1 font-mono">
-                        {agent.activeVersion.configJson.workflow.initial_node}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-muted-foreground">
-                        Total Nodes
-                      </div>
-                      <div className="text-sm mt-1">
-                        {agent.activeVersion.configJson.workflow.nodes.length}
-                      </div>
-                    </div>
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Version:</span>
+                    <Badge variant="default">v{agent.activeVersion.version}</Badge>
+                    <CheckCircle2 className="h-4 w-4 text-green-500" />
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleTabChange('workflow')}
-                    className="mt-2"
-                  >
-                    <Edit className="mr-2 h-4 w-4" />
-                    Edit Workflow
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Created by:</span>
+                    <span className="font-medium">{agent.activeVersion.createdBy || 'Unknown'}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Created:</span>
+                    <span className="font-medium">{formatDateTime(agent.activeVersion.createdAt)}</span>
+                  </div>
+                  {agent.activeVersion.notes && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">Notes:</span>
+                      <span className="font-medium">{agent.activeVersion.notes}</span>
+                    </div>
+                  )}
                 </div>
               ) : (
+                <p className="text-sm text-muted-foreground">
+                  No active version configured
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Workflow Summary */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                  <Network className="h-5 w-5 text-primary" />
+                </div>
+                Workflow Summary
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {agent.activeVersion ? (() => {
+                const config = agent.activeVersion.configJson as AgentActiveVersion['configJson'];
+                const nodes = config.workflow?.nodes || [];
+                const initialNode = config.workflow?.initial_node;
+                const typeCounts: Record<string, number> = {};
+                for (const node of nodes) {
+                  const type = node.type || 'standard';
+                  typeCounts[type] = (typeCounts[type] || 0) + 1;
+                }
+                return (
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+                      {initialNode && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">Entry point:</span>
+                          <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">{initialNode}</code>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">Total nodes:</span>
+                        <span className="font-medium">{nodes.length}</span>
+                      </div>
+                    </div>
+                    {Object.keys(typeCounts).length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {Object.entries(typeCounts).map(([type, count]) => (
+                          <Badge key={type} variant="outline" className="text-xs">
+                            {NODE_TYPE_LABELS[type] || type}: {count}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleTabChange('workflow')}
+                      className="mt-1"
+                    >
+                      <Edit className="mr-2 h-4 w-4" />
+                      Edit Workflow
+                    </Button>
+                  </div>
+                );
+              })() : (
                 <p className="text-sm text-muted-foreground">
                   No workflow configuration available
                 </p>
@@ -902,133 +928,63 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
           </Card>
 
           {/* Global Settings Overview */}
-          {agent.activeVersion && (
-            <div className="grid gap-4 md:grid-cols-2">
-              {/* LLM Settings */}
+          {agent.activeVersion && (() => {
+            const config = agent.activeVersion.configJson as AgentActiveVersion['configJson'];
+            const activeVer = agent.activeVersion as AgentActiveVersion;
+            const llmEnabled = config.workflow?.llm?.enabled !== false;
+            const ttsEnabled = config.workflow?.tts?.enabled !== false;
+            const ragEnabled = activeVer.ragEnabled;
+            const autoHangupEnabled = !!config.auto_hangup?.enabled;
+            return (
               <Card>
                 <CardHeader>
-                  <CardTitle>LLM Configuration</CardTitle>
-                  <CardDescription>Language model settings</CardDescription>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>Global Settings</CardTitle>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="text-xs"
+                      onClick={() => handleTabChange('settings')}
+                    >
+                      Open full settings
+                    </Button>
+                  </div>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <div className="text-muted-foreground">Enabled</div>
-                      <div className="font-medium">
-                        {(agent.activeVersion.configJson as AgentActiveVersion['configJson']).workflow?.llm?.enabled !== false ? 'Yes' : 'No'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-muted-foreground">Model</div>
-                      <div className="font-mono text-xs">
-                        {(agent.activeVersion.configJson as AgentActiveVersion['configJson']).workflow?.llm?.model_name || 'N/A'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-muted-foreground">Temperature</div>
-                      <div className="font-medium">
-                        {(agent.activeVersion.configJson as AgentActiveVersion['configJson']).workflow?.llm?.temperature ?? 'N/A'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-muted-foreground">Max Tokens</div>
-                      <div className="font-medium">
-                        {(agent.activeVersion.configJson as AgentActiveVersion['configJson']).workflow?.llm?.max_tokens || 'N/A'}
-                      </div>
-                    </div>
+                <CardContent>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <SettingsOverviewItem
+                      icon={BrainCircuit}
+                      title="LLM"
+                      enabled={llmEnabled}
+                      detail={config.workflow?.llm?.model_name || 'Default model'}
+                      onConfigure={() => handleTabChange('settings')}
+                    />
+                    <SettingsOverviewItem
+                      icon={Volume2}
+                      title="Voice / TTS"
+                      enabled={ttsEnabled}
+                      detail={voiceConfig?.name || 'Not configured'}
+                      onConfigure={() => handleTabChange('settings')}
+                    />
+                    <SettingsOverviewItem
+                      icon={Database}
+                      title="RAG"
+                      enabled={ragEnabled}
+                      detail={ragEnabled ? 'Configuration linked' : 'Not configured'}
+                      onConfigure={() => handleTabChange('settings')}
+                    />
+                    <SettingsOverviewItem
+                      icon={PhoneOff}
+                      title="Auto Hangup"
+                      enabled={autoHangupEnabled}
+                      detail={autoHangupEnabled ? 'Calls auto-terminate' : 'Manual only'}
+                      onConfigure={() => handleTabChange('settings')}
+                    />
                   </div>
                 </CardContent>
               </Card>
-
-              {/* TTS Settings - Database-backed */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>TTS Configuration</CardTitle>
-                  <CardDescription>Voice configuration (database-backed)</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <div className="text-muted-foreground">Selected Voice</div>
-                      <div className="font-medium">
-                        {voiceConfig?.name || 'Not Configured'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-muted-foreground">TTS Enabled</div>
-                      <div className="font-medium">
-                        {(agent.activeVersion.configJson as AgentActiveVersion['configJson']).tts?.enabled !== false ? 'Yes' : 'No'}
-                      </div>
-                    </div>
-                  </div>
-                  {voiceConfig?.description && (
-                    <div className="text-xs text-muted-foreground">
-                      {voiceConfig.description}
-                    </div>
-                  )}
-                  <div className="text-xs text-muted-foreground">
-                    Voice/TTS settings are managed via shared configurations in Settings → Voice Configurations.
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* STT Settings - Environment-based */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>STT Configuration</CardTitle>
-                  <CardDescription>Speech-to-text settings (system-wide)</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="text-sm text-muted-foreground">
-                    STT settings are configured via environment variables (DEEPGRAM_MODEL, AUDIO_SAMPLE_RATE).
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* RAG Settings - Database-backed */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>RAG Configuration</CardTitle>
-                  <CardDescription>Knowledge base retrieval (database-backed)</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <div className="text-muted-foreground">RAG Enabled</div>
-                      <div className="font-medium">
-                        {(agent.activeVersion as AgentActiveVersion).ragEnabled ? 'Yes' : 'No'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-muted-foreground">Configuration</div>
-                      <div className="font-medium">
-                        {(agent.activeVersion as AgentActiveVersion).ragConfigId ? 'Linked' : 'Not Configured'}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    RAG settings are managed via shared configurations in Settings → RAG Configurations.
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Auto Hangup Settings */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Auto Hangup</CardTitle>
-                  <CardDescription>Call termination settings</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="text-sm">
-                    <div className="text-muted-foreground">Status</div>
-                    <div className="font-medium">
-                      {agent.activeVersion.configJson.auto_hangup?.enabled ? 'Enabled' : 'Disabled'}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
+            );
+          })()}
         </TabsContent>
 
         {/* Workflow Editor Tab */}
