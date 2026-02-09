@@ -20,10 +20,10 @@ export function getLayoutedNodes(
 ): Node<WorkflowNodeData>[] {
   const {
     direction = 'TB',
-    nodeWidth: _nodeWidth = 280,
+    nodeWidth: _nodeWidth = 340,
     nodeHeight: _nodeHeight = 180,
-    ranksep = 280,  // Increased for better vertical spacing between ranks
-    nodesep = 220,  // Increased for better horizontal spacing between nodes
+    ranksep = 350,  // Increased for better vertical spacing with inline transitions
+    nodesep = 280,  // Increased for better horizontal spacing with wider nodes
   } = options;
   // Note: nodeWidth/nodeHeight defaults provided for API but actual dimensions come from getNodeDimensions
   void _nodeWidth;
@@ -45,7 +45,7 @@ export function getLayoutedNodes(
 
   // Add nodes to dagre graph with proper dimensions per node type
   nodes.forEach((node) => {
-    const dimensions = getNodeDimensions(node.type || 'standardNode');
+    const dimensions = getNodeDimensions(node.type || 'standardNode', node.data);
     dagreGraph.setNode(node.id, {
       width: dimensions.width,
       height: dimensions.height,
@@ -63,7 +63,7 @@ export function getLayoutedNodes(
   // Map dagre positions back to ReactFlow nodes
   const layoutedNodes = nodes.map((node) => {
     const nodeWithPosition = dagreGraph.node(node.id);
-    const dimensions = getNodeDimensions(node.type || 'standardNode');
+    const dimensions = getNodeDimensions(node.type || 'standardNode', node.data);
 
     // Calculate position (dagre uses center, ReactFlow uses top-left)
     const x = nodeWithPosition.x - dimensions.width / 2;
@@ -79,18 +79,36 @@ export function getLayoutedNodes(
 }
 
 /**
- * Get dimensions for different node types
+ * Get dimensions for different node types, dynamically based on content
  */
-export function getNodeDimensions(nodeType: string): { width: number; height: number } {
+export function getNodeDimensions(
+  nodeType: string,
+  nodeData?: WorkflowNodeData
+): { width: number; height: number } {
+  const transitionCount = nodeData?.transitions?.length || 0;
+
+  // Transition section height: header (24px) + rows (24px each, max visible 5) + expand button (20px if needed)
+  const visibleTransitions = Math.min(transitionCount, 5);
+  const transitionSectionHeight = transitionCount > 0
+    ? 24 + (visibleTransitions * 24) + (transitionCount > 5 ? 20 : 0)
+    : 0;
+
   switch (nodeType) {
     case 'standardNode':
-      return { width: 280, height: 200 };  // Slightly taller to account for content
+      // Header (44px) + padding (24px) + badges (28px) + content line-clamp-4 (~72px) + transitions
+      return { width: 340, height: 168 + transitionSectionHeight };
     case 'retrieveVariableNode':
-      return { width: 280, height: 220 };  // Taller for variable lists
+      // Header (44px) + padding (24px) + badge (28px) + variables section (~60px) + transitions
+      return { width: 340, height: 156 + transitionSectionHeight };
     case 'endCallNode':
-      return { width: 220, height: 140 };  // Matches actual rendered size
-    default:
+      return { width: 220, height: 140 };
+    case 'agentTransferNode':
       return { width: 280, height: 180 };
+    case 'apiCallNode':
+      // Header (44px) + padding (24px) + method badge (28px) + URL (20px) + extractions (20px) + transitions
+      return { width: 340, height: 156 + transitionSectionHeight };
+    default:
+      return { width: 340, height: 168 + transitionSectionHeight };
   }
 }
 
@@ -114,7 +132,11 @@ export function fitNodesToViewport(
   let maxY = -Infinity;
 
   nodes.forEach((node) => {
-    const { width = 250, height = 150 } = getNodeDimensions(node.type || 'standardNode');
+    const nodeWithData = node as Node<WorkflowNodeData>;
+    const { width = 340, height = 180 } = getNodeDimensions(
+      node.type || 'standardNode',
+      nodeWithData.data
+    );
     minX = Math.min(minX, node.position.x);
     minY = Math.min(minY, node.position.y);
     maxX = Math.max(maxX, node.position.x + width);

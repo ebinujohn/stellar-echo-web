@@ -20,7 +20,6 @@ import 'reactflow/dist/style.css';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
 import {
   Dialog,
   DialogContent,
@@ -42,6 +41,8 @@ import {
   ArrowRightToLine,
   ArrowRightLeft,
   Globe,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -69,6 +70,9 @@ function useOptionalAgentDraft() {
   }
 }
 
+// localStorage key for palette collapse state
+const PALETTE_COLLAPSED_KEY = 'workflow-palette-collapsed';
+
 function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNodeData>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -82,6 +86,10 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [isInteractive, setIsInteractive] = useState(true);
   const [layoutDirection, setLayoutDirection] = useState<'TB' | 'LR'>('TB');
+  const [paletteCollapsed, setPaletteCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem(PALETTE_COLLAPSED_KEY) === 'true';
+  });
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition } = useReactFlow();
 
@@ -91,6 +99,15 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
   // Track initial state for dirty detection
   const initialStateRef = useRef<string>('');
   const isInitializedRef = useRef(false);
+
+  // Persist palette collapse state
+  const togglePalette = useCallback(() => {
+    setPaletteCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem(PALETTE_COLLAPSED_KEY, String(next));
+      return next;
+    });
+  }, []);
 
   // Initialize nodes and edges from config with auto-layout
   // If there's a draft, restore from draft instead
@@ -104,8 +121,6 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
         const { nodes: draftNodes, edges: draftEdges } = workflowToNodes(draftConfig);
         const layoutedNodes = getLayoutedNodes(draftNodes, draftEdges, {
           direction: layoutDirection,
-          nodeWidth: 280,
-          nodeHeight: 180,
         });
         setNodes(layoutedNodes);
         setEdges(draftEdges);
@@ -122,8 +137,6 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
         // Apply auto-layout immediately for better initial presentation
         const layoutedNodes = getLayoutedNodes(initialNodes, initialEdges, {
           direction: layoutDirection,
-          nodeWidth: 280,
-          nodeHeight: 180,
         });
 
         setNodes(layoutedNodes);
@@ -235,7 +248,7 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
     setSelectedEdge(null);
   }, []);
 
-  // Handle connection creation
+  // Handle connection creation with per-transition handles
   // Note: The useEffect above will sync the new edge to node.data.transitions
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -246,9 +259,8 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
         source: connection.source,
         target: connection.target,
         sourceHandle: connection.sourceHandle || null,
-        targetHandle: connection.targetHandle || null,
+        targetHandle: connection.targetHandle || 'input',
         type: 'deletable',
-        label: 'always',
         markerEnd: {
           type: MarkerType.ArrowClosed,
           width: 20,
@@ -284,8 +296,6 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
     const dir = direction ?? layoutDirection;
     const layoutedNodes = getLayoutedNodes(nodes, edges, {
       direction: dir,
-      nodeWidth: 280,
-      nodeHeight: 180,
     });
     setNodes(layoutedNodes);
     toast.success(`${dir === 'TB' ? 'Vertical' : 'Horizontal'} layout applied`);
@@ -390,7 +400,7 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
         return prev;
       });
 
-      // Sync transitions from panel to edges
+      // Sync transitions from panel to edges with per-transition handles
       if (updates.transitions !== undefined) {
         const newTransitions = updates.transitions || [];
 
@@ -398,13 +408,14 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
           // Remove existing edges from this node
           const otherEdges = eds.filter((e) => e.source !== nodeId);
 
-          // Create new edges from the updated transitions
+          // Create new edges from the updated transitions with per-transition source handles
           const newEdges: Edge[] = newTransitions.map((transition, idx) => ({
             id: `${nodeId}-${transition.target}-${idx}`,
             source: nodeId,
             target: transition.target,
+            sourceHandle: `transition-${idx}`,
+            targetHandle: 'input',
             type: 'deletable',
-            label: transition.condition,
             animated: (transition.priority ?? 0) > 5,
             markerEnd: {
               type: MarkerType.ArrowClosed,
@@ -583,84 +594,89 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
 
       {/* Main Content: 3-Panel Layout */}
       <div ref={reactFlowWrapper} className="flex flex-1 overflow-hidden">
-        {/* Left Sidebar: Node Palette */}
-        <div className="w-[280px] border-r bg-card/30 overflow-y-auto">
-          <div className="p-4 space-y-4">
-            <div>
-              <h3 className="font-semibold text-sm mb-3">Node Palette</h3>
-              <p className="text-xs text-muted-foreground mb-4">
-                Drag nodes onto the canvas to build your workflow
-              </p>
-            </div>
-
-            <Separator />
-
-            {/* Node Categories */}
-            <div className="space-y-4">
-              <div>
-                <h4 className="text-xs font-medium text-muted-foreground uppercase mb-2">
-                  Conversation
-                </h4>
-                <div className="space-y-2">
-                  <NodePaletteItem
-                    type="standard"
-                    icon={<MessageSquare className="h-5 w-5 text-purple-500" />}
-                    label="Standard Node"
-                    description="LLM-powered conversation or static text"
-                  />
-                </div>
+        {/* Left Sidebar: Node Palette (Collapsible) */}
+        {paletteCollapsed ? (
+          <div className="w-[48px] border-r bg-card/30 flex flex-col items-center py-2 gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 mb-1"
+              onClick={togglePalette}
+              title="Expand palette"
+            >
+              <PanelLeftOpen className="h-4 w-4" />
+            </Button>
+            {/* Collapsed: icon-only draggable items */}
+            <CollapsedPaletteItem
+              type="standard"
+              icon={<MessageSquare className="h-4 w-4 text-purple-500" />}
+              title="Standard Node"
+            />
+            <CollapsedPaletteItem
+              type="retrieve_variable"
+              icon={<Database className="h-4 w-4 text-amber-500" />}
+              title="Extract Variables"
+            />
+            <CollapsedPaletteItem
+              type="api_call"
+              icon={<Globe className="h-4 w-4 text-green-500" />}
+              title="API Call"
+            />
+            <CollapsedPaletteItem
+              type="end_call"
+              icon={<PhoneOff className="h-4 w-4 text-red-500" />}
+              title="End Call"
+            />
+            <CollapsedPaletteItem
+              type="agent_transfer"
+              icon={<ArrowRightLeft className="h-4 w-4 text-cyan-500" />}
+              title="Agent Transfer"
+            />
+          </div>
+        ) : (
+          <div className="w-[220px] border-r bg-card/30 overflow-y-auto">
+            <div className="p-3 space-y-1">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-semibold text-xs">Node Palette</h3>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6"
+                  onClick={togglePalette}
+                  title="Collapse palette"
+                >
+                  <PanelLeftClose className="h-3.5 w-3.5" />
+                </Button>
               </div>
 
-              <div>
-                <h4 className="text-xs font-medium text-muted-foreground uppercase mb-2">
-                  Data
-                </h4>
-                <div className="space-y-2">
-                  <NodePaletteItem
-                    type="retrieve_variable"
-                    icon={<Database className="h-5 w-5 text-amber-500" />}
-                    label="Extract Variables"
-                    description="Extract data from conversation"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <h4 className="text-xs font-medium text-muted-foreground uppercase mb-2">
-                  Integration
-                </h4>
-                <div className="space-y-2">
-                  <NodePaletteItem
-                    type="api_call"
-                    icon={<Globe className="h-5 w-5 text-green-500" />}
-                    label="API Call"
-                    description="Make HTTP API requests"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <h4 className="text-xs font-medium text-muted-foreground uppercase mb-2">
-                  Control Flow
-                </h4>
-                <div className="space-y-2">
-                  <NodePaletteItem
-                    type="end_call"
-                    icon={<PhoneOff className="h-5 w-5 text-red-500" />}
-                    label="End Call"
-                    description="Terminate the call"
-                  />
-                  <NodePaletteItem
-                    type="agent_transfer"
-                    icon={<ArrowRightLeft className="h-5 w-5 text-cyan-500" />}
-                    label="Agent Transfer"
-                    description="Transfer to another agent"
-                  />
-                </div>
-              </div>
+              <NodePaletteItem
+                type="standard"
+                icon={<MessageSquare className="h-4 w-4 text-purple-500" />}
+                label="Standard Node"
+              />
+              <NodePaletteItem
+                type="retrieve_variable"
+                icon={<Database className="h-4 w-4 text-amber-500" />}
+                label="Extract Variables"
+              />
+              <NodePaletteItem
+                type="api_call"
+                icon={<Globe className="h-4 w-4 text-green-500" />}
+                label="API Call"
+              />
+              <NodePaletteItem
+                type="end_call"
+                icon={<PhoneOff className="h-4 w-4 text-red-500" />}
+                label="End Call"
+              />
+              <NodePaletteItem
+                type="agent_transfer"
+                icon={<ArrowRightLeft className="h-4 w-4 text-cyan-500" />}
+                label="Agent Transfer"
+              />
             </div>
           </div>
-        </div>
+        )}
 
         {/* Center: ReactFlow Canvas */}
         <div className="flex-1 relative">
@@ -764,17 +780,15 @@ export function WorkflowEditorLayout(props: WorkflowEditorLayoutProps) {
   );
 }
 
-// Node Palette Item Component
+// Compact Node Palette Item Component (expanded state)
 function NodePaletteItem({
   type,
   icon,
   label,
-  description,
 }: {
   type: string;
   icon: ReactNode;
   label: string;
-  description: string;
 }) {
   const onDragStart = (event: React.DragEvent) => {
     event.dataTransfer.setData('application/reactflow', type);
@@ -783,17 +797,39 @@ function NodePaletteItem({
 
   return (
     <div
-      className="p-3 rounded-lg border bg-card hover:bg-accent transition-colors cursor-move"
+      className="px-2.5 py-1.5 rounded-md border bg-card hover:bg-accent transition-colors cursor-move flex items-center gap-2"
       draggable
       onDragStart={onDragStart}
     >
-      <div className="flex items-start gap-2">
-        <div className="flex-shrink-0">{icon}</div>
-        <div className="flex-1 min-w-0">
-          <div className="font-medium text-sm">{label}</div>
-          <div className="text-xs text-muted-foreground line-clamp-2">{description}</div>
-        </div>
-      </div>
+      <div className="flex-shrink-0">{icon}</div>
+      <div className="font-medium text-sm truncate">{label}</div>
+    </div>
+  );
+}
+
+// Collapsed palette icon-only item
+function CollapsedPaletteItem({
+  type,
+  icon,
+  title,
+}: {
+  type: string;
+  icon: ReactNode;
+  title: string;
+}) {
+  const onDragStart = (event: React.DragEvent) => {
+    event.dataTransfer.setData('application/reactflow', type);
+    event.dataTransfer.effectAllowed = 'move';
+  };
+
+  return (
+    <div
+      className="w-8 h-8 rounded-md border bg-card hover:bg-accent transition-colors cursor-move flex items-center justify-center"
+      draggable
+      onDragStart={onDragStart}
+      title={title}
+    >
+      {icon}
     </div>
   );
 }

@@ -276,7 +276,7 @@ export function workflowToNodes(config: WorkflowConfig): {
 
     nodes.push(reactFlowNode);
 
-    // Create edges from transitions
+    // Create edges from transitions with per-transition source handles
     const nodeTransitions = extNode.transitions;
     if (nodeTransitions && Array.isArray(nodeTransitions)) {
       nodeTransitions.forEach((transition, transIdx) => {
@@ -284,7 +284,8 @@ export function workflowToNodes(config: WorkflowConfig): {
           id: `${node.id}-${transition.target}-${transIdx}`,
           source: node.id,
           target: transition.target,
-          label: transition.condition,
+          sourceHandle: `transition-${transIdx}`,
+          targetHandle: 'input',
           type: 'deletable',
           animated: !!(transition.priority && transition.priority > 5),
           markerEnd: {
