@@ -812,13 +812,91 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
     }
   };
 
+  // Section definitions for navigation sidebar
+  const sections = [
+    { id: 'global-prompt', label: 'Global Prompt', icon: MessageSquare, enabled: !!globalPrompt },
+    { id: 'llm', label: 'LLM', icon: BrainCircuit, enabled: llmEnabled },
+    { id: 'voice-tts', label: 'Voice/TTS', icon: Volume2, enabled: ttsEnabled },
+    { id: 'rag', label: 'RAG', icon: Database, enabled: ragEnabledState },
+    { id: 'extraction-llm', label: 'Extraction LLM', icon: Cpu, enabled: extractionLlmEnabled },
+    { id: 'auto-hangup', label: 'Auto Hangup', icon: PhoneOff, enabled: autoHangupEnabled },
+    { id: 'webhooks', label: 'Webhooks', icon: Webhook, enabled: webhook.enabled },
+    { id: 'global-intents', label: 'Global Intents', icon: Brain, enabled: Object.keys(globalIntents).length > 0 },
+    { id: 'post-call-analysis', label: 'Post-Call Analysis', icon: FileSearch, enabled: postCallAnalysis.enabled },
+    { id: 'phone-numbers', label: 'Phone Numbers', icon: Phone, enabled: (agentPhoneConfigs?.length ?? 0) > 0 },
+  ];
+
+  const configuredCount = sections.filter(s => s.enabled).length;
+
+  const scrollToSection = (sectionId: string) => {
+    // Open the section first
+    setOpenSections(prev => new Set([...prev, sectionId]));
+    // Scroll to it after a brief delay for the collapsible to open
+    setTimeout(() => {
+      const element = document.getElementById(`section-${sectionId}`);
+      element?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  };
+
+  // Build summary text for collapsed sections
+  const getSectionSummary = (sectionId: string): string | null => {
+    switch (sectionId) {
+      case 'global-prompt':
+        return globalPrompt ? `${globalPrompt.slice(0, 60)}${globalPrompt.length > 60 ? '...' : ''}` : null;
+      case 'llm': {
+        const provider = llmProviders?.find(p => p.id === llmProviderId);
+        return llmEnabled ? `${provider?.name || 'No provider'} | Temp: ${llmTemperature} | Max: ${llmMaxTokens}` : 'Disabled';
+      }
+      case 'voice-tts':
+        return ttsEnabled ? `Model: ${ttsModel} | Stability: ${(ttsStability * 100).toFixed(0)}%` : 'Disabled';
+      case 'rag':
+        return ragEnabledState ? `Mode: ${ragSearchMode} | Top K: ${ragTopK}` : 'Disabled';
+      case 'extraction-llm':
+        return extractionLlmEnabled ? `Max tokens: ${extractionLlmMaxTokens}` : 'Disabled';
+      case 'auto-hangup':
+        return autoHangupEnabled ? 'Enabled' : 'Disabled';
+      case 'webhooks':
+        return webhook.enabled ? `${webhook.url || 'No URL'} | ${webhook.events.length} events` : 'Disabled';
+      case 'global-intents':
+        return Object.keys(globalIntents).length > 0 ? `${Object.keys(globalIntents).length} intent(s)` : 'None configured';
+      case 'post-call-analysis':
+        return postCallAnalysis.enabled ? `${postCallAnalysis.questions.length} question(s)` : 'Disabled';
+      case 'phone-numbers':
+        return `${agentPhoneConfigs?.length ?? 0} number(s) mapped`;
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="flex flex-col">
-      {/* Note: Save button removed - use "Save All Changes" in page header to save all tabs together */}
+      {/* Section Navigation */}
+      <div className="mb-6 rounded-lg border bg-card p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-medium text-muted-foreground">Settings Navigation</h3>
+          <Badge variant="info" className="text-xs">
+            {configuredCount} of {sections.length} configured
+          </Badge>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {sections.map((section) => (
+            <button
+              key={section.id}
+              type="button"
+              onClick={() => scrollToSection(section.id)}
+              className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-muted border"
+            >
+              <section.icon className="h-3.5 w-3.5" />
+              {section.label}
+              <span className={`h-1.5 w-1.5 rounded-full ${section.enabled ? 'bg-emerald-500' : 'bg-muted-foreground/30'}`} />
+            </button>
+          ))}
+        </div>
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-8 pb-8">
         {/* Global Prompt */}
-        <Card>
+        <Card id="section-global-prompt">
           <Collapsible open={openSections.has('global-prompt')} onOpenChange={() => toggleSection('global-prompt')}>
             <CardHeader>
               <CollapsibleTrigger asChild>
@@ -837,7 +915,10 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
                 </div>
               </CollapsibleTrigger>
               <CardDescription>
-                System prompt applied to all nodes in the workflow. Node-specific prompts take precedence.
+                {!openSections.has('global-prompt') && getSectionSummary('global-prompt')
+                  ? <span className="text-xs font-mono text-muted-foreground/70">{getSectionSummary('global-prompt')}</span>
+                  : 'System prompt applied to all nodes in the workflow. Node-specific prompts take precedence.'
+                }
               </CardDescription>
             </CardHeader>
             <CollapsibleContent>
@@ -858,7 +939,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
         </Card>
 
         {/* LLM Settings */}
-        <Card>
+        <Card id="section-llm">
           <Collapsible open={openSections.has('llm')} onOpenChange={() => toggleSection('llm')}>
             <CardHeader>
               <CollapsibleTrigger asChild>
@@ -877,7 +958,10 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
                 </div>
               </CollapsibleTrigger>
               <CardDescription>
-                Configure the language model settings for your agent
+                {!openSections.has('llm') && getSectionSummary('llm')
+                  ? <span className="text-xs font-mono text-muted-foreground/70">{getSectionSummary('llm')}</span>
+                  : 'Configure the language model settings for your agent'
+                }
               </CardDescription>
             </CardHeader>
             <CollapsibleContent>
@@ -972,7 +1056,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
         </Card>
 
       {/* TTS/Voice Settings */}
-      <Card>
+      <Card id="section-voice-tts">
         <Collapsible open={openSections.has('voice-tts')} onOpenChange={() => toggleSection('voice-tts')}>
           <CardHeader>
             <CollapsibleTrigger asChild>
@@ -991,7 +1075,10 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
               </div>
             </CollapsibleTrigger>
             <CardDescription>
-              Select a voice and configure TTS settings for this agent
+              {!openSections.has('voice-tts') && getSectionSummary('voice-tts')
+                ? <span className="text-xs font-mono text-muted-foreground/70">{getSectionSummary('voice-tts')}</span>
+                : 'Select a voice and configure TTS settings for this agent'
+              }
             </CardDescription>
           </CardHeader>
           <CollapsibleContent>
@@ -1204,7 +1291,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
       </Card>
 
       {/* RAG Configuration */}
-      <Card>
+      <Card id="section-rag">
         <Collapsible open={openSections.has('rag')} onOpenChange={() => toggleSection('rag')}>
           <CardHeader>
             <CollapsibleTrigger asChild>
@@ -1223,11 +1310,12 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
               </div>
             </CollapsibleTrigger>
             <CardDescription>
-              Select a RAG configuration for this agent. Manage configurations in{' '}
-              <Link href="/settings/rag" className="underline">
-                Settings
-              </Link>
-              .
+              {!openSections.has('rag') && getSectionSummary('rag')
+                ? <span className="text-xs font-mono text-muted-foreground/70">{getSectionSummary('rag')}</span>
+                : <>Select a RAG configuration for this agent. Manage configurations in{' '}
+                  <Link href="/settings/rag" className="underline">Settings</Link>.
+                </>
+              }
             </CardDescription>
           </CardHeader>
           <CollapsibleContent>
@@ -1464,7 +1552,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
       </Card>
 
       {/* Extraction LLM Configuration */}
-      <Card>
+      <Card id="section-extraction-llm">
         <Collapsible open={openSections.has('extraction-llm')} onOpenChange={() => toggleSection('extraction-llm')}>
           <CardHeader>
             <CollapsibleTrigger asChild>
@@ -1483,8 +1571,10 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
               </div>
             </CollapsibleTrigger>
             <CardDescription>
-              Configure a separate LLM for variable extraction and intent classification.
-              Uses lower temperature for more precise extraction tasks.
+              {!openSections.has('extraction-llm') && getSectionSummary('extraction-llm')
+                ? <span className="text-xs font-mono text-muted-foreground/70">{getSectionSummary('extraction-llm')}</span>
+                : 'Configure a separate LLM for variable extraction and intent classification.'
+              }
             </CardDescription>
           </CardHeader>
           <CollapsibleContent>
@@ -1562,7 +1652,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
       </Card>
 
       {/* Auto Hangup */}
-      <Card>
+      <Card id="section-auto-hangup">
         <Collapsible open={openSections.has('auto-hangup')} onOpenChange={() => toggleSection('auto-hangup')}>
           <CardHeader>
             <CollapsibleTrigger asChild>
@@ -1601,7 +1691,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
       </Card>
 
       {/* Webhooks */}
-      <Card>
+      <Card id="section-webhooks">
         <Collapsible open={openSections.has('webhooks')} onOpenChange={() => toggleSection('webhooks')}>
           <CardHeader>
             <CollapsibleTrigger asChild>
@@ -1632,7 +1722,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
       </Card>
 
       {/* Global Intents */}
-      <Card>
+      <Card id="section-global-intents">
         <Collapsible open={openSections.has('global-intents')} onOpenChange={() => toggleSection('global-intents')}>
           <CardHeader>
             <CollapsibleTrigger asChild>
@@ -1673,7 +1763,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
       </Card>
 
       {/* Post-Call Analysis */}
-      <Card>
+      <Card id="section-post-call-analysis">
         <Collapsible open={openSections.has('post-call-analysis')} onOpenChange={() => toggleSection('post-call-analysis')}>
           <CardHeader>
             <CollapsibleTrigger asChild>
@@ -1711,7 +1801,7 @@ export function SettingsForm({ agentId, currentConfig, globalPrompt: initialGlob
       </Card>
 
       {/* Phone Numbers (Read-only) */}
-      <Card>
+      <Card id="section-phone-numbers">
         <Collapsible open={openSections.has('phone-numbers')} onOpenChange={() => toggleSection('phone-numbers')}>
           <CardHeader>
             <CollapsibleTrigger asChild>

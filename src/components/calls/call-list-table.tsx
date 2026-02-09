@@ -108,9 +108,13 @@ export function CallListTable({ filters, page, pageSize, onPageChange }: CallLis
             </TableHeader>
             <TableBody>
               {calls.map((call) => (
-                <TableRow key={call.callId}>
-                  <TableCell className="font-mono text-xs">
-                    {call.callId.slice(0, 8)}...
+                <TableRow key={call.callId} className="group">
+                  <TableCell>
+                    <Link href={`/calls/${call.callId}`}>
+                      <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono text-primary hover:bg-primary/10 transition-colors">
+                        {call.callId.slice(0, 8)}
+                      </code>
+                    </Link>
                   </TableCell>
                   <TableCell className="text-sm">
                     {formatDateTime(call.startedAt)}

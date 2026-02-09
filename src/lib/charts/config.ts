@@ -21,20 +21,20 @@ export const chartPalette = [
 
 // Sentiment-specific colors
 export const sentimentColors = {
-  positive: "hsl(142, 76%, 36%)", // Green
-  neutral: "hsl(43, 74%, 66%)", // Yellow
-  negative: "hsl(0, 84%, 60%)", // Red
-  mixed: "hsl(197, 37%, 24%)", // Blue-grey
+  positive: "hsl(162, 50%, 42%)", // Green
+  neutral: "hsl(195, 60%, 46%)", // Cyan
+  negative: "hsl(338, 60%, 52%)", // Rose
+  mixed: "hsl(28, 70%, 50%)", // Orange
 } as const;
 
 // Status-specific colors
 export const statusColors = {
-  completed: "hsl(142, 76%, 36%)",
-  failed: "hsl(0, 84%, 60%)",
-  in_progress: "hsl(43, 74%, 66%)",
-  no_answer: "hsl(220, 70%, 50%)",
-  busy: "hsl(280, 65%, 60%)",
-  voicemail: "hsl(197, 37%, 24%)",
+  completed: "hsl(162, 50%, 42%)",
+  failed: "hsl(338, 60%, 52%)",
+  in_progress: "hsl(45, 75%, 50%)",
+  no_answer: "hsl(195, 60%, 46%)",
+  busy: "hsl(28, 70%, 50%)",
+  voicemail: "hsl(217, 55%, 48%)",
 } as const;
 
 // Common chart config for Recharts

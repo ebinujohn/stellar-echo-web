@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Plus, Activity, Clock, Edit, Trash2, ArrowRight, Bot } from "lucide-react";
+import { Plus, Clock, Edit, Trash2, ArrowRight, Bot, Search } from "lucide-react";
 import { useAgents } from "@/lib/hooks/use-agents";
 import { formatDateTime } from "@/lib/utils/formatters";
 import { CreateAgentDialog } from "./dialogs/create-agent-dialog";
@@ -18,12 +19,25 @@ export function AgentsPageClient() {
   const { data: agents, isLoading, error } = useAgents();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedAgent, setSelectedAgent] = useState<{
     id: string;
     name: string;
     callCount?: number;
     phoneMappingCount?: number;
   } | null>(null);
+
+  // Filter agents by search query
+  const filteredAgents = useMemo(() => {
+    if (!agents) return [];
+    if (!searchQuery.trim()) return agents;
+    const query = searchQuery.toLowerCase();
+    return agents.filter(
+      (agent) =>
+        agent.name.toLowerCase().includes(query) ||
+        agent.description?.toLowerCase().includes(query)
+    );
+  }, [agents, searchQuery]);
 
   const handleDeleteClick = (agent: { id: string; name: string; callCount?: number; phoneMappingCount?: number }, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -51,8 +65,21 @@ export function AgentsPageClient() {
         </Button>
       </div>
 
+      {/* Search Bar */}
+      {agents && agents.length > 0 && (
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search agents by name or description..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+      )}
+
       {/* Agent List */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 stagger-children">
         {isLoading ? (
           [...Array(3)].map((_, i) => (
             <Card key={i}>
@@ -91,11 +118,16 @@ export function AgentsPageClient() {
               ]}
             />
           </div>
+        ) : filteredAgents.length === 0 ? (
+          <div className="col-span-full py-12 text-center">
+            <Search className="mx-auto h-10 w-10 text-muted-foreground/50" />
+            <p className="mt-3 text-sm text-muted-foreground">No agents match &quot;{searchQuery}&quot;</p>
+          </div>
         ) : (
-          agents.map((agent) => (
+          filteredAgents.map((agent) => (
             <Card
               key={agent.id}
-              className="hover:shadow-md transition-shadow cursor-pointer group"
+              className="border-l-4 border-l-primary/70 hover:border-l-primary hover:shadow-md transition-all cursor-pointer group"
               onClick={() => router.push(`/agents/${agent.id}`)}
             >
               <CardHeader>
@@ -103,17 +135,17 @@ export function AgentsPageClient() {
                   <div className="flex-1">
                     <CardTitle className="text-lg flex items-center gap-2">
                       {agent.name}
-                      <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-primary" />
                     </CardTitle>
                     <div className="flex items-center gap-2 mt-1">
-                      <Badge variant="outline" className="text-xs">
-                        <Activity className="mr-1 h-3 w-3" />
+                      <Badge variant="success" className="text-xs">
+                        <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block animate-pulse" />
                         Active
                       </Badge>
                       {agent.activeVersion && (
-                        <span className="text-xs text-muted-foreground">
+                        <Badge variant="outline" className="text-xs">
                           v{agent.activeVersion}
-                        </span>
+                        </Badge>
                       )}
                     </div>
                   </div>

@@ -785,206 +785,220 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-4">
-          {/* Phone Numbers Section */}
-          {phoneConfigs && phoneConfigs.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Phone className="h-5 w-5" />
-                  Mapped Phone Numbers
-                </CardTitle>
-                <CardDescription>
-                  Incoming calls to these numbers will be routed to this agent
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-2">
-                  {phoneConfigs.map((phone) => (
-                    <Link
-                      key={phone.id}
-                      href={`/settings/phone/${phone.id}`}
-                      className="inline-flex"
-                    >
-                      <Badge
-                        variant="secondary"
-                        className="text-sm py-1.5 px-3 hover:bg-secondary/80 cursor-pointer"
-                      >
-                        <Phone className="h-3.5 w-3.5 mr-2" />
-                        {formatPhoneNumber(phone.phoneNumber)}
-                        {phone.name && (
-                          <span className="ml-2 text-muted-foreground">
-                            ({phone.name})
-                          </span>
-                        )}
-                      </Badge>
-                    </Link>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Active Configuration */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                  <FileCode className="h-5 w-5 text-primary" />
-                </div>
-                Active Configuration
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {agent.activeVersion ? (
-                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">Version:</span>
-                    <Badge variant="default">v{agent.activeVersion.version}</Badge>
-                    <CheckCircle2 className="h-4 w-4 text-green-500" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">Created by:</span>
-                    <span className="font-medium">{agent.activeVersion.createdBy || 'Unknown'}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">Created:</span>
-                    <span className="font-medium">{formatDateTime(agent.activeVersion.createdAt)}</span>
-                  </div>
-                  {agent.activeVersion.notes && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground">Notes:</span>
-                      <span className="font-medium">{agent.activeVersion.notes}</span>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No active version configured
-                </p>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Workflow Summary */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                  <Network className="h-5 w-5 text-primary" />
-                </div>
-                Workflow Summary
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {agent.activeVersion ? (() => {
-                const config = agent.activeVersion.configJson as AgentActiveVersion['configJson'];
-                const nodes = config.workflow?.nodes || [];
-                const initialNode = config.workflow?.initial_node;
-                const typeCounts: Record<string, number> = {};
-                for (const node of nodes) {
-                  const type = node.type || 'standard';
-                  typeCounts[type] = (typeCounts[type] || 0) + 1;
-                }
-                return (
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-                      {initialNode && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground">Entry point:</span>
-                          <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">{initialNode}</code>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">Total nodes:</span>
-                        <span className="font-medium">{nodes.length}</span>
-                      </div>
-                    </div>
-                    {Object.keys(typeCounts).length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {Object.entries(typeCounts).map(([type, count]) => (
-                          <Badge key={type} variant="outline" className="text-xs">
-                            {NODE_TYPE_LABELS[type] || type}: {count}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleTabChange('workflow')}
-                      className="mt-1"
-                    >
-                      <Edit className="mr-2 h-4 w-4" />
-                      Edit Workflow
-                    </Button>
-                  </div>
-                );
-              })() : (
-                <p className="text-sm text-muted-foreground">
-                  No workflow configuration available
-                </p>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Global Settings Overview */}
-          {agent.activeVersion && (() => {
-            const config = agent.activeVersion.configJson as AgentActiveVersion['configJson'];
-            const activeVer = agent.activeVersion as AgentActiveVersion;
-            const llmEnabled = config.workflow?.llm?.enabled !== false;
-            const ttsEnabled = config.workflow?.tts?.enabled !== false;
-            const ragEnabled = activeVer.ragEnabled;
-            const autoHangupEnabled = !!config.auto_hangup?.enabled;
-            return (
+          <div className="grid gap-4 lg:grid-cols-2">
+            {/* Left Column */}
+            <div className="space-y-4">
+              {/* Active Configuration */}
               <Card>
                 <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle>Global Settings</CardTitle>
-                    <Button
-                      variant="link"
-                      size="sm"
-                      className="text-xs"
-                      onClick={() => handleTabChange('settings')}
-                    >
-                      Open full settings
-                    </Button>
-                  </div>
+                  <CardTitle className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                      <FileCode className="h-5 w-5 text-primary" />
+                    </div>
+                    Active Configuration
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <SettingsOverviewItem
-                      icon={BrainCircuit}
-                      title="LLM"
-                      enabled={llmEnabled}
-                      detail={config.workflow?.llm?.model_name || 'Default model'}
-                      onConfigure={() => handleTabChange('settings')}
-                    />
-                    <SettingsOverviewItem
-                      icon={Volume2}
-                      title="Voice / TTS"
-                      enabled={ttsEnabled}
-                      detail={voiceConfig?.name || 'Not configured'}
-                      onConfigure={() => handleTabChange('settings')}
-                    />
-                    <SettingsOverviewItem
-                      icon={Database}
-                      title="RAG"
-                      enabled={ragEnabled}
-                      detail={ragEnabled ? 'Configuration linked' : 'Not configured'}
-                      onConfigure={() => handleTabChange('settings')}
-                    />
-                    <SettingsOverviewItem
-                      icon={PhoneOff}
-                      title="Auto Hangup"
-                      enabled={autoHangupEnabled}
-                      detail={autoHangupEnabled ? 'Calls auto-terminate' : 'Manual only'}
-                      onConfigure={() => handleTabChange('settings')}
-                    />
-                  </div>
+                  {agent.activeVersion ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3">
+                        <Badge variant="default">v{agent.activeVersion.version}</Badge>
+                        <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                        <span className="text-sm text-muted-foreground">Active</span>
+                      </div>
+                      <div className="grid gap-2 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Created by</span>
+                          <span className="font-medium">{agent.activeVersion.createdBy || 'Unknown'}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Created</span>
+                          <span className="font-medium">{formatDateTime(agent.activeVersion.createdAt)}</span>
+                        </div>
+                        {agent.activeVersion.notes && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Notes</span>
+                            <span className="font-medium truncate max-w-[200px]">{agent.activeVersion.notes}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      No active version configured
+                    </p>
+                  )}
                 </CardContent>
               </Card>
-            );
-          })()}
+
+              {/* Workflow Summary */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                      <Network className="h-5 w-5 text-primary" />
+                    </div>
+                    Workflow Summary
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {agent.activeVersion ? (() => {
+                    const config = agent.activeVersion.configJson as AgentActiveVersion['configJson'];
+                    const nodes = config.workflow?.nodes || [];
+                    const initialNode = config.workflow?.initial_node;
+                    const typeCounts: Record<string, number> = {};
+                    for (const node of nodes) {
+                      const type = node.type || 'standard';
+                      typeCounts[type] = (typeCounts[type] || 0) + 1;
+                    }
+                    return (
+                      <div className="space-y-3">
+                        <div className="grid gap-2 text-sm">
+                          {initialNode && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-muted-foreground">Entry point</span>
+                              <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">{initialNode}</code>
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Total nodes</span>
+                            <span className="font-medium">{nodes.length}</span>
+                          </div>
+                        </div>
+                        {Object.keys(typeCounts).length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {Object.entries(typeCounts).map(([type, count]) => (
+                              <Badge key={type} variant="outline" className="text-xs">
+                                {NODE_TYPE_LABELS[type] || type}: {count}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleTabChange('workflow')}
+                          className="mt-1"
+                        >
+                          <Edit className="mr-2 h-4 w-4" />
+                          Edit Workflow
+                        </Button>
+                      </div>
+                    );
+                  })() : (
+                    <p className="text-sm text-muted-foreground">
+                      No workflow configuration available
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Right Column */}
+            <div className="space-y-4">
+              {/* Phone Numbers Section */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                      <Phone className="h-5 w-5 text-primary" />
+                    </div>
+                    Mapped Phone Numbers
+                  </CardTitle>
+                  <CardDescription>
+                    Incoming calls to these numbers will be routed to this agent
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {phoneConfigs && phoneConfigs.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {phoneConfigs.map((phone) => (
+                        <Link
+                          key={phone.id}
+                          href={`/settings/phone/${phone.id}`}
+                          className="inline-flex"
+                        >
+                          <Badge
+                            variant="secondary"
+                            className="text-sm py-1.5 px-3 hover:bg-secondary/80 cursor-pointer"
+                          >
+                            <Phone className="h-3.5 w-3.5 mr-2" />
+                            {formatPhoneNumber(phone.phoneNumber)}
+                            {phone.name && (
+                              <span className="ml-2 text-muted-foreground">
+                                ({phone.name})
+                              </span>
+                            )}
+                          </Badge>
+                        </Link>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No phone numbers mapped</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Global Settings Overview */}
+              {agent.activeVersion && (() => {
+                const config = agent.activeVersion.configJson as AgentActiveVersion['configJson'];
+                const activeVer = agent.activeVersion as AgentActiveVersion;
+                const llmEnabled = config.workflow?.llm?.enabled !== false;
+                const ttsEnabled = config.workflow?.tts?.enabled !== false;
+                const ragEnabled = activeVer.ragEnabled;
+                const autoHangupEnabled = !!config.auto_hangup?.enabled;
+                return (
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <CardTitle>Global Settings</CardTitle>
+                        <Button
+                          variant="link"
+                          size="sm"
+                          className="text-xs"
+                          onClick={() => handleTabChange('settings')}
+                        >
+                          Open full settings
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <SettingsOverviewItem
+                          icon={BrainCircuit}
+                          title="LLM"
+                          enabled={llmEnabled}
+                          detail={config.workflow?.llm?.model_name || 'Default model'}
+                          onConfigure={() => handleTabChange('settings')}
+                        />
+                        <SettingsOverviewItem
+                          icon={Volume2}
+                          title="Voice / TTS"
+                          enabled={ttsEnabled}
+                          detail={voiceConfig?.name || 'Not configured'}
+                          onConfigure={() => handleTabChange('settings')}
+                        />
+                        <SettingsOverviewItem
+                          icon={Database}
+                          title="RAG"
+                          enabled={ragEnabled}
+                          detail={ragEnabled ? 'Configuration linked' : 'Not configured'}
+                          onConfigure={() => handleTabChange('settings')}
+                        />
+                        <SettingsOverviewItem
+                          icon={PhoneOff}
+                          title="Auto Hangup"
+                          enabled={autoHangupEnabled}
+                          detail={autoHangupEnabled ? 'Calls auto-terminate' : 'Manual only'}
+                          onConfigure={() => handleTabChange('settings')}
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
+            </div>
+          </div>
         </TabsContent>
 
         {/* Workflow Editor Tab */}

@@ -1,6 +1,6 @@
 "use client";
 
-import { LineChart, Line, BarChart, Bar } from "recharts";
+import { AreaChart, Area, BarChart, Bar } from "recharts";
 import {
   ChartContainer,
   ChartGrid,
@@ -42,7 +42,7 @@ export function CallVolumeChart({ days = 7, height = 280 }: CallVolumeChartProps
     calls: Number(item.count),
   }));
 
-  // Use bar chart for sparse data (< 3 data points), line chart otherwise
+  // Use bar chart for sparse data (< 3 data points), area chart otherwise
   const useSparseVisualization = chartData.length < 3;
 
   return (
@@ -66,12 +66,16 @@ export function CallVolumeChart({ days = 7, height = 280 }: CallVolumeChartProps
           />
         </BarChart>
       ) : (
-        <LineChart data={chartData}>
+        <AreaChart data={chartData}>
+          <defs>
+            <linearGradient id="callVolumeGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={chartColors.primary} stopOpacity={0.3} />
+              <stop offset="95%" stopColor={chartColors.primary} stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
           <ChartGrid />
           <ChartXAxis
             dataKey="date"
-            angle={-45}
-            height={60}
           />
           <ChartYAxis
             tickFormatter={(value) => Math.round(value).toString()}
@@ -79,15 +83,16 @@ export function CallVolumeChart({ days = 7, height = 280 }: CallVolumeChartProps
           <ChartTooltip
             formatter={(value: number) => [`${value} call${value === 1 ? '' : 's'}`, "Total"]}
           />
-          <Line
+          <Area
             type="monotone"
             dataKey="calls"
             stroke={chartColors.primary}
             strokeWidth={2}
-            dot={{ fill: chartColors.primary, r: 4 }}
-            activeDot={{ r: 6 }}
+            fill="url(#callVolumeGradient)"
+            dot={{ fill: chartColors.primary, r: 3, strokeWidth: 0 }}
+            activeDot={{ r: 5, strokeWidth: 2, stroke: "hsl(var(--background))" }}
           />
-        </LineChart>
+        </AreaChart>
       )}
     </ChartContainer>
   );

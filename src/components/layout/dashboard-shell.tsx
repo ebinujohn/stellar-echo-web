@@ -3,6 +3,7 @@
 import { SidebarProvider } from './sidebar-context';
 import { Sidebar } from './sidebar';
 import { Navbar } from './navbar';
+import { CommandPalette } from '@/components/ui/command-palette';
 import type { AuthUser } from '@/types';
 
 interface DashboardShellProps {
@@ -28,6 +29,9 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
           </main>
         </div>
       </div>
+
+      {/* Global Command Palette (Cmd+K) */}
+      <CommandPalette />
     </SidebarProvider>
   );
 }

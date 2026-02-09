@@ -105,12 +105,12 @@ export function getStatusColor(status: string): string {
   return statusColors[status.toLowerCase()] || 'gray';
 }
 
-export function getStatusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
-  const statusMap: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-    started: 'default',
-    ongoing: 'secondary',
-    ended: 'default',
-    completed: 'default',
+export function getStatusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'info' {
+  const statusMap: Record<string, 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'info'> = {
+    started: 'info',
+    ongoing: 'warning',
+    ended: 'success',
+    completed: 'success',
     failed: 'destructive',
     error: 'destructive',
   };
