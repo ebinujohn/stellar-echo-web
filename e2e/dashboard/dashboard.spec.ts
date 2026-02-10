@@ -7,17 +7,19 @@ test.describe('Dashboard Page', () => {
   });
 
   test('should display dashboard with KPI cards', async ({ page }) => {
-    // Wait for loading to complete
     await waitForSkeletonsToDisappear(page);
 
-    // Check page title - use first() to avoid strict mode violation
+    // Check page title
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
 
-    // Check for KPI stat cards (should have at least 4)
-    const statCards = page.locator('[class*="card"]').filter({
-      has: page.locator('[class*="text-2xl"], [class*="text-3xl"]'),
-    });
-    await expect(statCards.first()).toBeVisible();
+    // Check description text
+    await expect(page.getByText('Overview of your call analytics and agent performance')).toBeVisible();
+
+    // Check for 4 specific KPI cards
+    const kpiTitles = ['Total Calls', 'Avg Duration', 'Avg Response Time', 'Success Rate'];
+    for (const title of kpiTitles) {
+      await expect(page.getByText(title, { exact: true }).first()).toBeVisible();
+    }
   });
 
   test('should display navigation sidebar', async ({ page }) => {
@@ -30,9 +32,10 @@ test.describe('Dashboard Page', () => {
   });
 
   test('should highlight active navigation item', async ({ page }) => {
-    // Dashboard link should be highlighted/active
+    // Dashboard link should have active styling (bg-primary/10 with border-l-2)
     const dashboardLink = page.locator('nav a:has-text("Dashboard")');
-    await expect(dashboardLink).toHaveClass(/bg-primary|active/);
+    await expect(dashboardLink).toHaveClass(/bg-primary/);
+    await expect(dashboardLink).toHaveClass(/border-primary/);
   });
 
   test('should navigate to other pages from sidebar', async ({ page }) => {
@@ -50,8 +53,8 @@ test.describe('Dashboard Page', () => {
   });
 
   test('should display user greeting in navbar', async ({ page }) => {
-    // Check for welcome message
-    await expect(page.locator('header').filter({ hasText: /welcome/i })).toBeVisible();
+    // Check for welcome message in header
+    await expect(page.locator('header').filter({ hasText: /welcome back/i })).toBeVisible();
   });
 
   test('should have theme toggle in navbar', async ({ page }) => {
@@ -60,17 +63,27 @@ test.describe('Dashboard Page', () => {
     await expect(themeToggle).toBeVisible();
   });
 
+  test('should display chart sections', async ({ page }) => {
+    await waitForSkeletonsToDisappear(page);
+
+    // Check for Call Volume chart card
+    await expect(page.getByText('Call Volume')).toBeVisible();
+    await expect(page.getByText('Calls over the last 7 days')).toBeVisible();
+
+    // Check for Sentiment Distribution chart card
+    await expect(page.getByText('Sentiment Distribution')).toBeVisible();
+  });
+
   test('should display recent calls section', async ({ page }) => {
     await waitForSkeletonsToDisappear(page);
 
-    // Look for recent calls table or list - use separate locators instead of comma-separated
-    const recentCallsHeading = page.getByText(/recent calls/i);
-    const tableElement = page.locator('[class*="table"]').first();
+    // Recent Calls is now a card with a specific title
+    await expect(page.getByText('Recent Calls')).toBeVisible();
+    await expect(page.getByText('Latest call activity')).toBeVisible();
+  });
 
-    // Either the heading or table should be visible
-    const headingVisible = await recentCallsHeading.isVisible({ timeout: 3000 }).catch(() => false);
-    const tableVisible = await tableElement.isVisible({ timeout: 3000 }).catch(() => false);
-
-    expect(headingVisible || tableVisible).toBe(true);
+  test('should display Stellar Echo branding in sidebar', async ({ page }) => {
+    // Check sidebar branding
+    await expect(page.getByText('Stellar Echo').first()).toBeVisible();
   });
 });

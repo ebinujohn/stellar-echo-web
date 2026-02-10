@@ -27,17 +27,22 @@ async function navigateToWebhooksSection(page: import('@playwright/test').Page):
   await page.waitForLoadState('networkidle');
   await waitForSkeletonsToDisappear(page);
 
-  // Scroll to Webhooks section
+  // Click on Webhooks section header to expand it (sections are collapsed by default)
   const webhooksHeading = page.getByRole('heading', { name: 'Webhooks' });
   await webhooksHeading.scrollIntoViewIfNeeded();
   await expect(webhooksHeading).toBeVisible();
+  await webhooksHeading.click();
+
+  // Wait for section to expand
+  await page.waitForTimeout(300);
 }
 
 /**
- * Get the Webhooks card element
+ * Get the expanded Webhooks section content area
  */
 function getWebhooksCard(page: import('@playwright/test').Page) {
-  return page.locator('[class*="card"]').filter({ has: page.getByRole('heading', { name: 'Webhooks' }) });
+  // The webhooks Card has id="section-webhooks" in settings-form
+  return page.locator('#section-webhooks');
 }
 
 /**
@@ -45,10 +50,11 @@ function getWebhooksCard(page: import('@playwright/test').Page) {
  */
 async function enableWebhooks(page: import('@playwright/test').Page): Promise<void> {
   const webhooksCard = getWebhooksCard(page);
-  const enableSwitch = webhooksCard.locator('button[role="switch"]').first();
-  const state = await enableSwitch.getAttribute('data-state');
+  // Find the switch within the webhooks section
+  const webhooksSwitch = webhooksCard.locator('button[role="switch"]').first();
+  const state = await webhooksSwitch.getAttribute('data-state');
   if (state !== 'checked') {
-    await enableSwitch.click();
+    await webhooksSwitch.click();
   }
 }
 

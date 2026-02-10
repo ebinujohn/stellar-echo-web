@@ -185,7 +185,7 @@ test.describe('Workflow Editor - API Call Node', () => {
     });
 
     test('should show Api Call node type indicator', async ({ page }) => {
-      const nodeType = page.locator('text=/api.*call.*node/i');
+      const nodeType = page.locator('text=/api.*call.*node/i').first();
       await expect(nodeType).toBeVisible({ timeout: 5000 });
     });
 
@@ -341,24 +341,24 @@ test.describe('Workflow Editor - API Call Node', () => {
 
     test('should allow adding transitions', async ({ page }) => {
       // Scroll down to Transitions section
-      const transitionsSection = page.locator('text=/^Transitions/').first();
-      await transitionsSection.scrollIntoViewIfNeeded();
+      const transitionsLabel = page.getByText(/^Transitions \(\d+\)/).first();
+      await transitionsLabel.scrollIntoViewIfNeeded();
 
-      // Find Add button for transitions (last one in the form)
-      const addTransitionButton = page.locator('button:has-text("Add")').last();
+      // Find Add button next to the Transitions label (they share the same parent div)
+      const addTransitionButton = transitionsLabel.locator('..').locator('button:has-text("Add")');
       await addTransitionButton.click();
 
       // Transition form should appear with target selector
-      const targetSelector = page.locator('button[role="combobox"]:has-text("Select target")');
+      const targetSelector = page.locator('button[role="combobox"]:has-text("Select target node")');
       await expect(targetSelector).toBeVisible({ timeout: 3000 });
     });
 
     test('should show API-specific transition conditions', async ({ page }) => {
       // Scroll to Transitions section and add a transition
-      const transitionsSection = page.locator('text=/^Transitions/').first();
-      await transitionsSection.scrollIntoViewIfNeeded();
+      const transitionsLabel = page.getByText(/^Transitions \(\d+\)/).first();
+      await transitionsLabel.scrollIntoViewIfNeeded();
 
-      const addTransitionButton = page.locator('button:has-text("Add")').last();
+      const addTransitionButton = transitionsLabel.locator('..').locator('button:has-text("Add")');
       await addTransitionButton.click();
       await page.waitForTimeout(300);
 

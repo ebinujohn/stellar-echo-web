@@ -6,8 +6,8 @@ test.describe('Create Agent Workflow', () => {
   });
 
   test('should open create agent dialog', async ({ page }) => {
-    // Click create button
-    await page.click('button:has-text("New Agent"), button:has-text("Create")');
+    // Click "New Agent" button
+    await page.getByRole('button', { name: /new agent/i }).click();
 
     // Dialog should be visible
     await expect(page.locator('[role="dialog"]')).toBeVisible();
@@ -15,20 +15,20 @@ test.describe('Create Agent Workflow', () => {
 
   test('should show validation errors for empty form', async ({ page }) => {
     // Open dialog
-    await page.click('button:has-text("New Agent"), button:has-text("Create")');
+    await page.getByRole('button', { name: /new agent/i }).click();
     await expect(page.locator('[role="dialog"]')).toBeVisible();
 
     // Try to submit without filling required fields
     await page.click('[role="dialog"] button:has-text("Create")');
 
-    // Should show validation error - look for specific error text
+    // Should show validation error
     const errorText = page.getByText(/required/i);
     await expect(errorText.first()).toBeVisible();
   });
 
   test('should create agent with name and description', async ({ page }) => {
     // Open dialog
-    await page.click('button:has-text("New Agent"), button:has-text("Create")');
+    await page.getByRole('button', { name: /new agent/i }).click();
     await expect(page.locator('[role="dialog"]')).toBeVisible();
 
     // Fill form using id selectors
@@ -50,7 +50,7 @@ test.describe('Create Agent Workflow', () => {
 
   test('should close dialog on cancel', async ({ page }) => {
     // Open dialog
-    await page.click('button:has-text("New Agent"), button:has-text("Create")');
+    await page.getByRole('button', { name: /new agent/i }).click();
     await expect(page.locator('[role="dialog"]')).toBeVisible();
 
     // Click cancel or close
@@ -58,7 +58,6 @@ test.describe('Create Agent Workflow', () => {
     if (await closeButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await closeButton.click();
     } else {
-      // Try escape key
       await page.keyboard.press('Escape');
     }
 
@@ -68,7 +67,7 @@ test.describe('Create Agent Workflow', () => {
 
   test('should close dialog on escape key', async ({ page }) => {
     // Open dialog
-    await page.click('button:has-text("New Agent"), button:has-text("Create")');
+    await page.getByRole('button', { name: /new agent/i }).click();
     await expect(page.locator('[role="dialog"]')).toBeVisible();
 
     // Press escape
