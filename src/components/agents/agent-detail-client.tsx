@@ -759,11 +759,12 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
                 navigator.clipboard.writeText(agent.id);
                 toast.success("Agent ID copied to clipboard");
               }}
-              className="mt-0.5 inline-flex items-center gap-1.5 font-mono text-xs text-muted-foreground hover:text-foreground transition-colors group"
+              className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-transparent px-2 py-1 font-mono text-xs text-muted-foreground hover:border-border hover:bg-muted/50 hover:text-foreground transition-all"
               title="Click to copy Agent ID"
             >
+              <span className="text-muted-foreground/70 font-sans">ID:</span>
               {agent.id}
-              <Copy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <Copy className="h-3 w-3 shrink-0" />
             </button>
           </div>
         </div>
@@ -982,6 +983,54 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
                 </CardContent>
               </Card>
 
+              {/* Phone Numbers Section */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                      <Phone className="h-5 w-5 text-primary" />
+                    </div>
+                    Mapped Phone Numbers
+                  </CardTitle>
+                  <CardDescription>
+                    Incoming calls to these numbers will be routed to this agent
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {phoneConfigs && phoneConfigs.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {phoneConfigs.map((phone) => (
+                        <Link
+                          key={phone.id}
+                          href={`/settings/phone/${phone.id}`}
+                          className="inline-flex"
+                        >
+                          <Badge
+                            variant="secondary"
+                            className="text-sm py-1.5 px-3 hover:bg-secondary/80 cursor-pointer"
+                          >
+                            <Phone className="h-3.5 w-3.5 mr-2" />
+                            {formatPhoneNumber(phone.phoneNumber)}
+                            {phone.name && (
+                              <span className="ml-2 text-muted-foreground">
+                                ({phone.name})
+                              </span>
+                            )}
+                          </Badge>
+                        </Link>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      No phone numbers mapped
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Right Column */}
+            <div className="space-y-4">
               {/* Workflow Summary */}
               <Card>
                 <CardHeader>
@@ -1056,54 +1105,6 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
                   ) : (
                     <p className="text-sm text-muted-foreground">
                       No workflow configuration available
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Right Column */}
-            <div className="space-y-4">
-              {/* Phone Numbers Section */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                      <Phone className="h-5 w-5 text-primary" />
-                    </div>
-                    Mapped Phone Numbers
-                  </CardTitle>
-                  <CardDescription>
-                    Incoming calls to these numbers will be routed to this agent
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {phoneConfigs && phoneConfigs.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {phoneConfigs.map((phone) => (
-                        <Link
-                          key={phone.id}
-                          href={`/settings/phone/${phone.id}`}
-                          className="inline-flex"
-                        >
-                          <Badge
-                            variant="secondary"
-                            className="text-sm py-1.5 px-3 hover:bg-secondary/80 cursor-pointer"
-                          >
-                            <Phone className="h-3.5 w-3.5 mr-2" />
-                            {formatPhoneNumber(phone.phoneNumber)}
-                            {phone.name && (
-                              <span className="ml-2 text-muted-foreground">
-                                ({phone.name})
-                              </span>
-                            )}
-                          </Badge>
-                        </Link>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      No phone numbers mapped
                     </p>
                   )}
                 </CardContent>

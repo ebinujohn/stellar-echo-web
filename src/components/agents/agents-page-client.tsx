@@ -8,7 +8,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Plus, Clock, Edit, Trash2, ArrowRight, Bot, Search, Upload } from "lucide-react";
+import {
+  Plus,
+  Clock,
+  Edit,
+  Trash2,
+  ArrowRight,
+  Bot,
+  Search,
+  Upload,
+} from "lucide-react";
 import { useAgents } from "@/lib/hooks/use-agents";
 import { formatDateTime } from "@/lib/utils/formatters";
 import { CreateAgentDialog } from "./dialogs/create-agent-dialog";
@@ -37,11 +46,19 @@ export function AgentsPageClient() {
     return agents.filter(
       (agent) =>
         agent.name.toLowerCase().includes(query) ||
-        agent.description?.toLowerCase().includes(query)
+        agent.description?.toLowerCase().includes(query),
     );
   }, [agents, searchQuery]);
 
-  const handleDeleteClick = (agent: { id: string; name: string; callCount?: number; phoneMappingCount?: number }, e: React.MouseEvent) => {
+  const handleDeleteClick = (
+    agent: {
+      id: string;
+      name: string;
+      callCount?: number;
+      phoneMappingCount?: number;
+    },
+    e: React.MouseEvent,
+  ) => {
     e.stopPropagation();
     setSelectedAgent(agent);
     setDeleteDialogOpen(true);
@@ -115,21 +132,27 @@ export function AgentsPageClient() {
               title="No agents yet"
               description="Create your first voice AI agent to start handling calls. Agents can be customized with workflows, knowledge bases, and voice settings."
               action={{
-                label: 'Create First Agent',
+                label: "Create First Agent",
                 icon: Plus,
                 onClick: () => setCreateDialogOpen(true),
               }}
               tips={[
-                { text: 'Start with a simple workflow and expand from there' },
-                { text: 'Use global intents to handle common phrases across all nodes' },
-                { text: 'Test your agent with the built-in chat feature before going live' },
+                { text: "Start with a simple workflow and expand from there" },
+                {
+                  text: "Use global intents to handle common phrases across all nodes",
+                },
+                {
+                  text: "Test your agent with the built-in chat feature before going live",
+                },
               ]}
             />
           </div>
         ) : filteredAgents.length === 0 ? (
           <div className="col-span-full py-12 text-center">
             <Search className="mx-auto h-10 w-10 text-muted-foreground/50" />
-            <p className="mt-3 text-sm text-muted-foreground">No agents match &quot;{searchQuery}&quot;</p>
+            <p className="mt-3 text-sm text-muted-foreground">
+              No agents match &quot;{searchQuery}&quot;
+            </p>
           </div>
         ) : (
           filteredAgents.map((agent) => (
@@ -145,17 +168,13 @@ export function AgentsPageClient() {
                       {agent.name}
                       <ArrowRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-primary" />
                     </CardTitle>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Badge variant="success" className="text-xs">
-                        <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block animate-pulse" />
-                        Active
-                      </Badge>
-                      {agent.activeVersion && (
+                    {agent.activeVersion && (
+                      <div className="flex items-center gap-2 mt-1">
                         <Badge variant="outline" className="text-xs">
                           v{agent.activeVersion}
                         </Badge>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                   <div className="flex gap-1">
                     <Button
@@ -202,8 +221,14 @@ export function AgentsPageClient() {
       </div>
 
       {/* Dialogs */}
-      <CreateAgentDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} />
-      <ImportAgentDialog open={importDialogOpen} onOpenChange={setImportDialogOpen} />
+      <CreateAgentDialog
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+      />
+      <ImportAgentDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+      />
       <DeleteAgentDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
