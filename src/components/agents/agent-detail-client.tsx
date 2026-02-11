@@ -1,18 +1,23 @@
-'use client';
+"use client";
 
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useState, useCallback, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import {
   ArrowLeft,
   Settings,
-  Activity,
   Phone,
   PhoneOutgoing,
   Edit,
@@ -28,25 +33,38 @@ import {
   PhoneOff,
   Network,
   Download,
-} from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
-import { useAgent, useCreateVersion, useAgentVersions, useExportAgent } from '@/lib/hooks/use-agents';
-import { ApiError } from '@/lib/hooks/factories/create-api-hooks';
-import { useAgentPhoneConfigs } from '@/lib/hooks/use-phone-configs';
-import { useVoiceConfig } from '@/lib/hooks/use-voice-configs';
-import { formatDateTime, formatPhoneNumber } from '@/lib/utils/formatters';
-import { DeleteAgentDialog } from './dialogs/delete-agent-dialog';
-import { InitiateCallDialog } from './dialogs/initiate-call-dialog';
-import { UnsavedChangesDialog, UnsavedChangesAction } from './dialogs/unsaved-changes-dialog';
-import { SaveVersionDialog } from './dialogs/save-version-dialog';
-import { WorkflowEditorLayout } from './workflow-editor/workflow-editor-layout';
-import { SettingsForm } from './settings-form';
-import { VersionsTab } from './versions-tab';
-import { RagQueryTab } from './rag-query-tab';
-import { ChatTab } from './chat-tab';
-import { ChatSessionProvider } from './contexts/chat-session-context';
-import { AgentDraftProvider, useAgentDraft, useUnsavedChangesWarning } from './contexts/agent-draft-context';
-import { toast } from 'sonner';
+  Copy,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import {
+  useAgent,
+  useCreateVersion,
+  useAgentVersions,
+  useExportAgent,
+} from "@/lib/hooks/use-agents";
+import { ApiError } from "@/lib/hooks/factories/create-api-hooks";
+import { useAgentPhoneConfigs } from "@/lib/hooks/use-phone-configs";
+import { useVoiceConfig } from "@/lib/hooks/use-voice-configs";
+import { formatDateTime, formatPhoneNumber } from "@/lib/utils/formatters";
+import { DeleteAgentDialog } from "./dialogs/delete-agent-dialog";
+import { InitiateCallDialog } from "./dialogs/initiate-call-dialog";
+import {
+  UnsavedChangesDialog,
+  UnsavedChangesAction,
+} from "./dialogs/unsaved-changes-dialog";
+import { SaveVersionDialog } from "./dialogs/save-version-dialog";
+import { WorkflowEditorLayout } from "./workflow-editor/workflow-editor-layout";
+import { SettingsForm } from "./settings-form";
+import { VersionsTab } from "./versions-tab";
+import { RagQueryTab } from "./rag-query-tab";
+import { ChatTab } from "./chat-tab";
+import { ChatSessionProvider } from "./contexts/chat-session-context";
+import {
+  AgentDraftProvider,
+  useAgentDraft,
+  useUnsavedChangesWarning,
+} from "./contexts/agent-draft-context";
+import { toast } from "sonner";
 
 interface AgentDetailClientProps {
   agentId: string;
@@ -84,11 +102,11 @@ interface AgentActiveVersion {
 }
 
 const NODE_TYPE_LABELS: Record<string, string> = {
-  standard: 'Conversation',
-  retrieve_variable: 'Variable',
-  end_call: 'End Call',
-  agent_transfer: 'Transfer',
-  api_call: 'API Call',
+  standard: "Conversation",
+  retrieve_variable: "Variable",
+  end_call: "End Call",
+  agent_transfer: "Transfer",
+  api_call: "API Call",
 };
 
 function SettingsOverviewItem({
@@ -116,16 +134,23 @@ function SettingsOverviewItem({
             variant="secondary"
             className={
               enabled
-                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 text-xs'
-                : 'text-xs'
+                ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 text-xs"
+                : "text-xs"
             }
           >
-            {enabled ? 'Enabled' : 'Disabled'}
+            {enabled ? "Enabled" : "Disabled"}
           </Badge>
         </div>
-        <p className="mt-0.5 truncate text-xs text-muted-foreground">{detail}</p>
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+          {detail}
+        </p>
       </div>
-      <Button variant="ghost" size="icon" onClick={onConfigure} className="h-8 w-8 shrink-0">
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={onConfigure}
+        className="h-8 w-8 shrink-0"
+      >
         <Settings className="h-4 w-4" />
       </Button>
     </div>
@@ -139,27 +164,30 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
   const { data: phoneConfigs } = useAgentPhoneConfigs(agentId);
 
   // Get voice config ID from active version
-  const voiceConfigId = (agent?.activeVersion as AgentActiveVersion | undefined)?.voiceConfigId;
-  const { data: voiceConfig } = useVoiceConfig(voiceConfigId || '');
+  const voiceConfigId = (agent?.activeVersion as AgentActiveVersion | undefined)
+    ?.voiceConfigId;
+  const { data: voiceConfig } = useVoiceConfig(voiceConfigId || "");
 
   // Get versions for RAG Query tab
   const { data: versions } = useAgentVersions(agentId);
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [initiateCallDialogOpen, setInitiateCallDialogOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState("overview");
   const createVersion = useCreateVersion();
   const exportAgent = useExportAgent();
 
   // Unsaved changes dialog state
   const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false);
-  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(
+    null,
+  );
   const isSavingFromDialog = false; // Currently not used but kept for UnsavedChangesDialog prop
 
   // Save version dialog state
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [saveDialogContext, setSaveDialogContext] = useState<{
-    type: 'workflow' | 'settings' | 'combined';
+    type: "workflow" | "settings" | "combined";
     config?: Record<string, unknown>;
     ragEnabled?: boolean;
     ragConfigId?: string | null;
@@ -203,11 +231,15 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
   const handleExport = useCallback(async () => {
     try {
       const result = await exportAgent.mutateAsync({ agentId });
-      const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' });
+      const blob = new Blob([JSON.stringify(result, null, 2)], {
+        type: "application/json",
+      });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
-      const safeName = (result.agent_name || 'agent').replace(/[^a-z0-9-_]/gi, '-').toLowerCase();
+      const safeName = (result.agent_name || "agent")
+        .replace(/[^a-z0-9-_]/gi, "-")
+        .toLowerCase();
       a.download = `${safeName}-v${result.version}.json`;
       document.body.appendChild(a);
       a.click();
@@ -215,7 +247,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
       URL.revokeObjectURL(url);
       toast.success(`Exported ${result.agent_name} v${result.version}`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Export failed');
+      toast.error(error instanceof Error ? error.message : "Export failed");
     }
   }, [agentId, exportAgent]);
 
@@ -233,15 +265,15 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
 
       // Find the closest anchor tag
       const target = e.target as HTMLElement;
-      const anchor = target.closest('a');
+      const anchor = target.closest("a");
       if (!anchor) return;
 
       // Get the href
-      const href = anchor.getAttribute('href');
+      const href = anchor.getAttribute("href");
       if (!href) return;
 
       // Only intercept internal navigation (starts with /)
-      if (!href.startsWith('/')) return;
+      if (!href.startsWith("/")) return;
 
       // Don't intercept navigation within the current agent page
       if (href.startsWith(`/agents/${agentId}`)) return;
@@ -254,137 +286,158 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
     };
 
     // Add listener with capture to intercept before navigation
-    document.addEventListener('click', handleClick, true);
-    return () => document.removeEventListener('click', handleClick, true);
+    document.addEventListener("click", handleClick, true);
+    return () => document.removeEventListener("click", handleClick, true);
   }, [isDirty, agentId]);
 
   // Combined save that includes navigation after save
-  const handleCombinedSaveWithNavigation = useCallback((navigateTo: string | null) => {
-    if (!agent?.activeVersion) return;
+  const handleCombinedSaveWithNavigation = useCallback(
+    (navigateTo: string | null) => {
+      if (!agent?.activeVersion) return;
 
-    interface ActiveVersionType {
-      configJson: Record<string, unknown>;
-      globalPrompt: string | null;
-      ragEnabled: boolean;
-      ragConfigId: string | null;
-      voiceConfigId: string | null;
-    }
-    const activeVersion = agent.activeVersion as ActiveVersionType;
-    let configJson = activeVersion.configJson;
-    let globalPrompt = activeVersion.globalPrompt;
-    let ragEnabled = activeVersion.ragEnabled;
-    let ragConfigId = activeVersion.ragConfigId;
-    let voiceConfigId = activeVersion.voiceConfigId;
+      interface ActiveVersionType {
+        configJson: Record<string, unknown>;
+        globalPrompt: string | null;
+        ragEnabled: boolean;
+        ragConfigId: string | null;
+        voiceConfigId: string | null;
+      }
+      const activeVersion = agent.activeVersion as ActiveVersionType;
+      let configJson = activeVersion.configJson;
+      let globalPrompt = activeVersion.globalPrompt;
+      let ragEnabled = activeVersion.ragEnabled;
+      let ragConfigId = activeVersion.ragConfigId;
+      let voiceConfigId = activeVersion.voiceConfigId;
 
-    // Apply workflow draft changes if dirty
-    if (isWorkflowDirty && workflowDraft?.config) {
-      configJson = workflowDraft.config;
-    }
+      // Apply workflow draft changes if dirty
+      if (isWorkflowDirty && workflowDraft?.config) {
+        configJson = workflowDraft.config;
+      }
 
-    // Apply settings draft changes if dirty
-    if (isSettingsDirty && settingsDraft) {
-      const llmConfig = {
-        enabled: settingsDraft.llmEnabled,
-        ...(settingsDraft.llmProviderId && { provider_id: settingsDraft.llmProviderId }),
-        temperature: settingsDraft.llmTemperature,
-        max_tokens: settingsDraft.llmMaxTokens,
-        service_tier: settingsDraft.llmServiceTier,
-      };
+      // Apply settings draft changes if dirty
+      if (isSettingsDirty && settingsDraft) {
+        const llmConfig = {
+          enabled: settingsDraft.llmEnabled,
+          ...(settingsDraft.llmProviderId && {
+            provider_id: settingsDraft.llmProviderId,
+          }),
+          temperature: settingsDraft.llmTemperature,
+          max_tokens: settingsDraft.llmMaxTokens,
+          service_tier: settingsDraft.llmServiceTier,
+        };
 
-      // Build extraction LLM config from draft per AGENT_JSON_SCHEMA.md
-      // Note: temperature intentionally omitted - extraction LLM uses model built-in defaults
-      const extractionLlmConfig = settingsDraft.extractionLlm.enabled ? {
-        enabled: true,
-        ...(settingsDraft.extractionLlm.providerId && { provider_id: settingsDraft.extractionLlm.providerId }),
-        max_tokens: settingsDraft.extractionLlm.maxTokens,
-      } : { enabled: false };
+        // Build extraction LLM config from draft per AGENT_JSON_SCHEMA.md
+        // Note: temperature intentionally omitted - extraction LLM uses model built-in defaults
+        const extractionLlmConfig = settingsDraft.extractionLlm.enabled
+          ? {
+              enabled: true,
+              ...(settingsDraft.extractionLlm.providerId && {
+                provider_id: settingsDraft.extractionLlm.providerId,
+              }),
+              max_tokens: settingsDraft.extractionLlm.maxTokens,
+            }
+          : { enabled: false };
 
-      const ttsConfig = {
-        enabled: settingsDraft.ttsEnabled,
-        model: settingsDraft.tts.model,
-        stability: settingsDraft.tts.stability,
-        similarity_boost: settingsDraft.tts.similarityBoost,
-        style: settingsDraft.tts.style,
-        use_speaker_boost: settingsDraft.tts.useSpeakerBoost,
-        enable_ssml_parsing: settingsDraft.tts.enableSsmlParsing,
-        pronunciation_dictionaries_enabled: settingsDraft.tts.pronunciationDictionariesEnabled,
-        pronunciation_dictionary_ids: settingsDraft.tts.pronunciationDictionaryIds
-          .split(',')
-          .map((id: string) => id.trim())
-          .filter(Boolean),
-        aggregate_sentences: settingsDraft.tts.aggregateSentences,
-      };
+        const ttsConfig = {
+          enabled: settingsDraft.ttsEnabled,
+          model: settingsDraft.tts.model,
+          stability: settingsDraft.tts.stability,
+          similarity_boost: settingsDraft.tts.similarityBoost,
+          style: settingsDraft.tts.style,
+          use_speaker_boost: settingsDraft.tts.useSpeakerBoost,
+          enable_ssml_parsing: settingsDraft.tts.enableSsmlParsing,
+          pronunciation_dictionaries_enabled:
+            settingsDraft.tts.pronunciationDictionariesEnabled,
+          pronunciation_dictionary_ids:
+            settingsDraft.tts.pronunciationDictionaryIds
+              .split(",")
+              .map((id: string) => id.trim())
+              .filter(Boolean),
+          aggregate_sentences: settingsDraft.tts.aggregateSentences,
+        };
 
-      // Build post-call analysis config with provider_id per AGENT_JSON_SCHEMA.md
-      const postCallAnalysisConfig = settingsDraft.postCallAnalysis.enabled ? {
-        enabled: true,
-        ...(settingsDraft.postCallAnalysis.providerId && { provider_id: settingsDraft.postCallAnalysis.providerId }),
-        ...(settingsDraft.postCallAnalysis.questions.length > 0 && {
-          questions: settingsDraft.postCallAnalysis.questions.map(q => ({
-            name: q.name,
-            ...(q.description && { description: q.description }),
-            ...(q.type !== 'string' && { type: q.type }),
-            ...(q.type === 'enum' && q.choices.length > 0 && {
-              choices: q.choices.map(c => ({
-                value: c.value,
-                ...(c.label && { label: c.label }),
-              })),
-            }),
-            ...(q.required && { required: q.required }),
-          })),
-        }),
-        ...(settingsDraft.postCallAnalysis.additionalInstructions && {
-          additional_instructions: settingsDraft.postCallAnalysis.additionalInstructions,
-        }),
-      } : { enabled: false };
+        // Build post-call analysis config with provider_id per AGENT_JSON_SCHEMA.md
+        const postCallAnalysisConfig = settingsDraft.postCallAnalysis.enabled
+          ? {
+              enabled: true,
+              ...(settingsDraft.postCallAnalysis.providerId && {
+                provider_id: settingsDraft.postCallAnalysis.providerId,
+              }),
+              ...(settingsDraft.postCallAnalysis.questions.length > 0 && {
+                questions: settingsDraft.postCallAnalysis.questions.map(
+                  (q) => ({
+                    name: q.name,
+                    ...(q.description && { description: q.description }),
+                    ...(q.type !== "string" && { type: q.type }),
+                    ...(q.type === "enum" &&
+                      q.choices.length > 0 && {
+                        choices: q.choices.map((c) => ({
+                          value: c.value,
+                          ...(c.label && { label: c.label }),
+                        })),
+                      }),
+                    ...(q.required && { required: q.required }),
+                  }),
+                ),
+              }),
+              ...(settingsDraft.postCallAnalysis.additionalInstructions && {
+                additional_instructions:
+                  settingsDraft.postCallAnalysis.additionalInstructions,
+              }),
+            }
+          : { enabled: false };
 
-      const currentWorkflow = typeof configJson.workflow === 'object' && configJson.workflow !== null
-        ? configJson.workflow as Record<string, unknown>
-        : {};
-      configJson = {
-        ...configJson,
-        workflow: {
-          ...currentWorkflow,
-          llm: llmConfig,
-          extraction_llm: extractionLlmConfig, // Extraction LLM for variable extraction/intent classification
-          tts: ttsConfig,
-          post_call_analysis: postCallAnalysisConfig, // Post-call analysis with provider_id
-        },
-        tts: undefined,
-        stt: undefined,
-        llm: undefined,
-        rag: undefined,
-        auto_hangup: { enabled: settingsDraft.autoHangupEnabled },
-      };
+        const currentWorkflow =
+          typeof configJson.workflow === "object" &&
+          configJson.workflow !== null
+            ? (configJson.workflow as Record<string, unknown>)
+            : {};
+        configJson = {
+          ...configJson,
+          workflow: {
+            ...currentWorkflow,
+            llm: llmConfig,
+            extraction_llm: extractionLlmConfig, // Extraction LLM for variable extraction/intent classification
+            tts: ttsConfig,
+            post_call_analysis: postCallAnalysisConfig, // Post-call analysis with provider_id
+          },
+          tts: undefined,
+          stt: undefined,
+          llm: undefined,
+          rag: undefined,
+          auto_hangup: { enabled: settingsDraft.autoHangupEnabled },
+        };
 
-      globalPrompt = settingsDraft.globalPrompt;
-      ragEnabled = settingsDraft.ragEnabled;
-      ragConfigId = settingsDraft.ragConfigId;
-      voiceConfigId = settingsDraft.voiceConfigId;
-    }
+        globalPrompt = settingsDraft.globalPrompt;
+        ragEnabled = settingsDraft.ragEnabled;
+        ragConfigId = settingsDraft.ragConfigId;
+        voiceConfigId = settingsDraft.voiceConfigId;
+      }
 
-    setSaveDialogContext({
-      type: 'combined',
-      config: configJson,
-      ragEnabled,
-      ragConfigId,
-      voiceConfigId,
-      globalPrompt,
-      navigateAfterSave: navigateTo || undefined,
-    });
-    setSaveDialogOpen(true);
-  }, [agent, isWorkflowDirty, workflowDraft, isSettingsDirty, settingsDraft]);
+      setSaveDialogContext({
+        type: "combined",
+        config: configJson,
+        ragEnabled,
+        ragConfigId,
+        voiceConfigId,
+        globalPrompt,
+        navigateAfterSave: navigateTo || undefined,
+      });
+      setSaveDialogOpen(true);
+    },
+    [agent, isWorkflowDirty, workflowDraft, isSettingsDirty, settingsDraft],
+  );
 
   // Handle unsaved changes dialog action
   const handleUnsavedAction = useCallback(
     async (action: UnsavedChangesAction) => {
-      if (action === 'cancel') {
+      if (action === "cancel") {
         setUnsavedDialogOpen(false);
         setPendingNavigation(null);
         return;
       }
 
-      if (action === 'discard') {
+      if (action === "discard") {
         // Clear all drafts and navigate
         clearAllDrafts();
         setUnsavedDialogOpen(false);
@@ -397,7 +450,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
         return;
       }
 
-      if (action === 'save') {
+      if (action === "save") {
         // Close unsaved dialog and open save notes dialog with navigation context
         setUnsavedDialogOpen(false);
         // Trigger combined save which will open the notes dialog
@@ -406,7 +459,12 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
         setPendingNavigation(null);
       }
     },
-    [pendingNavigation, router, clearAllDrafts, handleCombinedSaveWithNavigation]
+    [
+      pendingNavigation,
+      router,
+      clearAllDrafts,
+      handleCombinedSaveWithNavigation,
+    ],
   );
 
   // Handler for settings form - opens dialog to get notes, then saves
@@ -417,11 +475,11 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
     ragEnabled?: boolean,
     ragConfigId?: string | null,
     voiceConfigId?: string | null,
-    globalPrompt?: string | null
+    globalPrompt?: string | null,
   ) => {
     // Store context and open dialog
     setSaveDialogContext({
-      type: 'settings',
+      type: "settings",
       config,
       ragEnabled,
       ragConfigId,
@@ -442,7 +500,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
       globalPrompt?: string | null;
     } | null;
     setSaveDialogContext({
-      type: 'workflow',
+      type: "workflow",
       config,
       ragEnabled: activeVersion?.ragEnabled,
       ragConfigId: activeVersion?.ragConfigId,
@@ -480,7 +538,9 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
     if (isSettingsDirty && settingsDraft) {
       const llmConfig = {
         enabled: settingsDraft.llmEnabled,
-        ...(settingsDraft.llmProviderId && { provider_id: settingsDraft.llmProviderId }),
+        ...(settingsDraft.llmProviderId && {
+          provider_id: settingsDraft.llmProviderId,
+        }),
         temperature: settingsDraft.llmTemperature,
         max_tokens: settingsDraft.llmMaxTokens,
         service_tier: settingsDraft.llmServiceTier,
@@ -488,11 +548,15 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
 
       // Build extraction LLM config from draft per AGENT_JSON_SCHEMA.md
       // Note: temperature intentionally omitted - extraction LLM uses model built-in defaults
-      const extractionLlmConfig = settingsDraft.extractionLlm.enabled ? {
-        enabled: true,
-        ...(settingsDraft.extractionLlm.providerId && { provider_id: settingsDraft.extractionLlm.providerId }),
-        max_tokens: settingsDraft.extractionLlm.maxTokens,
-      } : { enabled: false };
+      const extractionLlmConfig = settingsDraft.extractionLlm.enabled
+        ? {
+            enabled: true,
+            ...(settingsDraft.extractionLlm.providerId && {
+              provider_id: settingsDraft.extractionLlm.providerId,
+            }),
+            max_tokens: settingsDraft.extractionLlm.maxTokens,
+          }
+        : { enabled: false };
 
       // Build TTS config from draft - tuning params in workflow.tts per AGENT_JSON_SCHEMA.md
       // Note: voice_name is NOT included - voice selection is via voiceConfigId FK
@@ -504,36 +568,44 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
         style: settingsDraft.tts.style,
         use_speaker_boost: settingsDraft.tts.useSpeakerBoost,
         enable_ssml_parsing: settingsDraft.tts.enableSsmlParsing,
-        pronunciation_dictionaries_enabled: settingsDraft.tts.pronunciationDictionariesEnabled,
-        pronunciation_dictionary_ids: settingsDraft.tts.pronunciationDictionaryIds
-          .split(',')
-          .map((id: string) => id.trim())
-          .filter(Boolean),
+        pronunciation_dictionaries_enabled:
+          settingsDraft.tts.pronunciationDictionariesEnabled,
+        pronunciation_dictionary_ids:
+          settingsDraft.tts.pronunciationDictionaryIds
+            .split(",")
+            .map((id: string) => id.trim())
+            .filter(Boolean),
         aggregate_sentences: settingsDraft.tts.aggregateSentences,
       };
 
       // Build post-call analysis config with provider_id per AGENT_JSON_SCHEMA.md
-      const postCallAnalysisConfig = settingsDraft.postCallAnalysis.enabled ? {
-        enabled: true,
-        ...(settingsDraft.postCallAnalysis.providerId && { provider_id: settingsDraft.postCallAnalysis.providerId }),
-        ...(settingsDraft.postCallAnalysis.questions.length > 0 && {
-          questions: settingsDraft.postCallAnalysis.questions.map(q => ({
-            name: q.name,
-            ...(q.description && { description: q.description }),
-            ...(q.type !== 'string' && { type: q.type }),
-            ...(q.type === 'enum' && q.choices.length > 0 && {
-              choices: q.choices.map(c => ({
-                value: c.value,
-                ...(c.label && { label: c.label }),
+      const postCallAnalysisConfig = settingsDraft.postCallAnalysis.enabled
+        ? {
+            enabled: true,
+            ...(settingsDraft.postCallAnalysis.providerId && {
+              provider_id: settingsDraft.postCallAnalysis.providerId,
+            }),
+            ...(settingsDraft.postCallAnalysis.questions.length > 0 && {
+              questions: settingsDraft.postCallAnalysis.questions.map((q) => ({
+                name: q.name,
+                ...(q.description && { description: q.description }),
+                ...(q.type !== "string" && { type: q.type }),
+                ...(q.type === "enum" &&
+                  q.choices.length > 0 && {
+                    choices: q.choices.map((c) => ({
+                      value: c.value,
+                      ...(c.label && { label: c.label }),
+                    })),
+                  }),
+                ...(q.required && { required: q.required }),
               })),
             }),
-            ...(q.required && { required: q.required }),
-          })),
-        }),
-        ...(settingsDraft.postCallAnalysis.additionalInstructions && {
-          additional_instructions: settingsDraft.postCallAnalysis.additionalInstructions,
-        }),
-      } : { enabled: false };
+            ...(settingsDraft.postCallAnalysis.additionalInstructions && {
+              additional_instructions:
+                settingsDraft.postCallAnalysis.additionalInstructions,
+            }),
+          }
+        : { enabled: false };
 
       const existingWorkflow = configJson.workflow || {};
       configJson = {
@@ -562,7 +634,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
 
     // Store context and open dialog
     setSaveDialogContext({
-      type: 'combined',
+      type: "combined",
       config: configJson,
       ragEnabled,
       ragConfigId,
@@ -591,15 +663,15 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
       });
 
       // Clear appropriate drafts based on save type
-      if (saveDialogContext.type === 'workflow') {
+      if (saveDialogContext.type === "workflow") {
         clearWorkflowDraft();
-        toast.success('Workflow saved and activated');
-      } else if (saveDialogContext.type === 'settings') {
+        toast.success("Workflow saved and activated");
+      } else if (saveDialogContext.type === "settings") {
         clearSettingsDraft();
-        toast.success('Settings saved and activated');
+        toast.success("Settings saved and activated");
       } else {
         clearAllDrafts();
-        toast.success('Changes saved and activated');
+        toast.success("Changes saved and activated");
       }
 
       setSaveDialogOpen(false);
@@ -614,7 +686,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
       const message =
         error instanceof ApiError
           ? error.getFullMessage()
-          : 'Failed to save changes';
+          : "Failed to save changes";
       toast.error(message);
       throw error;
     }
@@ -647,7 +719,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
         <Card>
           <CardContent className="pt-6">
             <p className="text-center text-destructive">
-              {error?.message || 'Agent not found'}
+              {error?.message || "Agent not found"}
             </p>
           </CardContent>
         </Card>
@@ -667,13 +739,14 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
           </Link>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold tracking-tight">{agent.name}</h1>
-              <Badge variant="outline">
-                <Activity className="mr-1 h-3 w-3" />
-                Active
-              </Badge>
+              <h1 className="text-3xl font-bold tracking-tight">
+                {agent.name}
+              </h1>
               {isDirty && (
-                <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                <Badge
+                  variant="secondary"
+                  className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
+                >
                   Unsaved Changes
                 </Badge>
               )}
@@ -681,7 +754,17 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
             {agent.description && (
               <p className="text-muted-foreground mt-1">{agent.description}</p>
             )}
-            <p className="mt-0.5 font-mono text-xs text-muted-foreground">{agent.id}</p>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(agent.id);
+                toast.success("Agent ID copied to clipboard");
+              }}
+              className="mt-0.5 inline-flex items-center gap-1.5 font-mono text-xs text-muted-foreground hover:text-foreground transition-colors group"
+              title="Click to copy Agent ID"
+            >
+              {agent.id}
+              <Copy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+            </button>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -693,7 +776,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
               disabled={createVersion.isPending}
             >
               <Save className="mr-2 h-4 w-4" />
-              {createVersion.isPending ? 'Saving...' : 'Save All Changes'}
+              {createVersion.isPending ? "Saving..." : "Save All Changes"}
             </Button>
           )}
           <Button
@@ -701,7 +784,11 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
             size="sm"
             onClick={() => setInitiateCallDialogOpen(true)}
             disabled={!agent.activeVersion}
-            title={!agent.activeVersion ? 'Activate a version first to make calls' : 'Start an outbound call'}
+            title={
+              !agent.activeVersion
+                ? "Activate a version first to make calls"
+                : "Start an outbound call"
+            }
           >
             <PhoneOutgoing className="mr-2 h-4 w-4" />
             Initiate Call
@@ -711,10 +798,14 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
             size="sm"
             onClick={handleExport}
             disabled={!agent.activeVersion || exportAgent.isPending}
-            title={!agent.activeVersion ? 'Activate a version first to export' : 'Export agent config as JSON'}
+            title={
+              !agent.activeVersion
+                ? "Activate a version first to export"
+                : "Export agent config as JSON"
+            }
           >
             <Download className="mr-2 h-4 w-4" />
-            {exportAgent.isPending ? 'Exporting...' : 'Export'}
+            {exportAgent.isPending ? "Exporting..." : "Export"}
           </Button>
           <Button
             variant="destructive"
@@ -731,15 +822,18 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Version</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Active Version
+            </CardTitle>
             <FileCode className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {agent.activeVersion ? `v${agent.activeVersion.version}` : 'None'}
+              {agent.activeVersion ? `v${agent.activeVersion.version}` : "None"}
             </div>
             <p className="text-xs text-muted-foreground">
-              {agent.versionCount} total version{agent.versionCount !== 1 ? 's' : ''}
+              {agent.versionCount} total version
+              {agent.versionCount !== 1 ? "s" : ""}
             </p>
           </CardContent>
         </Card>
@@ -752,7 +846,10 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
           <CardContent>
             <div className="text-2xl font-bold">{agent.callCount}</div>
             <p className="text-xs text-muted-foreground">
-              <Link href={`/calls?agent=${agent.id}`} className="hover:underline">
+              <Link
+                href={`/calls?agent=${agent.id}`}
+                className="hover:underline"
+              >
                 View call history
               </Link>
             </p>
@@ -761,13 +858,17 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Phone Mappings</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Phone Mappings
+            </CardTitle>
             <Phone className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{agent.phoneMappingCount}</div>
             <p className="text-xs text-muted-foreground">
-              {agent.phoneMappingCount > 0 ? 'Active numbers' : 'No numbers mapped'}
+              {agent.phoneMappingCount > 0
+                ? "Active numbers"
+                : "No numbers mapped"}
             </p>
           </CardContent>
         </Card>
@@ -778,7 +879,9 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-sm font-bold">{formatDateTime(agent.updatedAt)}</div>
+            <div className="text-sm font-bold">
+              {formatDateTime(agent.updatedAt)}
+            </div>
             <p className="text-xs text-muted-foreground">
               Created {formatDateTime(agent.createdAt)}
             </p>
@@ -787,7 +890,11 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
       </div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
+      <Tabs
+        value={activeTab}
+        onValueChange={handleTabChange}
+        className="space-y-4"
+      >
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="workflow" className="relative">
@@ -817,7 +924,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-4">
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-2 items-start">
             {/* Left Column */}
             <div className="space-y-4">
               {/* Active Configuration */}
@@ -834,23 +941,35 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
                   {agent.activeVersion ? (
                     <div className="space-y-3">
                       <div className="flex items-center gap-3">
-                        <Badge variant="default">v{agent.activeVersion.version}</Badge>
+                        <Badge variant="default">
+                          v{agent.activeVersion.version}
+                        </Badge>
                         <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                        <span className="text-sm text-muted-foreground">Active</span>
+                        <span className="text-sm text-muted-foreground">
+                          Active
+                        </span>
                       </div>
                       <div className="grid gap-2 text-sm">
                         <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Created by</span>
-                          <span className="font-medium">{agent.activeVersion.createdBy || 'Unknown'}</span>
+                          <span className="text-muted-foreground">
+                            Created by
+                          </span>
+                          <span className="font-medium">
+                            {agent.activeVersion.createdBy || "Unknown"}
+                          </span>
                         </div>
                         <div className="flex items-center justify-between">
                           <span className="text-muted-foreground">Created</span>
-                          <span className="font-medium">{formatDateTime(agent.activeVersion.createdAt)}</span>
+                          <span className="font-medium">
+                            {formatDateTime(agent.activeVersion.createdAt)}
+                          </span>
                         </div>
                         {agent.activeVersion.notes && (
                           <div className="flex items-center justify-between">
                             <span className="text-muted-foreground">Notes</span>
-                            <span className="font-medium truncate max-w-[200px]">{agent.activeVersion.notes}</span>
+                            <span className="font-medium truncate max-w-[200px]">
+                              {agent.activeVersion.notes}
+                            </span>
                           </div>
                         )}
                       </div>
@@ -874,50 +993,67 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {agent.activeVersion ? (() => {
-                    const config = agent.activeVersion.configJson as AgentActiveVersion['configJson'];
-                    const nodes = config.workflow?.nodes || [];
-                    const initialNode = config.workflow?.initial_node;
-                    const typeCounts: Record<string, number> = {};
-                    for (const node of nodes) {
-                      const type = node.type || 'standard';
-                      typeCounts[type] = (typeCounts[type] || 0) + 1;
-                    }
-                    return (
-                      <div className="space-y-3">
-                        <div className="grid gap-2 text-sm">
-                          {initialNode && (
+                  {agent.activeVersion ? (
+                    (() => {
+                      const config = agent.activeVersion
+                        .configJson as AgentActiveVersion["configJson"];
+                      const nodes = config.workflow?.nodes || [];
+                      const initialNode = config.workflow?.initial_node;
+                      const typeCounts: Record<string, number> = {};
+                      for (const node of nodes) {
+                        const type = node.type || "standard";
+                        typeCounts[type] = (typeCounts[type] || 0) + 1;
+                      }
+                      return (
+                        <div className="space-y-3">
+                          <div className="grid gap-2 text-sm">
+                            {initialNode && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-muted-foreground">
+                                  Entry point
+                                </span>
+                                <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">
+                                  {initialNode}
+                                </code>
+                              </div>
+                            )}
                             <div className="flex items-center justify-between">
-                              <span className="text-muted-foreground">Entry point</span>
-                              <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">{initialNode}</code>
+                              <span className="text-muted-foreground">
+                                Total nodes
+                              </span>
+                              <span className="font-medium">
+                                {nodes.length}
+                              </span>
+                            </div>
+                          </div>
+                          {Object.keys(typeCounts).length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {Object.entries(typeCounts).map(
+                                ([type, count]) => (
+                                  <Badge
+                                    key={type}
+                                    variant="outline"
+                                    className="text-xs"
+                                  >
+                                    {NODE_TYPE_LABELS[type] || type}: {count}
+                                  </Badge>
+                                ),
+                              )}
                             </div>
                           )}
-                          <div className="flex items-center justify-between">
-                            <span className="text-muted-foreground">Total nodes</span>
-                            <span className="font-medium">{nodes.length}</span>
-                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleTabChange("workflow")}
+                            className="mt-1"
+                          >
+                            <Edit className="mr-2 h-4 w-4" />
+                            Edit Workflow
+                          </Button>
                         </div>
-                        {Object.keys(typeCounts).length > 0 && (
-                          <div className="flex flex-wrap gap-2">
-                            {Object.entries(typeCounts).map(([type, count]) => (
-                              <Badge key={type} variant="outline" className="text-xs">
-                                {NODE_TYPE_LABELS[type] || type}: {count}
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleTabChange('workflow')}
-                          className="mt-1"
-                        >
-                          <Edit className="mr-2 h-4 w-4" />
-                          Edit Workflow
-                        </Button>
-                      </div>
-                    );
-                  })() : (
+                      );
+                    })()
+                  ) : (
                     <p className="text-sm text-muted-foreground">
                       No workflow configuration available
                     </p>
@@ -931,7 +1067,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
               {/* Phone Numbers Section */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-3">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
                       <Phone className="h-5 w-5 text-primary" />
                     </div>
@@ -966,69 +1102,89 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground">No phone numbers mapped</p>
+                    <p className="text-sm text-muted-foreground">
+                      No phone numbers mapped
+                    </p>
                   )}
                 </CardContent>
               </Card>
 
               {/* Global Settings Overview */}
-              {agent.activeVersion && (() => {
-                const config = agent.activeVersion.configJson as AgentActiveVersion['configJson'];
-                const activeVer = agent.activeVersion as AgentActiveVersion;
-                const llmEnabled = config.workflow?.llm?.enabled !== false;
-                const ttsEnabled = config.workflow?.tts?.enabled !== false;
-                const ragEnabled = activeVer.ragEnabled;
-                const autoHangupEnabled = !!config.auto_hangup?.enabled;
-                return (
-                  <Card>
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <CardTitle>Global Settings</CardTitle>
-                        <Button
-                          variant="link"
-                          size="sm"
-                          className="text-xs"
-                          onClick={() => handleTabChange('settings')}
-                        >
-                          Open full settings
-                        </Button>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <SettingsOverviewItem
-                          icon={BrainCircuit}
-                          title="LLM"
-                          enabled={llmEnabled}
-                          detail={config.workflow?.llm?.model_name || 'Default model'}
-                          onConfigure={() => handleTabChange('settings')}
-                        />
-                        <SettingsOverviewItem
-                          icon={Volume2}
-                          title="Voice / TTS"
-                          enabled={ttsEnabled}
-                          detail={voiceConfig?.name || 'Not configured'}
-                          onConfigure={() => handleTabChange('settings')}
-                        />
-                        <SettingsOverviewItem
-                          icon={Database}
-                          title="RAG"
-                          enabled={ragEnabled}
-                          detail={ragEnabled ? 'Configuration linked' : 'Not configured'}
-                          onConfigure={() => handleTabChange('settings')}
-                        />
-                        <SettingsOverviewItem
-                          icon={PhoneOff}
-                          title="Auto Hangup"
-                          enabled={autoHangupEnabled}
-                          detail={autoHangupEnabled ? 'Calls auto-terminate' : 'Manual only'}
-                          onConfigure={() => handleTabChange('settings')}
-                        />
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })()}
+              {agent.activeVersion &&
+                (() => {
+                  const config = agent.activeVersion
+                    .configJson as AgentActiveVersion["configJson"];
+                  const activeVer = agent.activeVersion as AgentActiveVersion;
+                  const llmEnabled = config.workflow?.llm?.enabled !== false;
+                  const ttsEnabled = config.workflow?.tts?.enabled !== false;
+                  const ragEnabled = activeVer.ragEnabled;
+                  const autoHangupEnabled = !!config.auto_hangup?.enabled;
+                  return (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                            <Settings className="h-5 w-5 text-primary" />
+                          </div>
+                          Global Settings
+                        </CardTitle>
+                        <CardDescription className="flex justify-end">
+                          <Button
+                            variant="link"
+                            size="sm"
+                            className="text-xs h-auto p-0"
+                            onClick={() => handleTabChange("settings")}
+                          >
+                            Open full settings
+                          </Button>
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <SettingsOverviewItem
+                            icon={BrainCircuit}
+                            title="LLM"
+                            enabled={llmEnabled}
+                            detail={
+                              config.workflow?.llm?.model_name ||
+                              "Default model"
+                            }
+                            onConfigure={() => handleTabChange("settings")}
+                          />
+                          <SettingsOverviewItem
+                            icon={Volume2}
+                            title="Voice / TTS"
+                            enabled={ttsEnabled}
+                            detail={voiceConfig?.name || "Not configured"}
+                            onConfigure={() => handleTabChange("settings")}
+                          />
+                          <SettingsOverviewItem
+                            icon={Database}
+                            title="RAG"
+                            enabled={ragEnabled}
+                            detail={
+                              ragEnabled
+                                ? "Configuration linked"
+                                : "Not configured"
+                            }
+                            onConfigure={() => handleTabChange("settings")}
+                          />
+                          <SettingsOverviewItem
+                            icon={PhoneOff}
+                            title="Auto Hangup"
+                            enabled={autoHangupEnabled}
+                            detail={
+                              autoHangupEnabled
+                                ? "Calls auto-terminate"
+                                : "Manual only"
+                            }
+                            onConfigure={() => handleTabChange("settings")}
+                          />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })()}
             </div>
           </div>
         </TabsContent>
@@ -1046,12 +1202,16 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
             <Card>
               <CardHeader>
                 <CardTitle>Workflow Editor</CardTitle>
-                <CardDescription>No active workflow configuration</CardDescription>
+                <CardDescription>
+                  No active workflow configuration
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="py-12 text-center text-muted-foreground">
                   <FileCode className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg font-medium mb-2">No Active Configuration</p>
+                  <p className="text-lg font-medium mb-2">
+                    No Active Configuration
+                  </p>
                   <p className="text-sm">
                     This agent does not have an active workflow version.
                   </p>
@@ -1076,7 +1236,9 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
               globalPrompt={agent.activeVersion.globalPrompt}
               ragEnabled={agent.activeVersion.ragEnabled}
               ragConfigId={agent.activeVersion.ragConfigId}
-              voiceConfigId={(agent.activeVersion as AgentActiveVersion)?.voiceConfigId}
+              voiceConfigId={
+                (agent.activeVersion as AgentActiveVersion)?.voiceConfigId
+              }
               onSave={handleSettingsSave}
             />
           ) : (
@@ -1090,7 +1252,9 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
               <CardContent>
                 <div className="py-12 text-center text-muted-foreground">
                   <Settings className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg font-medium mb-2">No Active Configuration</p>
+                  <p className="text-lg font-medium mb-2">
+                    No Active Configuration
+                  </p>
                   <p className="text-sm">
                     This agent does not have an active workflow version.
                   </p>
@@ -1101,19 +1265,27 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
         </TabsContent>
 
         {/* RAG Query Tab - Only shown when RAG is enabled */}
-        {(agent.activeVersion as AgentActiveVersion)?.ragEnabled && versions && (
-          <TabsContent value="rag-query" className="space-y-4">
-            <RagQueryTab
-              agentId={agentId}
-              versions={versions.map((v: { id: string; version: number; isActive: boolean; createdAt: Date }) => ({
-                id: v.id,
-                version: v.version,
-                isActive: v.isActive,
-                createdAt: v.createdAt,
-              }))}
-            />
-          </TabsContent>
-        )}
+        {(agent.activeVersion as AgentActiveVersion)?.ragEnabled &&
+          versions && (
+            <TabsContent value="rag-query" className="space-y-4">
+              <RagQueryTab
+                agentId={agentId}
+                versions={versions.map(
+                  (v: {
+                    id: string;
+                    version: number;
+                    isActive: boolean;
+                    createdAt: Date;
+                  }) => ({
+                    id: v.id,
+                    version: v.version,
+                    isActive: v.isActive,
+                    createdAt: v.createdAt,
+                  }),
+                )}
+              />
+            </TabsContent>
+          )}
 
         {/* Chat Tab */}
         <TabsContent value="chat" className="space-y-4">
