@@ -31,7 +31,7 @@ async function globalSetup(config: FullConfig) {
     // Save authentication state
     await page.context().storageState({ path: authFile });
 
-    console.log('Authentication successful, state saved');
+    console.info('Authentication successful, state saved');
   } catch (error) {
     console.error('Authentication setup failed:', error);
     // Take screenshot on failure for debugging

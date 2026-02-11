@@ -1,6 +1,6 @@
 # Admin API Documentation
 
-The Admin API provides cache management, RAG query, and outbound call endpoints for the orchestrator service. These endpoints are designed for machine-to-machine (M2M) communication, allowing external applications to trigger cache refresh operations, query knowledge bases, and initiate outbound calls.
+The Admin API provides cache management, RAG query, outbound call, and agent import/export endpoints for the orchestrator service. These endpoints are designed for machine-to-machine (M2M) communication, allowing external applications to trigger cache refresh operations, query knowledge bases, initiate outbound calls, and manage agent configurations programmatically.
 
 ## Authentication
 
@@ -719,6 +719,278 @@ GET /admin/rag/deploy/{deployment_id}/status
 | Status Code | Scenario | Detail |
 |-------------|----------|--------|
 | 404 Not Found | Deployment not found | `"Deployment not found: <deployment_id>. Deployment status is cached for 1 hour after completion."` |
+
+---
+
+## Agent Import/Export
+
+Endpoints for programmatic management of agent JSON configurations. Supports creating new agents, updating existing agents with new config versions, exporting configs in a round-trip compatible format, and dry-run validation.
+
+**Use Cases:** CI/CD pipelines, admin dashboards, backup/restore, round-trip config editing (export → modify → reimport).
+
+### Import Agent Config
+
+Import a single agent JSON configuration. Creates a new agent or adds a new config version to an existing agent.
+
+```
+POST /admin/agents/import
+```
+
+**Request Body:**
+```json
+{
+  "tenant_id": "6bc1814c-5705-5b6e-af99-104b91962282",
+  "agent_json": {
+    "agent": {
+      "id": "b2c3d4e5-f6a7-4901-bcde-f23456789012",
+      "name": "My Agent",
+      "description": "Agent description",
+      "version": "1.0.0"
+    },
+    "workflow": {
+      "initial_node": "greeting",
+      "global_prompt": "You are a helpful assistant.",
+      "llm": {
+        "provider_id": "azure-gpt-5-2",
+        "temperature": 0.7,
+        "max_tokens": 150
+      },
+      "tts": { "enabled": true, "voice_name": "rachel" },
+      "nodes": [
+        {
+          "id": "greeting",
+          "type": "standard",
+          "name": "Greeting",
+          "proactive": true,
+          "static_text": "Hello! How can I help you?",
+          "transitions": [{ "condition": "always", "target": "end_call" }]
+        },
+        { "id": "end_call", "type": "end_call", "name": "End Call" }
+      ]
+    }
+  },
+  "phone_numbers": ["+15551234567"],
+  "notes": "Initial deployment",
+  "created_by": "ci-pipeline",
+  "dry_run": false
+}
+```
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `tenant_id` | string (UUID) | Yes | Tenant must already exist in database |
+| `agent_json` | object | Yes | Full agent JSON with `agent` and `workflow` top-level keys. Same format as seed data files. See [AGENT_JSON_SCHEMA.md](AGENT_JSON_SCHEMA.md). |
+| `phone_numbers` | string[] | No | E.164 phone numbers to map to this agent |
+| `notes` | string | No | Version notes (e.g., "Updated greeting flow") |
+| `created_by` | string | No | Creator identifier (defaults to `"admin_api"`) |
+| `dry_run` | boolean | No | Validate only, don't save (default: `false`) |
+
+**Response:**
+```json
+{
+  "success": true,
+  "result": {
+    "success": true,
+    "tenant_id": "6bc1814c-5705-5b6e-af99-104b91962282",
+    "agent_id": "b2c3d4e5-f6a7-4901-bcde-f23456789012",
+    "agent_name": "My Agent",
+    "action": "created",
+    "version": 1,
+    "previous_version": null,
+    "voice_config_linked": true,
+    "rag_enabled": false,
+    "phone_numbers_mapped": 1,
+    "validation_warnings": [],
+    "error_message": null
+  }
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `action` | `"created"` (new agent), `"updated"` (new version), or `"validated"` (dry_run) |
+| `version` | New config version number (null for dry_run) |
+| `previous_version` | Previous active version number (null if first version) |
+| `voice_config_linked` | Whether `tts.voice_name` matched a voice in `voice_configs` table |
+| `rag_enabled` | Whether any workflow node has RAG enabled |
+| `phone_numbers_mapped` | Count of phone numbers newly mapped or reassigned |
+| `validation_warnings` | Non-fatal warnings (e.g., unrecognized voice name) |
+
+**Error Responses:**
+
+| Status Code | Scenario | Detail |
+|-------------|----------|--------|
+| 400 Bad Request | Missing `agent`/`workflow` keys, invalid UUID | `"Missing required top-level key: 'agent'"` |
+| 404 Not Found | Tenant not found | `"Tenant not found: <tenant_id>"` |
+| 422 Unprocessable Entity | Workflow validation errors | `"Workflow validation failed: ..."` |
+| 500 Internal Server Error | Database or unexpected errors | `"Agent import failed: ..."` |
+
+---
+
+### Bulk Import Agent Configs
+
+Import multiple agent configurations in a single request. Each agent is processed independently — a failure in one agent does not affect others (partial success).
+
+```
+POST /admin/agents/import/bulk
+```
+
+**Request Body:**
+```json
+{
+  "agents": [
+    {
+      "tenant_id": "6bc1814c-...",
+      "agent_json": { "agent": { "..." }, "workflow": { "..." } },
+      "notes": "Batch deploy v2.1"
+    },
+    {
+      "tenant_id": "6bc1814c-...",
+      "agent_json": { "agent": { "..." }, "workflow": { "..." } }
+    }
+  ]
+}
+```
+
+- Minimum: 1 agent per request
+- Maximum: 50 agents per request
+
+**Response:**
+```json
+{
+  "total": 2,
+  "succeeded": 1,
+  "failed": 1,
+  "results": [
+    {
+      "success": true,
+      "tenant_id": "6bc1814c-...",
+      "agent_id": "b2c3d4e5-...",
+      "agent_name": "Agent A",
+      "action": "created",
+      "version": 1,
+      "validation_warnings": [],
+      "error_message": null
+    },
+    {
+      "success": false,
+      "tenant_id": "6bc1814c-...",
+      "agent_id": "invalid-uuid",
+      "agent_name": "Agent B",
+      "action": "failed",
+      "error_message": "Invalid agent.id UUID format: invalid-uuid"
+    }
+  ]
+}
+```
+
+---
+
+### Export Agent Config
+
+Export an agent configuration as import-compatible JSON. The exported JSON can be directly re-imported via `POST /admin/agents/import`.
+
+```
+GET /admin/agents/{tenant_id}/{agent_id}/export
+GET /admin/agents/{tenant_id}/{agent_id}/export?version=2
+```
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `tenant_id` | string (UUID) | Tenant UUID |
+| `agent_id` | string (UUID) | Agent UUID |
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `version` | integer | Active version | Specific version number to export |
+
+**Response:**
+```json
+{
+  "tenant_id": "6bc1814c-5705-5b6e-af99-104b91962282",
+  "agent_id": "b2c3d4e5-f6a7-4901-bcde-f23456789012",
+  "agent_name": "My Agent",
+  "version": 3,
+  "is_active": true,
+  "config_json": {
+    "agent": {
+      "id": "b2c3d4e5-f6a7-4901-bcde-f23456789012",
+      "name": "My Agent",
+      "description": "Agent description"
+    },
+    "workflow": {
+      "initial_node": "greeting",
+      "global_prompt": "You are a helpful assistant.",
+      "llm": { "..." },
+      "tts": { "..." },
+      "nodes": [ "..." ]
+    }
+  },
+  "global_prompt": "You are a helpful assistant.",
+  "rag_enabled": false,
+  "rag_config_id": null,
+  "voice_config_id": "a1b2c3d4-...",
+  "voice_name": "rachel",
+  "created_at": "2026-02-10T22:30:00+00:00",
+  "created_by": "admin_api",
+  "notes": "Initial deployment"
+}
+```
+
+**Error Responses:**
+
+| Status Code | Scenario | Detail |
+|-------------|----------|--------|
+| 400 Bad Request | Invalid UUID format | `"Invalid tenant_id UUID format: ..."` |
+| 404 Not Found | Agent/version not found | `"No active configuration found for ..."` |
+| 500 Internal Server Error | Database or unexpected errors | `"Agent export failed: ..."` |
+
+---
+
+### Import/Export Behavior Details
+
+**Versioning:**
+- Each import creates a new config version (auto-incremented)
+- New version is automatically set as the active version
+- Previous active versions are deactivated (not deleted)
+- Version history is preserved for rollback
+
+**Voice Config Resolution:**
+- If `workflow.tts.voice_name` matches a voice in the `voice_configs` table, the FK is automatically linked
+- If the voice name is not found, a warning is returned but the import still succeeds
+
+**RAG Config Handling:**
+- RAG enablement is detected by scanning workflow nodes for `rag.enabled: true`
+- The `rag_config_id` is carried forward from the previous active version
+
+**Phone Number Mapping:**
+- Phone numbers are cleaned to E.164 format
+- New `PhoneConfig` records are created for the tenant if they don't exist
+- If a phone number is already mapped to a different agent, the mapping is reassigned
+- Phone mapping failures generate warnings but don't fail the import
+
+**Cache Invalidation:**
+- Agent config cache and phone mapping cache are automatically invalidated after import
+
+**Round-Trip Workflow:**
+```bash
+# 1. Export current config
+EXPORTED=$(curl -s ... /admin/agents/{tenant_id}/{agent_id}/export)
+
+# 2. Extract the import-compatible JSON
+CONFIG_JSON=$(echo "$EXPORTED" | jq '.config_json')
+
+# 3. Modify as needed
+MODIFIED=$(echo "$CONFIG_JSON" | jq '.workflow.nodes[0].static_text = "New greeting!"')
+
+# 4. Reimport (creates a new version)
+curl -X POST .../admin/agents/import \
+  -d "{\"tenant_id\": \"...\", \"agent_json\": $MODIFIED}"
+```
 
 ---
 

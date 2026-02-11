@@ -3,6 +3,9 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { APIError } from 'better-auth/api';
 import { db } from '@/lib/db';
 import * as schema from '@/lib/db/schema';
+import { loggers } from '@/lib/logger';
+
+const log = loggers.auth;
 
 /**
  * Get the default tenant ID for new users
@@ -122,7 +125,7 @@ export const auth = betterAuth({
     user: {
       create: {
         before: async (user) => {
-          console.log('[BetterAuth] User create hook - incoming user:', JSON.stringify(user, null, 2));
+          log.debug({ user }, 'User create hook - incoming user');
 
           // Extract email domain
           const email = user.email;
@@ -130,7 +133,7 @@ export const auth = betterAuth({
 
           // Validate domain for Google OAuth users
           if (domain !== ALLOWED_DOMAIN) {
-            console.log('[BetterAuth] Domain validation failed:', domain);
+            log.warn({ domain }, 'Domain validation failed');
             throw new APIError('FORBIDDEN', {
               message: `Only @${ALLOWED_DOMAIN} email addresses are allowed to sign in with Google`,
             });
@@ -142,7 +145,7 @@ export const auth = betterAuth({
 
           // Get the default tenant for new users
           const defaultTenantId = await getDefaultTenantId();
-          console.log('[BetterAuth] Default tenant ID:', defaultTenantId);
+          log.debug({ defaultTenantId }, 'Default tenant ID');
 
           // Set Google OAuth users as admins with default tenant
           const userData = {
@@ -155,14 +158,14 @@ export const auth = betterAuth({
             googleId: googleId, // Store Google's user ID
           };
 
-          console.log('[BetterAuth] User create hook - modified user:', JSON.stringify(userData, null, 2));
+          log.debug({ userData }, 'User create hook - modified user');
 
           return {
             data: userData,
           };
         },
         after: async (user) => {
-          console.log('[BetterAuth] User created successfully:', user.id, user.email);
+          log.info({ userId: user.id, email: user.email }, 'User created successfully');
         },
       },
     },

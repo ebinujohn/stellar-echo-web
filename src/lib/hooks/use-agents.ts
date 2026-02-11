@@ -2,12 +2,15 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   createCrudHooks,
   createVersionHooks,
+  apiFetch,
   apiMutate,
 } from './factories/create-api-hooks';
 import { QUERY_KEYS } from './constants/query-keys';
 import { STALE_TIMES } from './constants/stale-times';
 import type {
   CreateVersionInput,
+  ImportAgentInput,
+  BulkImportAgentsInput,
   WorkflowConfig,
 } from '@/lib/validations/agents';
 
@@ -118,5 +121,92 @@ export function useCreateVersion() {
   });
 }
 
+// ========================================
+// Import/Export Hooks
+// ========================================
+
+interface ImportAgentResult {
+  success: boolean;
+  tenantId: string;
+  agentId: string;
+  agentName: string;
+  action: 'created' | 'updated' | 'validated' | 'failed';
+  version: number | null;
+  previousVersion: number | null;
+  voiceConfigLinked: boolean;
+  ragEnabled: boolean;
+  phoneNumbersMapped: number;
+  validationWarnings: string[];
+  errorMessage: string | null;
+}
+
+interface BulkImportResult {
+  total: number;
+  succeeded: number;
+  failed: number;
+  results: Array<{
+    success: boolean;
+    tenantId: string;
+    agentId: string;
+    agentName: string;
+    action: string;
+    version: number | null;
+    validationWarnings: string[];
+    errorMessage: string | null;
+  }>;
+}
+
+interface ExportAgentResult {
+  tenant_id: string;
+  agent_id: string;
+  agent_name: string;
+  version: number;
+  is_active: boolean;
+  config_json: Record<string, unknown>;
+  global_prompt: string | null;
+  rag_enabled: boolean;
+  rag_config_id: string | null;
+  voice_config_id: string | null;
+  voice_name: string | null;
+  created_at: string;
+  created_by: string | null;
+  notes: string | null;
+}
+
+export function useImportAgent() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: ImportAgentInput) =>
+      apiMutate<ImportAgentResult>('/api/agents/import', 'POST', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.agents.all });
+    },
+  });
+}
+
+export function useBulkImportAgents() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: BulkImportAgentsInput) =>
+      apiMutate<BulkImportResult>('/api/agents/import/bulk', 'POST', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.agents.all });
+    },
+  });
+}
+
+export function useExportAgent() {
+  return useMutation({
+    mutationFn: ({ agentId, version }: { agentId: string; version?: number }) => {
+      const url = version
+        ? `/api/agents/${agentId}/export?version=${version}`
+        : `/api/agents/${agentId}/export`;
+      return apiFetch<ExportAgentResult>(url);
+    },
+  });
+}
+
 // Re-export types
-export type { Agent, AgentDetail, AgentVersion };
+export type { Agent, AgentDetail, AgentVersion, ImportAgentResult, ExportAgentResult };

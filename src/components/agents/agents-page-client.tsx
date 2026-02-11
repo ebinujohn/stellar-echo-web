@@ -8,16 +8,18 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Plus, Clock, Edit, Trash2, ArrowRight, Bot, Search } from "lucide-react";
+import { Plus, Clock, Edit, Trash2, ArrowRight, Bot, Search, Upload } from "lucide-react";
 import { useAgents } from "@/lib/hooks/use-agents";
 import { formatDateTime } from "@/lib/utils/formatters";
 import { CreateAgentDialog } from "./dialogs/create-agent-dialog";
 import { DeleteAgentDialog } from "./dialogs/delete-agent-dialog";
+import { ImportAgentDialog } from "./dialogs/import-agent-dialog";
 
 export function AgentsPageClient() {
   const router = useRouter();
   const { data: agents, isLoading, error } = useAgents();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedAgent, setSelectedAgent] = useState<{
@@ -59,10 +61,16 @@ export function AgentsPageClient() {
             Manage voice AI agent configurations
           </p>
         </div>
-        <Button onClick={() => setCreateDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Agent
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
+            <Upload className="mr-2 h-4 w-4" />
+            Import
+          </Button>
+          <Button onClick={() => setCreateDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Agent
+          </Button>
+        </div>
       </div>
 
       {/* Search Bar */}
@@ -195,6 +203,7 @@ export function AgentsPageClient() {
 
       {/* Dialogs */}
       <CreateAgentDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} />
+      <ImportAgentDialog open={importDialogOpen} onOpenChange={setImportDialogOpen} />
       <DeleteAgentDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}

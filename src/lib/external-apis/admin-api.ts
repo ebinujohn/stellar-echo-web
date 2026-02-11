@@ -617,6 +617,261 @@ export async function deployRagFromS3(
  * @returns The deployment status response
  * @throws Error if Admin API is not configured or status fetch fails
  */
+// ============================================================================
+// Agent Import/Export API
+// ============================================================================
+
+/**
+ * Parameters for importing a single agent config.
+ */
+export interface ImportAgentConfigParams {
+  tenantId: string;
+  agentJson: Record<string, unknown>;
+  phoneNumbers?: string[];
+  notes?: string;
+  createdBy?: string;
+  dryRun?: boolean;
+}
+
+/**
+ * Result from a single agent import.
+ */
+export interface ImportAgentConfigResult {
+  success: boolean;
+  tenant_id: string;
+  agent_id: string;
+  agent_name: string;
+  action: 'created' | 'updated' | 'validated' | 'failed';
+  version: number | null;
+  previous_version: number | null;
+  voice_config_linked: boolean;
+  rag_enabled: boolean;
+  phone_numbers_mapped: number;
+  validation_warnings: string[];
+  error_message: string | null;
+}
+
+/**
+ * Response from the import endpoint.
+ */
+export interface ImportAgentConfigResponse {
+  success: boolean;
+  result: ImportAgentConfigResult;
+}
+
+/**
+ * Parameters for bulk importing agent configs.
+ */
+export interface BulkImportAgentConfigsParams {
+  agents: Array<{
+    tenantId: string;
+    agentJson: Record<string, unknown>;
+    notes?: string;
+  }>;
+}
+
+/**
+ * Response from the bulk import endpoint.
+ */
+export interface BulkImportAgentConfigsResponse {
+  total: number;
+  succeeded: number;
+  failed: number;
+  results: ImportAgentConfigResult[];
+}
+
+/**
+ * Parameters for exporting an agent config.
+ */
+export interface ExportAgentConfigParams {
+  tenantId: string;
+  agentId: string;
+  version?: number;
+}
+
+/**
+ * Response from the export endpoint.
+ */
+export interface ExportAgentConfigResponse {
+  tenant_id: string;
+  agent_id: string;
+  agent_name: string;
+  version: number;
+  is_active: boolean;
+  config_json: Record<string, unknown>;
+  global_prompt: string | null;
+  rag_enabled: boolean;
+  rag_config_id: string | null;
+  voice_config_id: string | null;
+  voice_name: string | null;
+  created_at: string;
+  created_by: string | null;
+  notes: string | null;
+}
+
+/**
+ * Imports a single agent JSON configuration.
+ *
+ * Creates a new agent or adds a new config version to an existing agent.
+ *
+ * @param params - Import parameters including tenant, agent JSON, and options
+ * @returns The import result with agent ID, version, and any warnings
+ * @throws Error if Admin API is not configured or import fails
+ */
+export async function importAgentConfig(
+  params: ImportAgentConfigParams
+): Promise<ImportAgentConfigResponse> {
+  if (!ADMIN_API_BASE_URL || !ADMIN_API_KEY) {
+    throw new Error('Admin API is not configured. Set ADMIN_API_BASE_URL and ADMIN_API_KEY.');
+  }
+
+  const requestBody: Record<string, unknown> = {
+    tenant_id: params.tenantId,
+    agent_json: params.agentJson,
+  };
+
+  if (params.phoneNumbers) {
+    requestBody.phone_numbers = params.phoneNumbers;
+  }
+  if (params.notes) {
+    requestBody.notes = params.notes;
+  }
+  if (params.createdBy) {
+    requestBody.created_by = params.createdBy;
+  }
+  if (params.dryRun !== undefined) {
+    requestBody.dry_run = params.dryRun;
+  }
+
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const nonce = generateNonce();
+  const path = '/admin/agents/import';
+  const bodyStr = JSON.stringify(requestBody);
+  const signature = computeSignature(ADMIN_API_KEY, timestamp, nonce, 'POST', path, bodyStr);
+
+  const response = await fetchWithTimeout(`${ADMIN_API_BASE_URL}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Timestamp': timestamp,
+      'X-Nonce': nonce,
+      'X-Signature': signature,
+    },
+    body: bodyStr,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+    const errorMessage = errorData.detail || `Admin API error: ${response.status}`;
+    throw new Error(errorMessage);
+  }
+
+  return response.json() as Promise<ImportAgentConfigResponse>;
+}
+
+/**
+ * Bulk imports multiple agent configurations.
+ *
+ * Each agent is processed independently — a failure in one does not affect others.
+ *
+ * @param params - Array of agent import items
+ * @returns Bulk import results with totals and per-agent results
+ * @throws Error if Admin API is not configured or request fails
+ */
+export async function bulkImportAgentConfigs(
+  params: BulkImportAgentConfigsParams
+): Promise<BulkImportAgentConfigsResponse> {
+  if (!ADMIN_API_BASE_URL || !ADMIN_API_KEY) {
+    throw new Error('Admin API is not configured. Set ADMIN_API_BASE_URL and ADMIN_API_KEY.');
+  }
+
+  const requestBody = {
+    agents: params.agents.map((agent) => ({
+      tenant_id: agent.tenantId,
+      agent_json: agent.agentJson,
+      ...(agent.notes && { notes: agent.notes }),
+    })),
+  };
+
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const nonce = generateNonce();
+  const path = '/admin/agents/import/bulk';
+  const bodyStr = JSON.stringify(requestBody);
+  const signature = computeSignature(ADMIN_API_KEY, timestamp, nonce, 'POST', path, bodyStr);
+
+  // Use 30s timeout for bulk operations
+  const response = await fetchWithTimeout(
+    `${ADMIN_API_BASE_URL}${path}`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Timestamp': timestamp,
+        'X-Nonce': nonce,
+        'X-Signature': signature,
+      },
+      body: bodyStr,
+    },
+    30_000
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+    const errorMessage = errorData.detail || `Admin API error: ${response.status}`;
+    throw new Error(errorMessage);
+  }
+
+  return response.json() as Promise<BulkImportAgentConfigsResponse>;
+}
+
+/**
+ * Exports an agent configuration as import-compatible JSON.
+ *
+ * The exported JSON can be directly re-imported via importAgentConfig().
+ *
+ * @param params - Export parameters including tenant, agent, and optional version
+ * @returns The exported config with metadata
+ * @throws Error if Admin API is not configured or export fails
+ */
+export async function exportAgentConfig(
+  params: ExportAgentConfigParams
+): Promise<ExportAgentConfigResponse> {
+  if (!ADMIN_API_BASE_URL || !ADMIN_API_KEY) {
+    throw new Error('Admin API is not configured. Set ADMIN_API_BASE_URL and ADMIN_API_KEY.');
+  }
+
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const nonce = generateNonce();
+  // Sign path only (no query params in signature)
+  const path = `/admin/agents/${params.tenantId}/${params.agentId}/export`;
+  const bodyStr = '';
+  const signature = computeSignature(ADMIN_API_KEY, timestamp, nonce, 'GET', path, bodyStr);
+
+  // Append version query param to URL if specified
+  let url = `${ADMIN_API_BASE_URL}${path}`;
+  if (params.version !== undefined) {
+    url += `?version=${params.version}`;
+  }
+
+  const response = await fetchWithTimeout(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Timestamp': timestamp,
+      'X-Nonce': nonce,
+      'X-Signature': signature,
+    },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+    const errorMessage = errorData.detail || `Admin API error: ${response.status}`;
+    throw new Error(errorMessage);
+  }
+
+  return response.json() as Promise<ExportAgentConfigResponse>;
+}
+
 export async function getRagDeploymentStatus(
   deploymentId: string
 ): Promise<RagDeploymentStatusResponse> {

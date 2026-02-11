@@ -749,6 +749,63 @@ export type IntentDefinition = z.infer<typeof intentDefinitionSchema>;
 export type NodeIntentConfig = z.infer<typeof nodeIntentConfigSchema>;
 
 // ========================================
+// Import/Export Schemas
+// ========================================
+
+/**
+ * Schema for importing an agent JSON configuration.
+ * Uses passthrough() to let the orchestrator handle full semantic validation.
+ * We only validate the minimal structure needed for a good UX.
+ */
+export const importAgentSchema = z.object({
+  agentJson: z.object({
+    agent: z.object({
+      name: z.string().min(1, 'Agent name is required'),
+    }).passthrough(),
+    workflow: z.object({
+      initial_node: z.string().min(1, 'Initial node is required'),
+      nodes: z.array(z.record(z.string(), z.unknown())).min(1, 'At least one node is required'),
+    }).passthrough(),
+  }).passthrough(),
+  phoneNumbers: z.array(z.string()).optional(),
+  notes: z.string().max(500, 'Notes must be less than 500 characters').optional(),
+  dryRun: z.boolean().optional(),
+});
+
+export type ImportAgentInput = z.infer<typeof importAgentSchema>;
+
+/**
+ * Schema for bulk importing agent configs.
+ */
+export const bulkImportAgentsSchema = z.object({
+  agents: z.array(
+    z.object({
+      agentJson: z.object({
+        agent: z.object({
+          name: z.string().min(1, 'Agent name is required'),
+        }).passthrough(),
+        workflow: z.object({
+          initial_node: z.string().min(1, 'Initial node is required'),
+          nodes: z.array(z.record(z.string(), z.unknown())).min(1, 'At least one node is required'),
+        }).passthrough(),
+      }).passthrough(),
+      notes: z.string().max(500).optional(),
+    })
+  ).min(1, 'At least one agent is required').max(50, 'Maximum 50 agents per request'),
+});
+
+export type BulkImportAgentsInput = z.infer<typeof bulkImportAgentsSchema>;
+
+/**
+ * Schema for export query parameters.
+ */
+export const exportAgentQuerySchema = z.object({
+  version: z.coerce.number().int().positive().optional(),
+});
+
+export type ExportAgentQueryInput = z.infer<typeof exportAgentQuerySchema>;
+
+// ========================================
 // Validation Helpers
 // ========================================
 

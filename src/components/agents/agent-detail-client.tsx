@@ -27,9 +27,10 @@ import {
   Volume2,
   PhoneOff,
   Network,
+  Download,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useAgent, useCreateVersion, useAgentVersions } from '@/lib/hooks/use-agents';
+import { useAgent, useCreateVersion, useAgentVersions, useExportAgent } from '@/lib/hooks/use-agents';
 import { ApiError } from '@/lib/hooks/factories/create-api-hooks';
 import { useAgentPhoneConfigs } from '@/lib/hooks/use-phone-configs';
 import { useVoiceConfig } from '@/lib/hooks/use-voice-configs';
@@ -148,6 +149,7 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
   const [initiateCallDialogOpen, setInitiateCallDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const createVersion = useCreateVersion();
+  const exportAgent = useExportAgent();
 
   // Unsaved changes dialog state
   const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false);
@@ -196,6 +198,26 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
   const handleTabChange = useCallback((newTab: string) => {
     setActiveTab(newTab);
   }, []);
+
+  // Export agent config as JSON file
+  const handleExport = useCallback(async () => {
+    try {
+      const result = await exportAgent.mutateAsync({ agentId });
+      const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const safeName = (result.agent_name || 'agent').replace(/[^a-z0-9-_]/gi, '-').toLowerCase();
+      a.download = `${safeName}-v${result.version}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${result.agent_name} v${result.version}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Export failed');
+    }
+  }, [agentId, exportAgent]);
 
   // Global navigation interception for SPA navigation
   useEffect(() => {
@@ -683,6 +705,16 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
           >
             <PhoneOutgoing className="mr-2 h-4 w-4" />
             Initiate Call
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExport}
+            disabled={!agent.activeVersion || exportAgent.isPending}
+            title={!agent.activeVersion ? 'Activate a version first to export' : 'Export agent config as JSON'}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            {exportAgent.isPending ? 'Exporting...' : 'Export'}
           </Button>
           <Button
             variant="destructive"
