@@ -1,1 +1,76 @@
-pnpm exec lint-staged
+#!/bin/sh
+
+# ============================================================
+# Pre-commit hook: All quality gates run before code is committed.
+# Skip flags:
+#   SKIP_HOOKS=1  — skip entire hook
+#   SKIP_TESTS=1  — skip unit + E2E tests
+#   SKIP_E2E=1    — skip E2E tests only
+# ============================================================
+
+if [ "$SKIP_HOOKS" = "1" ]; then
+  echo "\033[33m⚠  SKIP_HOOKS=1 — skipping all pre-commit checks\033[0m"
+  exit 0
+fi
+
+PASS="\033[32m✓\033[0m"
+FAIL="\033[31m✗\033[0m"
+SKIP="\033[33m⊘\033[0m"
+
+run_step() {
+  step_num=$1
+  label=$2
+  shift 2
+  printf "\033[36m[%s/6]\033[0m %s … " "$step_num" "$label"
+  if "$@" > /dev/null 2>&1; then
+    printf "%b %s\n" "$PASS" "passed"
+  else
+    printf "%b %s\n" "$FAIL" "FAILED"
+    echo ""
+    echo "\033[31m  Re-running with output:\033[0m"
+    echo ""
+    "$@"
+    echo ""
+    echo "\033[31m✗ Pre-commit failed at step $step_num: $label\033[0m"
+    exit 1
+  fi
+}
+
+echo ""
+echo "\033[1m── Pre-commit checks ──\033[0m"
+echo ""
+
+# Step 1: lint-staged (auto-fix + format staged files)
+run_step 1 "lint-staged" pnpm exec lint-staged
+
+# Step 2: Full project ESLint
+run_step 2 "lint" pnpm lint
+
+# Step 3: TypeScript type checking
+run_step 3 "type-check" pnpm type-check
+
+# Step 4: Semgrep security scan
+if command -v semgrep > /dev/null 2>&1; then
+  run_step 4 "security (semgrep)" pnpm security
+else
+  printf "\033[36m[4/6]\033[0m security (semgrep) … %b %s\n" "$SKIP" "skipped (semgrep not installed)"
+  echo "\033[33m  Install: pip install semgrep  or  brew install semgrep\033[0m"
+fi
+
+# Step 5: Unit tests
+if [ "$SKIP_TESTS" = "1" ]; then
+  printf "\033[36m[5/6]\033[0m unit tests … %b %s\n" "$SKIP" "skipped (SKIP_TESTS=1)"
+else
+  run_step 5 "unit tests" pnpm test:unit
+fi
+
+# Step 6: E2E tests
+if [ "$SKIP_TESTS" = "1" ] || [ "$SKIP_E2E" = "1" ]; then
+  printf "\033[36m[6/6]\033[0m E2E tests … %b %s\n" "$SKIP" "skipped (${SKIP_TESTS:+SKIP_TESTS=1}${SKIP_E2E:+SKIP_E2E=1})"
+else
+  run_step 6 "E2E tests" pnpm test:e2e
+fi
+
+echo ""
+echo "\033[32m✓ All pre-commit checks passed\033[0m"
+echo ""

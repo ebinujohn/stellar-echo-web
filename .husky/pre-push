@@ -1,2 +1,2 @@
-pnpm check
-pnpm security
+# All quality checks now run in the pre-commit hook.
+# This file is intentionally empty.

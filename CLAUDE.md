@@ -18,7 +18,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
    pnpm test          # Full: lint + type-check + unit tests + E2E tests
    ```
    Fix any errors before considering the task complete.
-6. **Git Hooks Enforce Quality** - Pre-commit and pre-push hooks run automatically (see Git Hooks section)
+6. **Git Hooks Enforce Quality** - Pre-commit hook runs all checks automatically (see Git Hooks section)
 
 ## Project Overview
 
@@ -80,7 +80,7 @@ Health check endpoint: `GET /api/health` (used by container orchestration)
 | Semgrep     | Static security analysis         | `.semgrepconfig.yml`               |
 | Vitest v4   | Unit testing                     | `vitest.config.ts`                 |
 | Playwright  | E2E browser testing              | `playwright.config.ts`             |
-| Husky v9    | Git hooks (pre-commit, pre-push) | `.husky/`                          |
+| Husky v9    | Git hooks (pre-commit)           | `.husky/`                          |
 | lint-staged | Run linters on staged files      | `package.json` (`lint-staged` key) |
 
 **Semgrep** checks for:
@@ -392,17 +392,29 @@ All metrics show min/avg/max values with interruption indicators.
 
 ## Git Hooks (Husky + lint-staged)
 
-Git hooks run automatically to enforce code quality at commit and push time.
+All quality gates run locally in the pre-commit hook before code is committed. There is no CI pipeline — the pre-commit hook is the single source of quality enforcement.
 
-| Event        | Hook         | What Runs                                                    | Speed           |
-| ------------ | ------------ | ------------------------------------------------------------ | --------------- |
-| `git commit` | `pre-commit` | `lint-staged` (ESLint + Prettier on staged files)            | Fast (seconds)  |
-| `git push`   | `pre-push`   | `pnpm check` (lint + type-check) + `pnpm security` (Semgrep) | Thorough (30s+) |
+| Step | Check | ~Time | Notes |
+|------|-------|-------|-------|
+| 1 | `lint-staged` | 2-5s | Auto-fix + format staged files |
+| 2 | `pnpm lint` | 5-15s | Full project ESLint |
+| 3 | `pnpm type-check` | 10-30s | TypeScript checking |
+| 4 | `pnpm security` | 15-30s | Semgrep scan (skips if not installed) |
+| 5 | `pnpm test:unit` | 5-20s | Vitest unit tests |
+| 6 | `pnpm test:e2e` | 60-180s | Playwright E2E (chromium only) |
 
-- **Pre-commit** (`.husky/pre-commit`): Runs `lint-staged` which applies `eslint --fix` + `prettier --write` only on staged `*.{ts,tsx}` files, and `prettier --write` on `*.{json,md,css}` files
-- **Pre-push** (`.husky/pre-push`): Runs full `pnpm check` (lint + type-check) and `pnpm security` (Semgrep scan)
+The hook fails fast — it stops at the first failure and re-runs the failing step with full output.
+
+**Skip flags** (environment variables):
+
+- `SKIP_HOOKS=1` — skip entire pre-commit hook
+- `SKIP_TESTS=1` — skip unit tests + E2E tests (steps 5-6)
+- `SKIP_E2E=1` — skip E2E tests only (step 6)
+
+Example: `SKIP_E2E=1 git commit -m "quick fix"`
+
 - Hooks are installed automatically via `"prepare": "husky"` in package.json when running `pnpm install`
-- To bypass hooks in emergencies: `git commit --no-verify` or `git push --no-verify` (use sparingly)
+- To bypass all hooks: `git commit --no-verify` (use sparingly)
 
 ## Unit Testing (Vitest)
 
@@ -523,18 +535,7 @@ pnpm test:e2e:report
 
 ### CI/CD Integration
 
-Two GitHub Actions workflows run automatically on push to `main`/`develop` and on pull requests:
-
-**CI workflow** (`.github/workflows/ci.yml`):
-
-- **Quality job**: ESLint, TypeScript type-check, Semgrep security scan
-- **Unit tests job**: Vitest with coverage report uploaded as artifact
-
-**E2E workflow** (`.github/workflows/e2e.yml`):
-
-- Tests run in parallel across Chrome, Firefox, and Safari
-- Mobile viewport tests run separately
-- Test reports and failure screenshots uploaded as artifacts
+There are no GitHub Actions CI workflows. All quality checks (lint, type-check, security, unit tests, E2E tests) run locally in the pre-commit hook. See the [Git Hooks](#git-hooks-husky--lint-staged) section for details.
 
 ### Writing New E2E Tests
 
