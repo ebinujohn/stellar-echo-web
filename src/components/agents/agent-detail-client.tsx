@@ -36,6 +36,8 @@ import {
   Copy,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { useSidebar } from "@/components/layout/sidebar-context";
+import { cn } from "@/lib/utils";
 import {
   useAgent,
   useCreateVersion,
@@ -160,6 +162,7 @@ function SettingsOverviewItem({
 // Inner component that uses the context
 function AgentDetailContent({ agentId }: AgentDetailClientProps) {
   const router = useRouter();
+  const { isFocusMode } = useSidebar();
   const { data: agent, isLoading, error } = useAgent(agentId);
   const { data: phoneConfigs } = useAgentPhoneConfigs(agentId);
 
@@ -728,200 +731,215 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-4">
-          <Link href="/agents">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold tracking-tight">
-                {agent.name}
-              </h1>
-              {isDirty && (
-                <Badge
-                  variant="secondary"
-                  className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
-                >
-                  Unsaved Changes
-                </Badge>
+    <div className={cn(!isFocusMode && "space-y-6")}>
+      {/* Header - hidden in focus mode */}
+      {!isFocusMode && (
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-4">
+            <Link href="/agents">
+              <Button variant="ghost" size="icon">
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            </Link>
+            <div>
+              <div className="flex items-center gap-3">
+                <h1 className="text-3xl font-bold tracking-tight">
+                  {agent.name}
+                </h1>
+                {isDirty && (
+                  <Badge
+                    variant="secondary"
+                    className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
+                  >
+                    Unsaved Changes
+                  </Badge>
+                )}
+              </div>
+              {agent.description && (
+                <p className="text-muted-foreground mt-1">
+                  {agent.description}
+                </p>
               )}
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(agent.id);
+                  toast.success("Agent ID copied to clipboard");
+                }}
+                className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-transparent px-2 py-1 font-mono text-xs text-muted-foreground hover:border-border hover:bg-muted/50 hover:text-foreground transition-all"
+                title="Click to copy Agent ID"
+              >
+                <span className="text-muted-foreground/70 font-sans">ID:</span>
+                {agent.id}
+                <Copy className="h-3 w-3 shrink-0" />
+              </button>
             </div>
-            {agent.description && (
-              <p className="text-muted-foreground mt-1">{agent.description}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {isDirty && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleCombinedSave}
+                disabled={createVersion.isPending}
+              >
+                <Save className="mr-2 h-4 w-4" />
+                {createVersion.isPending ? "Saving..." : "Save All Changes"}
+              </Button>
             )}
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(agent.id);
-                toast.success("Agent ID copied to clipboard");
-              }}
-              className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-transparent px-2 py-1 font-mono text-xs text-muted-foreground hover:border-border hover:bg-muted/50 hover:text-foreground transition-all"
-              title="Click to copy Agent ID"
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setInitiateCallDialogOpen(true)}
+              disabled={!agent.activeVersion}
+              title={
+                !agent.activeVersion
+                  ? "Activate a version first to make calls"
+                  : "Start an outbound call"
+              }
             >
-              <span className="text-muted-foreground/70 font-sans">ID:</span>
-              {agent.id}
-              <Copy className="h-3 w-3 shrink-0" />
-            </button>
+              <PhoneOutgoing className="mr-2 h-4 w-4" />
+              Initiate Call
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExport}
+              disabled={!agent.activeVersion || exportAgent.isPending}
+              title={
+                !agent.activeVersion
+                  ? "Activate a version first to export"
+                  : "Export agent config as JSON"
+              }
+            >
+              <Download className="mr-2 h-4 w-4" />
+              {exportAgent.isPending ? "Exporting..." : "Export"}
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setDeleteDialogOpen(true)}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete Agent
+            </Button>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {isDirty && (
-            <Button
-              variant="default"
-              size="sm"
-              onClick={handleCombinedSave}
-              disabled={createVersion.isPending}
-            >
-              <Save className="mr-2 h-4 w-4" />
-              {createVersion.isPending ? "Saving..." : "Save All Changes"}
-            </Button>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setInitiateCallDialogOpen(true)}
-            disabled={!agent.activeVersion}
-            title={
-              !agent.activeVersion
-                ? "Activate a version first to make calls"
-                : "Start an outbound call"
-            }
-          >
-            <PhoneOutgoing className="mr-2 h-4 w-4" />
-            Initiate Call
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExport}
-            disabled={!agent.activeVersion || exportAgent.isPending}
-            title={
-              !agent.activeVersion
-                ? "Activate a version first to export"
-                : "Export agent config as JSON"
-            }
-          >
-            <Download className="mr-2 h-4 w-4" />
-            {exportAgent.isPending ? "Exporting..." : "Export"}
-          </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => setDeleteDialogOpen(true)}
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete Agent
-          </Button>
+      )}
+
+      {/* Stats Cards - hidden in focus mode */}
+      {!isFocusMode && (
+        <div className="grid gap-4 md:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Active Version
+              </CardTitle>
+              <FileCode className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {agent.activeVersion
+                  ? `v${agent.activeVersion.version}`
+                  : "None"}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {agent.versionCount} total version
+                {agent.versionCount !== 1 ? "s" : ""}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Calls</CardTitle>
+              <Phone className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{agent.callCount}</div>
+              <p className="text-xs text-muted-foreground">
+                <Link
+                  href={`/calls?agent=${agent.id}`}
+                  className="hover:underline"
+                >
+                  View call history
+                </Link>
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Phone Mappings
+              </CardTitle>
+              <Phone className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {agent.phoneMappingCount}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {agent.phoneMappingCount > 0
+                  ? "Active numbers"
+                  : "No numbers mapped"}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Last Updated
+              </CardTitle>
+              <Clock className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-sm font-bold">
+                {formatDateTime(agent.updatedAt)}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Created {formatDateTime(agent.createdAt)}
+              </p>
+            </CardContent>
+          </Card>
         </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Active Version
-            </CardTitle>
-            <FileCode className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {agent.activeVersion ? `v${agent.activeVersion.version}` : "None"}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {agent.versionCount} total version
-              {agent.versionCount !== 1 ? "s" : ""}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Calls</CardTitle>
-            <Phone className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{agent.callCount}</div>
-            <p className="text-xs text-muted-foreground">
-              <Link
-                href={`/calls?agent=${agent.id}`}
-                className="hover:underline"
-              >
-                View call history
-              </Link>
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Phone Mappings
-            </CardTitle>
-            <Phone className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{agent.phoneMappingCount}</div>
-            <p className="text-xs text-muted-foreground">
-              {agent.phoneMappingCount > 0
-                ? "Active numbers"
-                : "No numbers mapped"}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Last Updated</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-sm font-bold">
-              {formatDateTime(agent.updatedAt)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Created {formatDateTime(agent.createdAt)}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      )}
 
       {/* Tabs */}
       <Tabs
         value={activeTab}
         onValueChange={handleTabChange}
-        className="space-y-4"
+        className={cn(!isFocusMode && "space-y-4")}
       >
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="workflow" className="relative">
-            Workflow Editor
-            {isWorkflowDirty && (
-              <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-500" />
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="versions">Versions</TabsTrigger>
-          <TabsTrigger value="settings" className="relative">
-            Settings
-            {isSettingsDirty && (
-              <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-500" />
-            )}
-          </TabsTrigger>
-          {(agent.activeVersion as AgentActiveVersion)?.ragEnabled && (
-            <TabsTrigger value="rag-query">
-              <Database className="mr-1.5 h-4 w-4" />
-              RAG Query
+        {/* Tab list - hidden in focus mode */}
+        {!isFocusMode && (
+          <TabsList>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="workflow" className="relative">
+              Workflow Editor
+              {isWorkflowDirty && (
+                <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-500" />
+              )}
             </TabsTrigger>
-          )}
-          <TabsTrigger value="chat">
-            <MessageSquare className="mr-1.5 h-4 w-4" />
-            Chat
-          </TabsTrigger>
-        </TabsList>
+            <TabsTrigger value="versions">Versions</TabsTrigger>
+            <TabsTrigger value="settings" className="relative">
+              Settings
+              {isSettingsDirty && (
+                <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-500" />
+              )}
+            </TabsTrigger>
+            {(agent.activeVersion as AgentActiveVersion)?.ragEnabled && (
+              <TabsTrigger value="rag-query">
+                <Database className="mr-1.5 h-4 w-4" />
+                RAG Query
+              </TabsTrigger>
+            )}
+            <TabsTrigger value="chat">
+              <MessageSquare className="mr-1.5 h-4 w-4" />
+              Chat
+            </TabsTrigger>
+          </TabsList>
+        )}
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-4">
@@ -1198,6 +1216,10 @@ function AgentDetailContent({ agentId }: AgentDetailClientProps) {
               initialConfig={agent.activeVersion.configJson}
               onSave={handleWorkflowSave}
               agentId={agentId}
+              agentName={agent.name}
+              isDirty={isDirty}
+              onSaveAll={handleCombinedSave}
+              isSaving={createVersion.isPending}
             />
           ) : (
             <Card>

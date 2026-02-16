@@ -1,6 +1,13 @@
-'use client';
+"use client";
 
-import { useState, useCallback, useEffect, useMemo, useRef, ReactNode } from 'react';
+import {
+  useState,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  ReactNode,
+} from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -15,11 +22,11 @@ import ReactFlow, {
   MarkerType,
   useReactFlow,
   ReactFlowProvider,
-} from 'reactflow';
-import 'reactflow/dist/style.css';
+} from "reactflow";
+import "reactflow/dist/style.css";
 
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -27,7 +34,14 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
 import {
   Wand2,
   CheckCircle2,
@@ -43,22 +57,40 @@ import {
   Globe,
   PanelLeftClose,
   PanelLeftOpen,
-} from 'lucide-react';
-import { toast } from 'sonner';
+  Maximize2,
+  Minimize2,
+  Save,
+  X,
+} from "lucide-react";
+import { toast } from "sonner";
+import { useSidebar } from "@/components/layout/sidebar-context";
+import { cn } from "@/lib/utils";
 
-import { nodeTypes } from './nodes';
-import { edgeTypes } from './edges';
-import type { WorkflowNodeData } from './utils/json-converter';
-import { workflowToNodes, nodesToWorkflow, validateWorkflowGraph } from './utils/json-converter';
-import { getLayoutedNodes } from './utils/auto-layout';
-import type { WorkflowConfig } from '@/lib/validations/agents';
-import { PropertiesPanel } from './panels/properties-panel';
-import { useAgentDraft } from '../contexts/agent-draft-context';
+import { nodeTypes } from "./nodes";
+import { edgeTypes } from "./edges";
+import type { WorkflowNodeData } from "./utils/json-converter";
+import {
+  workflowToNodes,
+  nodesToWorkflow,
+  validateWorkflowGraph,
+} from "./utils/json-converter";
+import { getLayoutedNodes } from "./utils/auto-layout";
+import type { WorkflowConfig } from "@/lib/validations/agents";
+import { PropertiesPanel } from "./panels/properties-panel";
+import { useAgentDraft } from "../contexts/agent-draft-context";
 
 interface WorkflowEditorLayoutProps {
   initialConfig?: WorkflowConfig;
   onSave?: (config: Partial<WorkflowConfig>) => void | Promise<void>;
   agentId?: string;
+  /** Agent name shown in focus mode floating header */
+  agentName?: string;
+  /** Whether there are unsaved changes (any tab) */
+  isDirty?: boolean;
+  /** Save all changes callback for focus mode floating header */
+  onSaveAll?: () => void | Promise<void>;
+  /** Whether a save is in progress */
+  isSaving?: boolean;
 }
 
 // Safe hook to get draft context (returns null if not in provider)
@@ -71,12 +103,31 @@ function useOptionalAgentDraft() {
 }
 
 // localStorage key for palette collapse state
-const PALETTE_COLLAPSED_KEY = 'workflow-palette-collapsed';
+const PALETTE_COLLAPSED_KEY = "workflow-palette-collapsed";
 
-function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutProps) {
+// Safe hook to get sidebar context (returns null if not in provider)
+function useOptionalSidebar() {
+  try {
+    return useSidebar();
+  } catch {
+    return null;
+  }
+}
+
+function WorkflowEditorContent({
+  initialConfig,
+  agentId,
+  agentName,
+  isDirty: isDirtyProp,
+  onSaveAll,
+  isSaving,
+}: WorkflowEditorLayoutProps) {
+  const sidebarContext = useOptionalSidebar();
+  const isFocusMode = sidebarContext?.isFocusMode ?? false;
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNodeData>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const [selectedNode, setSelectedNode] = useState<Node<WorkflowNodeData> | null>(null);
+  const [selectedNode, setSelectedNode] =
+    useState<Node<WorkflowNodeData> | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [validationResult, setValidationResult] = useState<{
@@ -85,10 +136,10 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
   } | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [isInteractive, setIsInteractive] = useState(true);
-  const [layoutDirection, setLayoutDirection] = useState<'TB' | 'LR'>('TB');
+  const [layoutDirection, setLayoutDirection] = useState<"TB" | "LR">("TB");
   const [paletteCollapsed, setPaletteCollapsed] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem(PALETTE_COLLAPSED_KEY) === 'true';
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem(PALETTE_COLLAPSED_KEY) === "true";
   });
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition } = useReactFlow();
@@ -97,7 +148,7 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
   const draftContext = useOptionalAgentDraft();
 
   // Track initial state for dirty detection
-  const initialStateRef = useRef<string>('');
+  const initialStateRef = useRef<string>("");
   const isInitializedRef = useRef(false);
 
   // Persist palette collapse state
@@ -118,7 +169,8 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
       // Check if we have a draft to restore
       if (draftContext?.workflowDraft) {
         const draftConfig = draftContext.workflowDraft.config as WorkflowConfig;
-        const { nodes: draftNodes, edges: draftEdges } = workflowToNodes(draftConfig);
+        const { nodes: draftNodes, edges: draftEdges } =
+          workflowToNodes(draftConfig);
         const layoutedNodes = getLayoutedNodes(draftNodes, draftEdges, {
           direction: layoutDirection,
         });
@@ -128,11 +180,12 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
         const serverConfig = nodesToWorkflow(
           workflowToNodes(initialConfig).nodes,
           workflowToNodes(initialConfig).edges,
-          initialConfig
+          initialConfig,
         );
         initialStateRef.current = JSON.stringify(serverConfig);
       } else {
-        const { nodes: initialNodes, edges: initialEdges } = workflowToNodes(initialConfig);
+        const { nodes: initialNodes, edges: initialEdges } =
+          workflowToNodes(initialConfig);
 
         // Apply auto-layout immediately for better initial presentation
         const layoutedNodes = getLayoutedNodes(initialNodes, initialEdges, {
@@ -143,12 +196,22 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
         setEdges(initialEdges);
 
         // Store initial state for dirty comparison
-        const currentConfig = nodesToWorkflow(layoutedNodes, initialEdges, initialConfig);
+        const currentConfig = nodesToWorkflow(
+          layoutedNodes,
+          initialEdges,
+          initialConfig,
+        );
         initialStateRef.current = JSON.stringify(currentConfig);
       }
       isInitializedRef.current = true;
     }
-  }, [initialConfig, setNodes, setEdges, draftContext?.workflowDraft, layoutDirection]);
+  }, [
+    initialConfig,
+    setNodes,
+    setEdges,
+    draftContext?.workflowDraft,
+    layoutDirection,
+  ]);
 
   // Sync edges to node.data.transitions whenever edges change
   // This ensures node labels and properties panel stay in sync with canvas
@@ -159,7 +222,7 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
         const nodeEdges = edges.filter((e) => e.source === node.id);
         const transitions = nodeEdges.map((e) => ({
           target: e.target,
-          condition: e.data?.condition || e.label?.toString() || 'always',
+          condition: e.data?.condition || e.label?.toString() || "always",
           priority: e.data?.priority || 0,
         }));
 
@@ -188,7 +251,7 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
             transitions,
           },
         };
-      })
+      }),
     );
   }, [edges, setNodes]);
 
@@ -200,7 +263,8 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
   }, [draftContext]);
 
   useEffect(() => {
-    if (!isInitializedRef.current || !initialConfig || nodes.length === 0) return;
+    if (!isInitializedRef.current || !initialConfig || nodes.length === 0)
+      return;
 
     // Build current config from nodes and edges
     const currentConfig = nodesToWorkflow(nodes, edges, initialConfig);
@@ -230,7 +294,7 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
       setSelectedNode(node);
       setSelectedEdge(null); // Deselect edge when selecting node
     },
-    []
+    [],
   );
 
   // Handle edge selection
@@ -239,7 +303,7 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
       setSelectedEdge(edge);
       setSelectedNode(null); // Deselect node when selecting edge
     },
-    []
+    [],
   );
 
   // Handle pane click (canvas background)
@@ -259,8 +323,8 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
         source: connection.source,
         target: connection.target,
         sourceHandle: connection.sourceHandle || null,
-        targetHandle: connection.targetHandle || 'input',
-        type: 'deletable',
+        targetHandle: connection.targetHandle || "input",
+        type: "deletable",
         markerEnd: {
           type: MarkerType.ArrowClosed,
           width: 20,
@@ -270,13 +334,13 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
           strokeWidth: 2,
         },
         data: {
-          condition: 'always',
+          condition: "always",
           priority: 0,
         },
       };
       setEdges((eds) => addEdge(newEdge, eds));
     },
-    [edges.length, setEdges]
+    [edges.length, setEdges],
   );
 
   // Handle validation
@@ -285,25 +349,30 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
     setValidationResult(result);
 
     if (result.valid) {
-      toast.success('Workflow is valid!');
+      toast.success("Workflow is valid!");
     } else {
       toast.error(`Found ${result.errors.length} validation error(s)`);
     }
   }, [nodes, edges]);
 
   // Handle auto-layout
-  const handleAutoLayout = useCallback((direction?: 'TB' | 'LR') => {
-    const dir = direction ?? layoutDirection;
-    const layoutedNodes = getLayoutedNodes(nodes, edges, {
-      direction: dir,
-    });
-    setNodes(layoutedNodes);
-    toast.success(`${dir === 'TB' ? 'Vertical' : 'Horizontal'} layout applied`);
-  }, [nodes, edges, setNodes, layoutDirection]);
+  const handleAutoLayout = useCallback(
+    (direction?: "TB" | "LR") => {
+      const dir = direction ?? layoutDirection;
+      const layoutedNodes = getLayoutedNodes(nodes, edges, {
+        direction: dir,
+      });
+      setNodes(layoutedNodes);
+      toast.success(
+        `${dir === "TB" ? "Vertical" : "Horizontal"} layout applied`,
+      );
+    },
+    [nodes, edges, setNodes, layoutDirection],
+  );
 
   // Toggle layout direction and re-apply layout
   const handleToggleDirection = useCallback(() => {
-    const newDirection = layoutDirection === 'TB' ? 'LR' : 'TB';
+    const newDirection = layoutDirection === "TB" ? "LR" : "TB";
     setLayoutDirection(newDirection);
     handleAutoLayout(newDirection);
   }, [layoutDirection, handleAutoLayout]);
@@ -318,7 +387,7 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
   // Handle drag over (required for drop to work)
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
+    event.dataTransfer.dropEffect = "move";
   }, []);
 
   // Handle drop to create new node
@@ -326,7 +395,7 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
     (event: React.DragEvent) => {
       event.preventDefault();
 
-      const nodeType = event.dataTransfer.getData('application/reactflow');
+      const nodeType = event.dataTransfer.getData("application/reactflow");
       if (!nodeType) return;
 
       const position = screenToFlowPosition({
@@ -347,7 +416,7 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
       setNodes((nds) => nds.concat(newNode));
       toast.success(`Added ${nodeType} node`);
     },
-    [screenToFlowPosition, generateNodeId, setNodes]
+    [screenToFlowPosition, generateNodeId, setNodes],
   );
 
   // Handle node deletion
@@ -355,7 +424,7 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
     (nodeId: string) => {
       setNodes((nds) => nds.filter((node) => node.id !== nodeId));
       setEdges((eds) =>
-        eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId)
+        eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId),
       );
 
       // Close properties panel if deleted node was selected
@@ -363,9 +432,9 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
         setSelectedNode(null);
       }
 
-      toast.success('Node deleted');
+      toast.success("Node deleted");
     },
-    [setNodes, setEdges, selectedNode]
+    [setNodes, setEdges, selectedNode],
   );
 
   // Handle node updates from properties panel
@@ -383,7 +452,7 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
             };
           }
           return node;
-        })
+        }),
       );
 
       // Update selected node state
@@ -414,8 +483,8 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
             source: nodeId,
             target: transition.target,
             sourceHandle: `transition-${idx}`,
-            targetHandle: 'input',
-            type: 'deletable',
+            targetHandle: "input",
+            type: "deletable",
             animated: (transition.priority ?? 0) > 5,
             markerEnd: {
               type: MarkerType.ArrowClosed,
@@ -435,7 +504,7 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
         });
       }
     },
-    [setNodes, setEdges]
+    [setNodes, setEdges],
   );
 
   // Calculate validation counts
@@ -456,41 +525,56 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
         event.target instanceof HTMLTextAreaElement;
 
       // Show shortcuts dialog (? key)
-      if (event.key === '?' && !isTyping) {
+      if (event.key === "?" && !isTyping) {
         event.preventDefault();
         setShortcutsOpen(true);
         return;
       }
 
       // Delete selected node or edge (Delete or Backspace)
-      if ((event.key === 'Delete' || event.key === 'Backspace') && !isTyping) {
+      if ((event.key === "Delete" || event.key === "Backspace") && !isTyping) {
         event.preventDefault();
         if (selectedNode) {
           handleDeleteNode(selectedNode.id);
         } else if (selectedEdge) {
           setEdges((eds) => eds.filter((edge) => edge.id !== selectedEdge.id));
           setSelectedEdge(null);
-          toast.success('Connection deleted');
+          toast.success("Connection deleted");
         }
       }
 
       // Note: Ctrl+S removed - use "Save All Changes" button in page header
 
+      // Toggle focus mode (Ctrl/Cmd + Shift + F)
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.shiftKey &&
+        (event.key === "f" || event.key === "F")
+      ) {
+        event.preventDefault();
+        sidebarContext?.toggleFocusMode();
+        return;
+      }
+
       // Toggle layout direction (Ctrl/Cmd + Shift + L)
-      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'l') {
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.shiftKey &&
+        event.key === "l"
+      ) {
         event.preventDefault();
         handleToggleDirection();
         return;
       }
 
       // Auto layout (Ctrl/Cmd + L)
-      if ((event.ctrlKey || event.metaKey) && event.key === 'l') {
+      if ((event.ctrlKey || event.metaKey) && event.key === "l") {
         event.preventDefault();
         handleAutoLayout();
       }
 
-      // Deselect node or edge (Escape)
-      if (event.key === 'Escape') {
+      // Deselect node or edge, or exit focus mode (Escape)
+      if (event.key === "Escape") {
         event.preventDefault();
         if (shortcutsOpen) {
           setShortcutsOpen(false);
@@ -498,21 +582,82 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
           setSelectedNode(null);
         } else if (selectedEdge) {
           setSelectedEdge(null);
+        } else if (isFocusMode) {
+          sidebarContext?.exitFocusMode();
         }
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedNode, selectedEdge, shortcutsOpen, handleDeleteNode, handleAutoLayout, handleToggleDirection, setEdges]);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    selectedNode,
+    selectedEdge,
+    shortcutsOpen,
+    isFocusMode,
+    sidebarContext,
+    handleDeleteNode,
+    handleAutoLayout,
+    handleToggleDirection,
+    setEdges,
+  ]);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-12rem)]">
+    <div
+      className={cn(
+        "flex flex-col",
+        isFocusMode ? "h-screen" : "h-[calc(100vh-12rem)]",
+      )}
+    >
+      {/* Floating header - only in focus mode */}
+      {isFocusMode && (
+        <div className="flex items-center justify-between border-b bg-card px-4 py-2">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-semibold truncate max-w-[300px]">
+              {agentName || "Workflow Editor"}
+            </span>
+            {isDirtyProp && (
+              <Badge
+                variant="secondary"
+                className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
+              >
+                Unsaved Changes
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {isDirtyProp && onSaveAll && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={onSaveAll}
+                disabled={isSaving}
+              >
+                <Save className="mr-2 h-4 w-4" />
+                {isSaving ? "Saving..." : "Save All Changes"}
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => sidebarContext?.exitFocusMode()}
+            >
+              <X className="mr-2 h-4 w-4" />
+              Exit Focus Mode
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Toolbar */}
       <div className="border-b bg-card/50 backdrop-blur supports-[backdrop-filter]:bg-card/80">
         <div className="flex items-center justify-between px-4 py-2">
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => handleAutoLayout()}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleAutoLayout()}
+            >
               <Wand2 className="mr-2 h-4 w-4" />
               Auto Layout
             </Button>
@@ -520,14 +665,14 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
               variant="outline"
               size="sm"
               onClick={handleToggleDirection}
-              title={`Switch to ${layoutDirection === 'TB' ? 'horizontal' : 'vertical'} layout`}
+              title={`Switch to ${layoutDirection === "TB" ? "horizontal" : "vertical"} layout`}
             >
-              {layoutDirection === 'TB' ? (
+              {layoutDirection === "TB" ? (
                 <ArrowRightToLine className="mr-2 h-4 w-4" />
               ) : (
                 <ArrowDownToLine className="mr-2 h-4 w-4" />
               )}
-              {layoutDirection === 'TB' ? 'Horizontal' : 'Vertical'}
+              {layoutDirection === "TB" ? "Horizontal" : "Vertical"}
             </Button>
             <Button variant="outline" size="sm" onClick={handleValidate}>
               <CheckCircle2 className="mr-2 h-4 w-4" />
@@ -550,22 +695,36 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
                 <div className="space-y-4 mt-4">
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div className="font-medium">Auto Layout</div>
-                    <div className="text-muted-foreground font-mono">Ctrl/⌘ + L</div>
+                    <div className="text-muted-foreground font-mono">
+                      Ctrl/⌘ + L
+                    </div>
 
                     <div className="font-medium">Toggle Layout Direction</div>
-                    <div className="text-muted-foreground font-mono">Ctrl/⌘ + Shift + L</div>
+                    <div className="text-muted-foreground font-mono">
+                      Ctrl/⌘ + Shift + L
+                    </div>
+
+                    <div className="font-medium">Toggle Focus Mode</div>
+                    <div className="text-muted-foreground font-mono">
+                      Ctrl/⌘ + Shift + F
+                    </div>
 
                     <div className="font-medium">Delete Node/Connection</div>
-                    <div className="text-muted-foreground font-mono">Delete / Backspace</div>
+                    <div className="text-muted-foreground font-mono">
+                      Delete / Backspace
+                    </div>
 
-                    <div className="font-medium">Deselect</div>
-                    <div className="text-muted-foreground font-mono">Escape</div>
+                    <div className="font-medium">Deselect / Exit Focus</div>
+                    <div className="text-muted-foreground font-mono">
+                      Escape
+                    </div>
 
                     <div className="font-medium">Show Shortcuts</div>
                     <div className="text-muted-foreground font-mono">?</div>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Use &quot;Save All Changes&quot; button in the page header to save.
+                    Use &quot;Save All Changes&quot; button in the page header
+                    to save.
                   </p>
                 </div>
               </DialogContent>
@@ -575,7 +734,8 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
                 {validationCounts.errors > 0 && (
                   <span className="flex items-center gap-1 text-destructive">
                     <AlertTriangle className="h-4 w-4" />
-                    {validationCounts.errors} error{validationCounts.errors !== 1 ? 's' : ''}
+                    {validationCounts.errors} error
+                    {validationCounts.errors !== 1 ? "s" : ""}
                   </span>
                 )}
                 {validationCounts.errors === 0 && (
@@ -588,7 +748,35 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
             )}
           </div>
 
-          {/* Save button removed - use "Save All Changes" in page header to save all tabs together */}
+          {/* Focus mode toggle */}
+          {sidebarContext && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => sidebarContext.toggleFocusMode()}
+                  >
+                    {isFocusMode ? (
+                      <Minimize2 className="mr-2 h-4 w-4" />
+                    ) : (
+                      <Maximize2 className="mr-2 h-4 w-4" />
+                    )}
+                    {isFocusMode ? "Exit Focus" : "Focus Mode"}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>
+                    {isFocusMode ? "Exit focus mode" : "Enter focus mode"}{" "}
+                    <kbd className="ml-1 rounded border bg-muted px-1 py-0.5 text-xs font-mono">
+                      Ctrl+Shift+F
+                    </kbd>
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
         </div>
       </div>
 
@@ -710,18 +898,19 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
               pannable={isInteractive}
               zoomable={isInteractive}
               nodeColor={(node) => {
-                if (node.type === 'standardNode') return '#a855f7';
-                if (node.type === 'retrieveVariableNode') return '#f59e0b';
-                if (node.type === 'endCallNode') return '#ef4444';
-                if (node.type === 'agentTransferNode') return '#06b6d4';
-                if (node.type === 'apiCallNode') return '#22c55e';
-                return '#64748b';
+                if (node.type === "standardNode") return "#a855f7";
+                if (node.type === "retrieveVariableNode") return "#f59e0b";
+                if (node.type === "endCallNode") return "#ef4444";
+                if (node.type === "agentTransferNode") return "#06b6d4";
+                if (node.type === "apiCallNode") return "#22c55e";
+                return "#64748b";
               }}
             />
             <Panel position="top-center" className="!m-0 !top-2">
               <Card className="px-3 py-1.5 text-sm text-muted-foreground">
-                {nodes.length} node{nodes.length !== 1 ? 's' : ''}, {edges.length} connection
-                {edges.length !== 1 ? 's' : ''}
+                {nodes.length} node{nodes.length !== 1 ? "s" : ""},{" "}
+                {edges.length} connection
+                {edges.length !== 1 ? "s" : ""}
               </Card>
             </Panel>
           </ReactFlow>
@@ -758,7 +947,9 @@ function WorkflowEditorContent({ initialConfig, agentId }: WorkflowEditorLayoutP
       {validationResult && !validationResult.valid && (
         <div className="border-t bg-destructive/10 p-4">
           <div className="space-y-2">
-            <div className="font-medium text-sm text-destructive">Validation Errors:</div>
+            <div className="font-medium text-sm text-destructive">
+              Validation Errors:
+            </div>
             <ul className="list-disc list-inside space-y-1 text-sm text-destructive">
               {validationResult.errors.map((error, index) => (
                 <li key={index}>{error}</li>
@@ -791,8 +982,8 @@ function NodePaletteItem({
   label: string;
 }) {
   const onDragStart = (event: React.DragEvent) => {
-    event.dataTransfer.setData('application/reactflow', type);
-    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData("application/reactflow", type);
+    event.dataTransfer.effectAllowed = "move";
   };
 
   return (
@@ -818,8 +1009,8 @@ function CollapsedPaletteItem({
   title: string;
 }) {
   const onDragStart = (event: React.DragEvent) => {
-    event.dataTransfer.setData('application/reactflow', type);
-    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData("application/reactflow", type);
+    event.dataTransfer.effectAllowed = "move";
   };
 
   return (
@@ -837,63 +1028,63 @@ function CollapsedPaletteItem({
 // Helper function to map node type to ReactFlow node type
 function getReactFlowNodeType(type: string): string {
   switch (type) {
-    case 'standard':
-      return 'standardNode';
-    case 'retrieve_variable':
-      return 'retrieveVariableNode';
-    case 'end_call':
-      return 'endCallNode';
-    case 'agent_transfer':
-      return 'agentTransferNode';
-    case 'api_call':
-      return 'apiCallNode';
+    case "standard":
+      return "standardNode";
+    case "retrieve_variable":
+      return "retrieveVariableNode";
+    case "end_call":
+      return "endCallNode";
+    case "agent_transfer":
+      return "agentTransferNode";
+    case "api_call":
+      return "apiCallNode";
     default:
-      return 'standardNode';
+      return "standardNode";
   }
 }
 
 // Helper function to create default node data based on type
 function getDefaultNodeData(id: string, type: string): WorkflowNodeData {
   switch (type) {
-    case 'standard':
+    case "standard":
       return {
         id,
-        type: 'standard',
-        name: 'New Standard Node',
-        system_prompt: 'You are a helpful AI assistant.',
+        type: "standard",
+        name: "New Standard Node",
+        system_prompt: "You are a helpful AI assistant.",
         interruptions_enabled: true,
       };
-    case 'retrieve_variable':
+    case "retrieve_variable":
       return {
         id,
-        type: 'retrieve_variable',
-        name: 'New Variable Node',
+        type: "retrieve_variable",
+        name: "New Variable Node",
         variables: [],
       };
-    case 'end_call':
+    case "end_call":
       return {
         id,
-        type: 'end_call',
-        name: 'End Call',
+        type: "end_call",
+        name: "End Call",
       };
-    case 'agent_transfer':
+    case "agent_transfer":
       return {
         id,
-        type: 'agent_transfer',
-        name: 'Transfer to Agent',
-        target_agent_id: '',
+        type: "agent_transfer",
+        name: "Transfer to Agent",
+        target_agent_id: "",
         transfer_context: false,
-        transfer_message: '',
+        transfer_message: "",
       };
-    case 'api_call':
+    case "api_call":
       return {
         id,
-        type: 'api_call',
-        name: 'New API Call',
-        static_text: '',
+        type: "api_call",
+        name: "New API Call",
+        static_text: "",
         api_call: {
-          method: 'GET',
-          url: '',
+          method: "GET",
+          url: "",
           headers: {},
           timeout_seconds: 30,
           retry: {
@@ -908,8 +1099,8 @@ function getDefaultNodeData(id: string, type: string): WorkflowNodeData {
     default:
       return {
         id,
-        type: 'standard',
-        name: 'New Node',
+        type: "standard",
+        name: "New Node",
       };
   }
 }
