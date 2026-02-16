@@ -39,9 +39,10 @@ interface StandardNodeFormProps {
   nodeData: WorkflowNodeData;
   onUpdate: (updates: Partial<WorkflowNodeData>) => void;
   availableTargetNodes: TargetNodeOption[];
+  availableVariables?: string[];
 }
 
-export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: StandardNodeFormProps) {
+export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes, availableVariables = [] }: StandardNodeFormProps) {
   const [name, setName] = useState(nodeData.name || '');
   const [mode, setMode] = useState<'static' | 'llm'>(
     nodeData.static_text ? 'static' : 'llm'
@@ -438,6 +439,7 @@ export function StandardNodeForm({ nodeData, onUpdate, availableTargetNodes }: S
                     }
                     nodeType="standard"
                     availableIntents={Object.keys(intents)}
+                    availableVariables={availableVariables}
                   />
 
                   <div>

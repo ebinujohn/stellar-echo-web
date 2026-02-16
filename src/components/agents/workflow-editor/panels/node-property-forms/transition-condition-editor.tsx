@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Clock, Hash, Search, MessageSquare, Check, Variable, AlertCircle, Brain, CheckCircle2, XCircle, Globe } from 'lucide-react';
+import { Clock, Hash, Search, MessageSquare, Check, Variable, AlertCircle, Brain, CheckCircle2, XCircle, Globe, Equal } from 'lucide-react';
 
 // ========================================
 // Types
@@ -28,6 +28,7 @@ export type TransitionConditionType =
   | 'always'
   | 'variables_extracted'
   | 'extraction_failed'
+  | 'variable_equals'
   | 'intent'
   | 'api_success'
   | 'api_failed'
@@ -40,7 +41,7 @@ interface TransitionConditionConfig {
   description: string;
   icon: React.ReactNode;
   hasParameter: boolean;
-  parameterType?: 'number' | 'string' | 'variables' | 'intent';
+  parameterType?: 'number' | 'string' | 'variables' | 'variable_value_pair' | 'intent';
   parameterLabel?: string;
   parameterPlaceholder?: string;
   parameterSuffix?: string;
@@ -140,6 +141,18 @@ const CONDITION_CONFIGS: TransitionConditionConfig[] = [
     parameterPlaceholder: 'name,email,phone',
     isPatternBased: true,
     applicableTo: ['retrieve_variable'],
+  },
+  {
+    type: 'variable_equals',
+    displayName: 'Variable Equals',
+    description: 'Deterministic variable comparison (~0ms)',
+    icon: <Equal className="h-3.5 w-3.5" />,
+    hasParameter: true,
+    parameterType: 'variable_value_pair',
+    parameterLabel: 'Variable & Expected Value',
+    parameterPlaceholder: 'var_name=value',
+    isPatternBased: true,
+    applicableTo: ['standard', 'retrieve_variable'],
   },
   {
     type: 'intent',
@@ -407,6 +420,74 @@ export function TransitionConditionEditor({
             <p className="text-xs text-muted-foreground mt-1">Comma-separated variable names</p>
           </div>
         );
+
+      case 'variable_value_pair': {
+        const eqIndex = parameter.indexOf('=');
+        const varName = eqIndex >= 0 ? parameter.substring(0, eqIndex) : parameter;
+        const expectedValue = eqIndex >= 0 ? parameter.substring(eqIndex + 1) : '';
+
+        const handleVarNameChange = (newVarName: string) => {
+          handleParameterChange(expectedValue || eqIndex >= 0 ? `${newVarName}=${expectedValue}` : newVarName);
+        };
+
+        const handleExpectedValueChange = (newValue: string) => {
+          handleParameterChange(`${varName}=${newValue}`);
+        };
+
+        return (
+          <div className="mt-2 space-y-2">
+            <div>
+              <Label className="text-xs text-muted-foreground">Variable Name</Label>
+              {availableVariables.length > 0 ? (
+                <Select
+                  value={varName || '__custom__'}
+                  onValueChange={(v) => handleVarNameChange(v === '__custom__' ? '' : v)}
+                >
+                  <SelectTrigger className="h-8 text-sm mt-1">
+                    <SelectValue placeholder="Select variable" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableVariables.map((v) => (
+                      <SelectItem key={v} value={v}>
+                        <span className="font-mono text-xs">{v}</span>
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="__custom__">Custom...</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  type="text"
+                  value={varName}
+                  onChange={(e) => handleVarNameChange(e.target.value)}
+                  placeholder="variable_name"
+                  className="h-8 text-sm font-mono mt-1"
+                />
+              )}
+              {availableVariables.length > 0 && (varName === '' || !availableVariables.includes(varName)) && (
+                <Input
+                  type="text"
+                  value={varName}
+                  onChange={(e) => handleVarNameChange(e.target.value)}
+                  placeholder="custom_variable_name"
+                  className="h-8 text-sm font-mono mt-1"
+                />
+              )}
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Expected Value</Label>
+              <Input
+                type="text"
+                value={expectedValue}
+                onChange={(e) => handleExpectedValueChange(e.target.value)}
+                placeholder="expected_value"
+                className="h-8 text-sm mt-1"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">Case-insensitive comparison.</p>
+          </div>
+        );
+      }
 
       case 'intent':
         return (

@@ -75,6 +75,12 @@ export function PropertiesPanel({
       .filter((n) => n.id !== selectedNode.id)
       .map((n) => ({ id: n.data.id, name: n.data.name }));
 
+    // Compute available variables from all retrieve_variable nodes
+    const allVariableNames = allNodes
+      .filter((n) => n.data.type === 'retrieve_variable')
+      .flatMap((n) => (n.data.variables || []).map((v: { variable_name?: string }) => v.variable_name))
+      .filter(Boolean) as string[];
+
     switch (nodeType) {
       case 'standard':
         return (
@@ -83,6 +89,7 @@ export function PropertiesPanel({
             nodeData={selectedNode.data}
             onUpdate={handleUpdate}
             availableTargetNodes={availableTargetNodes}
+            availableVariables={allVariableNames}
           />
         );
       case 'retrieve_variable':

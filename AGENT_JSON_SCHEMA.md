@@ -867,6 +867,7 @@ For batch mode (`variables` array):
 
 - `variables_extracted:var1,var2,var3` - True if all variables successfully extracted
 - `extraction_failed:var1,var2,var3` - True if any variable missing or null
+- `variable_equals:var_name=value` - True if collected variable matches expected value (case-insensitive)
 
 #### Example: Batch Variable Extraction
 
@@ -1534,6 +1535,7 @@ Transitions move between nodes based on conditions. Conditions are evaluated in 
 | **Always** | `always` | Immediate transition (with `proactive: true` = auto-advance after speaking) | `always` |
 | **Variables Extracted** | `variables_extracted:var1,var2` | All variables present and non-null | `variables_extracted:name,email` |
 | **Extraction Failed** | `extraction_failed:var1,var2` | Any variable missing or null | `extraction_failed:name,email` |
+| **Variable Equals** | `variable_equals:var=value` | Deterministic variable comparison (case-insensitive) | `variable_equals:status=active` |
 | **Intent** | `intent:intent_id` | LLM batch classification (~100-150ms) | `intent:wants_basics` |
 | **API Success** | `api_success` | API returned 2xx status (api_call nodes) | `api_success` |
 | **API Failed** | `api_failed` | API error/timeout/non-2xx (api_call nodes) | `api_failed` |
@@ -2735,7 +2737,7 @@ Sends `Authorization: Bearer your-token` header.
 ```json
 { "auth": { "type": "hmac", "secret": "your-secret-key" } }
 ```
-Sends `X-Webhook-Signature: sha256=<signature>` and `X-Webhook-Timestamp` headers.
+Sends `x-retell-signature: v=<timestamp_ms>,d=<signature>` header (Retell-compatible).
 
 #### Retry Configuration
 
@@ -3168,6 +3170,7 @@ This section provides a comprehensive reference for all workflow configuration t
 | `always` | `always` | Immediate transition. With `proactive: true`, fires ~300ms after bot stops speaking; without `proactive`, fires immediately. | standard, retrieve_variable |
 | `variables_extracted` | `variables_extracted:{var1,var2}` | True if ALL specified variables are present and non-null. | retrieve_variable |
 | `extraction_failed` | `extraction_failed:{var1,var2}` | True if ANY specified variable is missing or null. | retrieve_variable |
+| `variable_equals` | `variable_equals:{var_name}={value}` | True if collected_data variable matches value (case-insensitive string comparison). | standard, retrieve_variable |
 | `api_success` | `api_success` | API returned 2xx status code. | api_call |
 | `api_failed` | `api_failed` | API returned non-2xx, timed out, or error. | api_call |
 | `api_status` | `api_status:{code}` | API returned specific status code. | api_call |

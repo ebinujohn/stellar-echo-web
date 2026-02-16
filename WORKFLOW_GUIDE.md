@@ -306,6 +306,32 @@ Transitions determine when to move between nodes. **First matching condition win
 }
 ```
 
+### Variable-Based (Deterministic, ~0ms)
+
+```json
+{
+  "transitions": [
+    {
+      "condition": "variable_equals:call_intent_in_days=5",
+      "target": "five_day_flow",
+      "priority": 1
+    },
+    {
+      "condition": "variable_equals:call_intent_in_days=30",
+      "target": "thirty_day_flow",
+      "priority": 2
+    },
+    {
+      "condition": "always",
+      "target": "default_flow",
+      "priority": 10
+    }
+  ]
+}
+```
+
+Use `variable_equals:var_name=value` to route based on collected variable values (case-insensitive comparison). Ideal for branching on API response data or extracted variables without LLM calls.
+
 ### Intent-Based (LLM Batch Classification, ~100-150ms)
 
 ```json

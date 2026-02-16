@@ -133,7 +133,7 @@ const AuthSection = memo(function AuthSection({
               <div className="flex flex-col items-start">
                 <span>HMAC Signature</span>
                 <span className="text-xs text-muted-foreground">
-                  X-Signature header with HMAC-SHA256
+                  Retell-compatible x-retell-signature header
                 </span>
               </div>
             </SelectItem>

@@ -197,6 +197,128 @@ Note: No transitions allowed on end nodes. Auto-hangup: Call disconnects 3 secon
 
 Terminal node that marks workflow completion. Should not have transitions.
 
+#### API Call Node
+```json
+{
+  "id": "fetch_patient_data",
+  "type": "api_call",
+  "name": "Fetch Patient Data",
+  "static_text": "Please hold while I retrieve your information...",
+  "api_call": {
+    "method": "GET",
+    "url": "https://api.example.com/patients/{{patient_id}}",
+    "headers": {
+      "Authorization": "Bearer {{api_token}}",
+      "Content-Type": "application/json"
+    },
+    "query_params": {
+      "include": "medications,allergies"
+    },
+    "timeout_seconds": 30,
+    "retry": {
+      "max_retries": 2,
+      "initial_delay_ms": 500,
+      "backoff_multiplier": 2.0
+    },
+    "response_extraction": [
+      {
+        "path": "data.patient.first_name",
+        "variable_name": "patient_first_name",
+        "default_value": "Patient"
+      },
+      {
+        "path": "data.patient.medications",
+        "variable_name": "patient_medications"
+      }
+    ]
+  },
+  "transitions": [
+    { "condition": "api_success", "target": "show_info", "priority": 0 },
+    { "condition": "api_failed", "target": "api_error", "priority": 1 }
+  ]
+}
+```
+
+Executes HTTP API calls during conversation flow, extracts response data into variables, and transitions based on API result. Similar to Retell AI's custom functions.
+
+**How it works:**
+
+1. **Loading message** (optional): If `static_text` is provided, it's delivered first (e.g., "Please hold...")
+2. **Variable substitution**: `{{variable}}` placeholders in URL, headers, query params, and body are replaced with collected values
+3. **HTTP execution**: Request is made with configurable timeout and exponential backoff retry
+4. **Response extraction**: JSON paths extract values into workflow variables
+5. **Auto-transition**: Transitions evaluate based on `api_success`, `api_failed`, etc.
+
+**API Call Configuration Fields:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `method` | string | `"GET"` | HTTP method: GET, POST, PUT, PATCH, DELETE |
+| `url` | string | required | URL with optional `{{variable}}` placeholders |
+| `headers` | object | `{}` | Request headers (supports variable substitution) |
+| `query_params` | object | `{}` | URL query parameters |
+| `body` | object | `null` | Request body for POST/PUT/PATCH (JSON) |
+| `timeout_seconds` | int | `30` | Request timeout (max 120s) |
+| `retry` | object | see below | Retry configuration |
+| `response_extraction` | array | `[]` | List of values to extract from response |
+| `response_size_limit_bytes` | int | `15000` | Max response body size |
+| `allowed_hosts` | array | `null` | Optional host allowlist for security |
+
+**Retry Configuration:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `max_retries` | int | `2` | Maximum retry attempts |
+| `initial_delay_ms` | int | `500` | Initial delay before first retry |
+| `max_delay_ms` | int | `5000` | Maximum delay between retries |
+| `backoff_multiplier` | float | `2.0` | Exponential backoff multiplier |
+
+**Response Extraction:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `path` | string | Yes | Dot notation JSON path (e.g., `data.user.name`, `items.0.id`) |
+| `variable_name` | string | Yes | Variable name to store extracted value |
+| `default_value` | string | No | Fallback value if path not found or null |
+
+**POST Request Example:**
+
+```json
+{
+  "id": "create_appointment",
+  "type": "api_call",
+  "name": "Create Appointment",
+  "api_call": {
+    "method": "POST",
+    "url": "https://api.example.com/appointments",
+    "headers": {
+      "Authorization": "Bearer {{api_token}}",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "patient_id": "{{patient_id}}",
+      "date": "{{selected_date}}",
+      "provider_id": "{{provider_id}}"
+    },
+    "response_extraction": [
+      { "path": "data.confirmation_code", "variable_name": "confirmation_code" }
+    ]
+  },
+  "transitions": [
+    { "condition": "api_success", "target": "confirm", "priority": 0 },
+    { "condition": "api_status:409", "target": "slot_taken", "priority": 1 },
+    { "condition": "api_failed", "target": "error", "priority": 2 }
+  ]
+}
+```
+
+**Security Considerations:**
+
+- **Host Allowlist**: Use `allowed_hosts` to restrict URLs to approved domains
+- **Timeout Limits**: Max 120 seconds to prevent resource exhaustion
+- **Response Size**: Max 50KB to prevent memory issues
+- **Sensitive Data**: Headers with "auth" or "key" in name are masked in logs
+
 **Auto-Hangup Behavior:**
 When an end node is reached, the system automatically:
 1. Generates and delivers the closing message using the node's `system_prompt`
@@ -520,6 +642,147 @@ Triggers when required survey data is collected.
 **Use case:** Multi-question surveys with data collection.
 
 **Note:** Currently checks for `survey_q1` and `survey_q2` in collected data. Customize in `transition_evaluator.py`.
+
+### Variable Conditions (For Data-Driven Routing)
+
+Conditions for routing based on collected variables (from `retrieve_variable` nodes or API responses):
+
+#### `variables_extracted:var1,var2`
+Triggers when ALL specified variables are present and non-null in collected data.
+
+```json
+{
+  "condition": "variables_extracted:first_name,last_name",
+  "target": "verify_name"
+}
+```
+
+**Use case:** Proceed after successful variable extraction.
+
+#### `extraction_failed:var1,var2`
+Triggers when ANY specified variable is missing or null in collected data.
+
+```json
+{
+  "condition": "extraction_failed:first_name",
+  "target": "ask_name_again"
+}
+```
+
+**Use case:** Handle failed extraction with retry or fallback.
+
+#### `variable_equals:var_name=value`
+Triggers when a collected variable equals a specific value (case-insensitive string comparison).
+
+```json
+{
+  "condition": "variable_equals:call_intent_in_days=5",
+  "target": "five_day_flow"
+}
+```
+
+```json
+{
+  "condition": "variable_equals:is_verified=true",
+  "target": "verified_path"
+}
+```
+
+**Use case:** Deterministic branching based on variable values — zero-latency alternative to LLM-based routing for known values. Works with values from `retrieve_variable` extraction or `api_call` response extraction.
+
+**Complete Variable Routing Example:**
+
+```json
+{
+  "transitions": [
+    { "condition": "variable_equals:plan_type=premium", "target": "premium_flow", "priority": 1 },
+    { "condition": "variable_equals:plan_type=basic", "target": "basic_flow", "priority": 2 },
+    { "condition": "always", "target": "default_flow", "priority": 10 }
+  ]
+}
+```
+
+### API Call Conditions (For api_call Nodes)
+
+Conditions specific to `api_call` node types, evaluated after API execution:
+
+#### `api_success`
+Triggers when API returned 2xx status code.
+
+```json
+{
+  "condition": "api_success",
+  "target": "process_data"
+}
+```
+
+**Use case:** Continue workflow when API call succeeds.
+
+#### `api_failed`
+Triggers when API returned non-2xx, timed out, or encountered an error.
+
+```json
+{
+  "condition": "api_failed",
+  "target": "error_handler"
+}
+```
+
+**Use case:** Handle API failures gracefully.
+
+#### `api_status:CODE`
+Triggers when API returned a specific HTTP status code.
+
+```json
+{
+  "condition": "api_status:404",
+  "target": "not_found_handler"
+}
+```
+
+```json
+{
+  "condition": "api_status:409",
+  "target": "conflict_handler"
+}
+```
+
+**Use case:** Handle specific HTTP status codes differently (e.g., 404 for not found, 409 for conflict).
+
+#### `api_response_contains:VALUE`
+Triggers when API response body contains specific text (case-insensitive).
+
+```json
+{
+  "condition": "api_response_contains:error",
+  "target": "error_handler"
+}
+```
+
+```json
+{
+  "condition": "api_response_contains:success",
+  "target": "success_handler"
+}
+```
+
+**Use case:** Route based on response content when status codes alone aren't sufficient.
+
+**Complete API Call Transition Example:**
+
+```json
+{
+  "transitions": [
+    { "condition": "api_success", "target": "process_results", "priority": 0 },
+    { "condition": "api_status:404", "target": "patient_not_found", "priority": 1 },
+    { "condition": "api_status:401", "target": "auth_error", "priority": 1 },
+    { "condition": "api_status:429", "target": "rate_limited", "priority": 1 },
+    { "condition": "api_failed", "target": "general_error", "priority": 2 }
+  ]
+}
+```
+
+**Note:** Evaluation order matters. More specific conditions (like `api_status:404`) should have higher priority (lower number) than general conditions (like `api_failed`).
 
 ### Intent-Based Conditions (LLM Batch Classification)
 
@@ -924,7 +1187,7 @@ Uses LLM to extract structured data with custom prompt.
 
 **Use case:** Complex structured extraction (dates, phone numbers, emails, names).
 
-**Latency:** ~100-300ms per extraction (uses GPT-4o-mini).
+**Latency:** ~100-300ms per extraction (uses gpt-5-mini).
 
 ### Accessing Collected Data
 
@@ -2036,7 +2299,7 @@ class NodeRAGConfig:
     "name": "My Agent"
   },
   "llm": {
-    "model": "gpt-4o-mini",
+    "model": "gpt-5-mini",
     "system_prompt": "You are a helpful assistant.\nFirst greet the user.\nThen help them with their question.\nFinally say goodbye."
   }
 }
@@ -2084,7 +2347,7 @@ class NodeRAGConfig:
     ]
   },
   "llm": {
-    "model": "gpt-4o-mini"
+    "model": "gpt-5-mini"
   }
 }
 ```
